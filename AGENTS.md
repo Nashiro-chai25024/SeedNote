@@ -1,9 +1,26 @@
-<!-- BEGIN:nextjs-agent-rules -->
+# SeedNote 開発規範・AIルールブック (AGENTS.md)
 
-# This is NOT the Next.js you know
+## 1. プロジェクトの基本思想
+- 本アプリは「書くこと」よりも「後から思い出すこと（再発見）」を重視した、自分専用の思考アーカイブである。
+- アイデアを忘れないよう、起動直後は認知的ノイズをゼロにし、即座にメモを入力できる状態を最優先とする。
 
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+## 2. 絶対厳守ルール（AIへの禁止事項）
+1. **メモの「編集」「削除」機能は絶対に作らないこと**:
+   - 過去の思考の残骸や間違いもアイデアの種となるため、不可逆性を保つ。
+   - 変更は「追記（タイムスタンプ付き）」または「メモ同士のリンク」によってのみ行う。
+2. **勝手にコードを一気に書き換えないこと**:
+   - ファイルを編集する前に、必ず「何のためにどこを変更するか」を日本語で説明し、ユーザーの合意を得てから作業すること。
+3. **起動直後のノイズゼロUIを壊さないこと**:
+   - 起動直後は入力フォームのみを表示し、過去ログ閲覧ボタンや設定ボタンは5秒後に表示する（または邪魔にならない控えめな配置にする）。
+4. **完全無料の範囲を守ること（有料ツールの勝手な導入禁止）**:
+   - VercelやSupabaseの無料枠だけで動くようにし、課金が発生する外部APIや複雑な有料サービスを勝手に入れないこと。
+5. **デザインは「目に優しい配色」を基本とすること**:
+   - クリーム色系のライトモードやダークモードを意識し、眩しい純白や派手な原色を避けること。
+6. **パスワードやAPIキーをコードに直書きしないこと**:
+   - セキュリティのため、秘密の情報は必ず環境変数（`.env`）で管理し、リポジトリに公開しないこと。
+7. **TypeScriptの型エラーや警告を放置しないこと**:
+   - 動けばいいという雑な実装は禁止。型定義をしっかり行い、エラーのない状態を維持すること。
 
-This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
-
-<!-- END:nextjs-agent-rules -->
+## 3. 開発の進め方
+- 第1週は「最小限のメモ入力・保存・一覧表示」を本番公開することを最優先とし、複雑な機能（ログイン画面など）を前倒しで勝手に実装しないこと。
+- 「水平スライス（画面だけ作る、DBだけ作る）」ではなく、毎週「画面・ロジック・DB・公開」までが全て繋がった垂直スライスで進めること。
