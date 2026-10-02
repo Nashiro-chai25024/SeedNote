@@ -184,6 +184,7 @@ export default function Home() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [openHelpSection, setOpenHelpSection] = useState<string | null>(null);
+  const [activeMenuNoteId, setActiveMenuNoteId] = useState<string | null>(null);
   const [showToast, setShowToast] = useState(false);
   const [enableToast, setEnableToast] = useState(true);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -247,6 +248,7 @@ export default function Home() {
     );
     setNotes(updatedNotes);
     localStorage.setItem("seednote_items", JSON.stringify(updatedNotes));
+    setActiveMenuNoteId(null); // メニューを閉じる
   };
 
   // ゴミ箱から元に戻す処理
@@ -288,6 +290,14 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-[#e8e2d5] text-[#2d2926] font-sans flex flex-col justify-between p-4 sm:p-8 relative overflow-x-hidden">
+      {/* メニューが開いている時に画面のどこを触っても確実に閉じる透明な膜 */}
+      {activeMenuNoteId && (
+        <div
+          className="fixed inset-0 z-20 cursor-default"
+          onClick={() => setActiveMenuNoteId(null)}
+        />
+      )}
+
       {/* 保存通知トースト */}
       <div
         className={`fixed top-5 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 pointer-events-none ${
@@ -454,7 +464,7 @@ export default function Home() {
                 placeholder="タイトル（省略可）"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="w-full px-3.5 py-2 text-sm bg-[#faf7f2] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] placeholder-[#b0a598]"
+                className="w-full px-3.5 py-2 text-sm bg-[#faf8f5] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] placeholder-[#b0a598]"
               />
             </div>
 
@@ -519,33 +529,61 @@ export default function Home() {
                   まだメモがありません。ホームから思いつきを書いてみましょう。
                 </div>
               ) : (
-                activeNotes.map((note) => (
-                  <article
-                    key={note.id}
-                    className="p-4 rounded-xl bg-white border border-[#e5ded2] shadow-2xs"
-                  >
-                    <div className="flex items-baseline justify-between gap-2 mb-1.5">
-                      <h3 className="font-bold text-[#3d3731] text-sm">
-                        {note.title || <span className="text-[#b0a598] font-normal italic">（無題）</span>}
-                      </h3>
-                      <time className="text-xs text-[#8a7f72] shrink-0 font-mono">
-                        {formatDate(note.createdAt)}
-                      </time>
-                    </div>
-                    <p className="text-sm text-[#453f38] whitespace-pre-wrap leading-relaxed mb-3">
-                      {note.content}
-                    </p>
-                    <div className="flex justify-end pt-2 border-t border-[#f4f0e8]">
-                      <button
-                        type="button"
-                        onClick={() => handleMoveToTrash(note.id)}
-                        className="text-xs text-[#9c9184] hover:text-[#b85448] flex items-center gap-1 transition-colors px-2 py-1 rounded"
-                      >
-                        <span>🗑️</span> ゴミ箱へ
-                      </button>
-                    </div>
-                  </article>
-                ))
+                activeNotes.map((note) => {
+                  const isMenuThisNoteOpen = activeMenuNoteId === note.id;
+
+                  return (
+                    <article
+                      key={note.id}
+                      className="p-4 rounded-xl bg-white border border-[#e5ded2] shadow-2xs relative"
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-1.5">
+                        <h3 className="font-bold text-[#3d3731] text-sm pr-6">
+                          {note.title || <span className="text-[#b0a598] font-normal italic">（無題）</span>}
+                        </h3>
+
+                        {/* 右上：控えめな「…」メニューボタン */}
+                        <div className="relative shrink-0">
+                          <div className="flex items-center gap-2">
+                            <time className="text-xs text-[#8a7f72] font-mono">
+                              {formatDate(note.createdAt)}
+                            </time>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMenuNoteId(
+                                  isMenuThisNoteOpen ? null : note.id
+                                );
+                              }}
+                              className="w-6 h-6 flex items-center justify-center rounded-lg text-[#9c9184] hover:text-[#3d3731] hover:bg-[#f4f0e8] text-sm leading-none font-bold transition-colors"
+                              aria-label="操作メニュー"
+                            >
+                              …
+                            </button>
+                          </div>
+
+                          {/* タップした時だけ開くポップアップメニュー */}
+                          {isMenuThisNoteOpen && (
+                            <div className="absolute right-0 top-7 w-32 bg-white rounded-xl shadow-lg border border-[#e5ded2] p-1 z-30 transition-all">
+                              <button
+                                type="button"
+                                onClick={() => handleMoveToTrash(note.id)}
+                                className="w-full text-left px-2.5 py-1.5 text-xs text-[#b85448] hover:bg-[#fdf2f0] rounded-lg flex items-center gap-1.5 font-medium transition-colors"
+                              >
+                                <span>🗑️</span> ゴミ箱へ移動
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <p className="text-sm text-[#453f38] whitespace-pre-wrap leading-relaxed">
+                        {note.content}
+                      </p>
+                    </article>
+                  );
+                })
               )}
             </div>
           </div>
