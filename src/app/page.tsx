@@ -9,9 +9,12 @@ interface Note {
   content: string;
   createdAt: string;
   isTrash?: boolean; // ゴミ箱フラグ（完全削除せず退避する）
+  categories?: string[]; // カテゴリタグ一覧
 }
 
-type TabType = "home" | "list" | "trash" | "settings";
+type TabType = "home" | "list" | "categories" | "trash" | "settings";
+type FontSize = "normal" | "large";
+type ButtonSize = "normal" | "large";
 
 // ガイド・ヘルプの全11項目データ
 const HELP_ITEMS = [
@@ -110,12 +113,27 @@ const HELP_ITEMS = [
   },
   {
     id: "trash",
-    title: "ゴミ箱",
+    title: "ゴミ箱（移動と復元・誤操作防止）",
     content: (
-      <div className="space-y-1.5">
-        <p>使わなくなったメモは「ゴミ箱」へ移動できます。</p>
-        <p>ゴミ箱に入れたメモは普段の一覧や検索からは見えなくなりますが、<strong>データが消えるわけではありません</strong>。</p>
-        <p>「間違えて入れちゃった！」という時も、ゴミ箱画面からいつでも元の場所に戻せます。また、ゴミ箱の中だけを対象にした検索もできます。</p>
+      <div className="space-y-2">
+        <div>
+          <strong className="block mb-0.5 text-[#3d3731]">ゴミ箱への移動手順：</strong>
+          <p>
+            メモカードの右上にある「…」ボタンを押すと、「ゴミ箱へ移動」が表示されます。誤タップを防ぐため、2段階で移動する仕組みになっています。
+          </p>
+          <p className="text-xs text-[#786f66] mt-1">
+            ※メニュー以外の場所をタップすると、メニューを閉じることができます。
+          </p>
+        </div>
+        <div className="pt-1.5 border-t border-[#e5ded2]">
+          <strong className="block mb-0.5 text-[#3d3731]">データの保持と復元：</strong>
+          <p>
+            ゴミ箱に入れたメモは一覧からは見えなくなりますが、<strong>データが消えるわけではありません</strong>。
+          </p>
+          <p className="mt-1">
+            「間違えて入れちゃった！」という時も、左メニューの「ゴミ箱」画面から「↩️ 元に戻す」を押せば、いつでも元の場所に戻せます。
+          </p>
+        </div>
       </div>
     ),
   },
@@ -187,6 +205,17 @@ export default function Home() {
   const [activeMenuNoteId, setActiveMenuNoteId] = useState<string | null>(null);
   const [showToast, setShowToast] = useState(false);
   const [enableToast, setEnableToast] = useState(true);
+  const [fontSize, setFontSize] = useState<FontSize>("normal");
+  const [buttonSize, setButtonSize] = useState<ButtonSize>("normal");
+
+  // カテゴリ関連のState
+  const [categoriesList, setCategoriesList] = useState<string[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [isAddingCategoryInline, setIsAddingCategoryInline] = useState(false);
+  const [inlineNewCategoryName, setInlineNewCategoryName] = useState("");
+  const [newCategoryInput, setNewCategoryInput] = useState("");
+  const [categoryToDelete, setCategoryToDelete] = useState<string | null>(null);
+
   const [isLoaded, setIsLoaded] = useState(false);
 
   // 初回読み込み時にブラウザの保存領域 (localStorage) からデータを復元
@@ -200,12 +229,98 @@ export default function Home() {
       if (savedToastPref !== null) {
         setEnableToast(savedToastPref === "true");
       }
+      const savedFontSize = localStorage.getItem("seednote_font_size");
+      if (savedFontSize === "large" || savedFontSize === "normal") {
+        setFontSize(savedFontSize as FontSize);
+      }
+      const savedButtonSize = localStorage.getItem("seednote_button_size");
+      if (savedButtonSize === "large" || savedButtonSize === "normal") {
+        setButtonSize(savedButtonSize as ButtonSize);
+      }
+      const savedCategories = localStorage.getItem("seednote_categories");
+      if (savedCategories) {
+        setCategoriesList(JSON.parse(savedCategories));
+      }
     } catch (e) {
       console.error("データの読み込みに失敗しました", e);
     } finally {
       setIsLoaded(true);
     }
   }, []);
+
+  // カテゴリの選択・解除切り替え
+  const handleToggleCategory = (catName: string) => {
+    setSelectedCategories((prev) =>
+      prev.includes(catName)
+        ? prev.filter((c) => c !== catName)
+        : [...prev, catName]
+    );
+  };
+
+  // 新規カテゴリの追加処理
+  const handleAddCategory = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    if (categoriesList.includes(trimmed)) return;
+
+    const updated = [...categoriesList, trimmed];
+    setCategoriesList(updated);
+    try {
+      localStorage.setItem("seednote_categories", JSON.stringify(updated));
+    } catch (e) {
+      console.error("カテゴリの保存に失敗しました", e);
+    }
+  };
+
+  // メモ入力中のインライン新規カテゴリ追加
+  const handleSaveInlineCategory = () => {
+    const trimmed = inlineNewCategoryName.trim();
+    if (trimmed) {
+      handleAddCategory(trimmed);
+      if (!selectedCategories.includes(trimmed)) {
+        setSelectedCategories((prev) => [...prev, trimmed]);
+      }
+    }
+    setInlineNewCategoryName("");
+    setIsAddingCategoryInline(false);
+  };
+
+  // カテゴリ管理画面での新規カテゴリ作成
+  const handleCreateCategoryFromManagement = () => {
+    const trimmed = newCategoryInput.trim();
+    if (trimmed) {
+      handleAddCategory(trimmed);
+      setNewCategoryInput("");
+    }
+  };
+
+  // カテゴリ消去の確定処理（※過去のメモデータは消去せず、該当カテゴリタグのみ安全に除外）
+  const handleConfirmDeleteCategory = () => {
+    if (!categoryToDelete) return;
+
+    // カテゴリリストから除外
+    const updatedCategories = categoriesList.filter((c) => c !== categoryToDelete);
+    setCategoriesList(updatedCategories);
+    localStorage.setItem("seednote_categories", JSON.stringify(updatedCategories));
+
+    // 選択中カテゴリからも除外
+    setSelectedCategories((prev) => prev.filter((c) => c !== categoryToDelete));
+
+    // 既存メモから該当カテゴリのみを除外
+    const updatedNotes = notes.map((note) => {
+      if (!note.categories) return note;
+      const filtered = note.categories.filter((c) => c !== categoryToDelete);
+      return {
+        ...note,
+        categories: filtered.length > 0 ? filtered : undefined,
+      };
+    });
+    setNotes(updatedNotes);
+    localStorage.setItem("seednote_items", JSON.stringify(updatedNotes));
+
+    // モーダルを閉じる
+    setCategoryToDelete(null);
+  };
 
   // メモを保存する処理
   const handleSave = () => {
@@ -217,6 +332,7 @@ export default function Home() {
       content: content.trim(),
       createdAt: new Date().toISOString(),
       isTrash: false,
+      categories: selectedCategories.length > 0 ? selectedCategories : undefined,
     };
 
     const updatedNotes = [newNote, ...notes];
@@ -231,6 +347,9 @@ export default function Home() {
     // 入力欄をクリア
     setContent("");
     setTitle("");
+    setSelectedCategories([]);
+    setIsAddingCategoryInline(false);
+    setInlineNewCategoryName("");
 
     // 保存通知を表示（設定がONの場合）
     if (enableToast) {
@@ -264,6 +383,18 @@ export default function Home() {
   const handleToggleToast = (checked: boolean) => {
     setEnableToast(checked);
     localStorage.setItem("seednote_enable_toast", String(checked));
+  };
+
+  // 文字サイズの切り替え
+  const handleFontSizeChange = (size: FontSize) => {
+    setFontSize(size);
+    localStorage.setItem("seednote_font_size", size);
+  };
+
+  // ボタンの大きさの切り替え
+  const handleButtonSizeChange = (size: ButtonSize) => {
+    setButtonSize(size);
+    localStorage.setItem("seednote_button_size", size);
   };
 
   // Ctrl + Enter (または Cmd + Enter) で素早く保存
@@ -315,10 +446,12 @@ export default function Home() {
         <button
           type="button"
           onClick={() => setIsMenuOpen(true)}
-          className="w-9 h-9 flex items-center justify-center rounded-xl text-[#6b6257] hover:bg-[#ded6c9] active:bg-[#d5ccbe] transition-colors"
+          className={`${
+            buttonSize === "large" ? "w-11 h-11 text-2xl" : "w-9 h-9 text-xl"
+          } flex items-center justify-center rounded-xl text-[#6b6257] hover:bg-[#ded6c9] active:bg-[#d5ccbe] transition-all`}
           aria-label="メニューを開く"
         >
-          <span className="text-xl leading-none">≡</span>
+          <span className="leading-none">≡</span>
         </button>
 
         {/* 中央：控えめなロゴ */}
@@ -330,7 +463,9 @@ export default function Home() {
         <button
           type="button"
           onClick={() => setIsHelpOpen(true)}
-          className="w-8 h-8 flex items-center justify-center rounded-full text-xs font-bold border border-[#b8aea2] text-[#6b6257] hover:bg-[#ded6c9] transition-colors"
+          className={`${
+            buttonSize === "large" ? "w-10 h-10 text-sm" : "w-8 h-8 text-xs"
+          } flex items-center justify-center rounded-full font-bold border border-[#b8aea2] text-[#6b6257] hover:bg-[#ded6c9] transition-all`}
           aria-label="ガイド・ヘルプを開く"
         >
           ?
@@ -360,7 +495,9 @@ export default function Home() {
             <button
               type="button"
               onClick={() => setIsMenuOpen(false)}
-              className="text-xs text-[#8a7f72] hover:text-[#3d3731] px-2 py-1"
+              className={`${
+                buttonSize === "large" ? "p-2 text-sm" : "px-2 py-1 text-xs"
+              } text-[#8a7f72] hover:text-[#3d3731]`}
             >
               ✕
             </button>
@@ -373,7 +510,9 @@ export default function Home() {
                 setActiveTab("home");
                 setIsMenuOpen(false);
               }}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors text-left ${
+              className={`w-full flex items-center gap-3 ${
+                buttonSize === "large" ? "px-4 py-3 text-base" : "px-3.5 py-2.5 text-sm"
+              } rounded-xl font-medium transition-colors text-left ${
                 activeTab === "home"
                   ? "bg-[#e8e0d3] text-[#2d2926]"
                   : "text-[#5c5348] hover:bg-[#eae3d7]"
@@ -388,7 +527,9 @@ export default function Home() {
                 setActiveTab("list");
                 setIsMenuOpen(false);
               }}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors text-left ${
+              className={`w-full flex items-center justify-between ${
+                buttonSize === "large" ? "px-4 py-3 text-base" : "px-3.5 py-2.5 text-sm"
+              } rounded-xl font-medium transition-colors text-left ${
                 activeTab === "list"
                   ? "bg-[#e8e0d3] text-[#2d2926]"
                   : "text-[#5c5348] hover:bg-[#eae3d7]"
@@ -402,6 +543,30 @@ export default function Home() {
               </span>
             </button>
 
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab("categories");
+                setIsMenuOpen(false);
+              }}
+              className={`w-full flex items-center justify-between ${
+                buttonSize === "large" ? "px-4 py-3 text-base" : "px-3.5 py-2.5 text-sm"
+              } rounded-xl font-medium transition-colors text-left ${
+                activeTab === "categories"
+                  ? "bg-[#e8e0d3] text-[#2d2926]"
+                  : "text-[#5c5348] hover:bg-[#eae3d7]"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <span>🏷️</span> カテゴリ管理
+              </div>
+              {categoriesList.length > 0 && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-[#ded6c9] text-[#5c5348]">
+                  {categoriesList.length}
+                </span>
+              )}
+            </button>
+
             <div className="my-2 border-t border-[#ded6c9]" />
 
             <button
@@ -410,7 +575,9 @@ export default function Home() {
                 setActiveTab("trash");
                 setIsMenuOpen(false);
               }}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors text-left ${
+              className={`w-full flex items-center justify-between ${
+                buttonSize === "large" ? "px-4 py-3 text-base" : "px-3.5 py-2.5 text-sm"
+              } rounded-xl font-medium transition-colors text-left ${
                 activeTab === "trash"
                   ? "bg-[#e8e0d3] text-[#2d2926]"
                   : "text-[#5c5348] hover:bg-[#eae3d7]"
@@ -432,7 +599,9 @@ export default function Home() {
                 setActiveTab("settings");
                 setIsMenuOpen(false);
               }}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors text-left ${
+              className={`w-full flex items-center gap-3 ${
+                buttonSize === "large" ? "px-4 py-3 text-base" : "px-3.5 py-2.5 text-sm"
+              } rounded-xl font-medium transition-colors text-left ${
                 activeTab === "settings"
                   ? "bg-[#e8e0d3] text-[#2d2926]"
                   : "text-[#5c5348] hover:bg-[#eae3d7]"
@@ -464,8 +633,94 @@ export default function Home() {
                 placeholder="タイトル（省略可）"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="w-full px-3.5 py-2 text-sm bg-[#faf8f5] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] placeholder-[#b0a598]"
+                className={`w-full ${
+                  fontSize === "large" ? "px-4 py-2.5 text-base" : "px-3.5 py-2 text-sm"
+                } bg-[#faf8f5] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] placeholder-[#b0a598]`}
               />
+            </div>
+
+            {/* 本文に文字が入った時だけ現れるカテゴリ選択エリア（タイトルのすぐ下） */}
+            <div
+              className={`overflow-hidden transition-all duration-300 ease-out ${
+                hasContent ? "max-h-32 opacity-100 mb-3" : "max-h-0 opacity-0 mb-0 pointer-events-none"
+              }`}
+            >
+              <div className="flex flex-wrap items-center gap-1.5 text-xs pt-0.5">
+                <span className="text-[#8a7f72] flex items-center gap-1 text-[11px] font-medium mr-0.5 select-none">
+                  🏷️ カテゴリ:
+                </span>
+
+                {/* 登録済みカテゴリチップ */}
+                {categoriesList.map((cat) => {
+                  const isSelected = selectedCategories.includes(cat);
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => handleToggleCategory(cat)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                        isSelected
+                          ? "bg-[#3d3731] text-[#faf8f5] shadow-xs"
+                          : "bg-[#e8e0d3] text-[#5c5348] hover:bg-[#ded6c9]"
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  );
+                })}
+
+                {/* インライン新規追加フォーム or 「＋ 新規」ボタン */}
+                {isAddingCategoryInline ? (
+                  <div className="flex items-center gap-1 bg-white p-0.5 rounded-lg border border-[#ded5c8]">
+                    <input
+                      type="text"
+                      placeholder="新しいカテゴリ"
+                      value={inlineNewCategoryName}
+                      onChange={(e) => setInlineNewCategoryName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleSaveInlineCategory();
+                        }
+                      }}
+                      autoFocus
+                      className="px-2 py-0.5 text-xs text-[#2d2926] bg-transparent focus:outline-none w-28"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSaveInlineCategory}
+                      className="px-2 py-0.5 rounded-md bg-[#3d3731] text-[#faf8f5] text-[11px] font-medium hover:bg-[#292420]"
+                    >
+                      追加
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAddingCategoryInline(false);
+                        setInlineNewCategoryName("");
+                      }}
+                      className="px-1 text-[11px] text-[#8a7f72] hover:text-[#3d3731]"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingCategoryInline(true)}
+                    className="px-2.5 py-1 rounded-lg border border-dashed border-[#b8aea2] text-[#7d7367] hover:border-[#3d3731] hover:text-[#3d3731] transition-colors text-xs font-medium"
+                  >
+                    ＋ 新規
+                  </button>
+                )}
+
+                {/* 1つも選んでいない時の未分類案内 */}
+                {selectedCategories.length === 0 && !isAddingCategoryInline && (
+                  <span className="text-[11px] text-[#a09485] select-none">
+                    （未選択＝未分類）
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* 本文入力欄（文字はゼロ、薄い鉛筆マークのみ） */}
@@ -482,7 +737,9 @@ export default function Home() {
                 onChange={(e) => setContent(e.target.value)}
                 onKeyDown={handleKeyDown}
                 autoFocus
-                className="w-full text-base bg-transparent border-0 focus:outline-none resize-none text-[#2d2926] leading-relaxed relative z-10"
+                className={`w-full ${
+                  fontSize === "large" ? "text-lg sm:text-xl" : "text-base"
+                } bg-transparent border-0 focus:outline-none resize-none text-[#2d2926] leading-relaxed relative z-10`}
               />
             </div>
 
@@ -495,7 +752,9 @@ export default function Home() {
               <button
                 type="button"
                 onClick={handleSave}
-                className="px-6 py-2 rounded-xl text-sm font-medium bg-[#3d3731] text-[#faf8f5] hover:bg-[#292420] transition-all shadow-sm"
+                className={`${
+                  buttonSize === "large" ? "px-8 py-3 text-base" : "px-6 py-2 text-sm"
+                } rounded-xl font-medium bg-[#3d3731] text-[#faf8f5] hover:bg-[#292420] transition-all shadow-sm`}
               >
                 保存
               </button>
@@ -513,7 +772,9 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => setActiveTab("home")}
-                className="text-xs text-[#7d7367] hover:text-[#3d3731]"
+                className={`${
+                  buttonSize === "large" ? "text-sm py-1 px-2" : "text-xs"
+                } text-[#7d7367] hover:text-[#3d3731]`}
               >
                 ← ホームへ
               </button>
@@ -538,14 +799,22 @@ export default function Home() {
                       className="p-4 rounded-xl bg-white border border-[#e5ded2] shadow-2xs relative"
                     >
                       <div className="flex items-start justify-between gap-2 mb-1.5">
-                        <h3 className="font-bold text-[#3d3731] text-sm pr-6">
+                        <h3
+                          className={`font-bold text-[#3d3731] ${
+                            fontSize === "large" ? "text-base" : "text-sm"
+                          } pr-6`}
+                        >
                           {note.title || <span className="text-[#b0a598] font-normal italic">（無題）</span>}
                         </h3>
 
                         {/* 右上：控えめな「…」メニューボタン */}
                         <div className="relative shrink-0">
                           <div className="flex items-center gap-2">
-                            <time className="text-xs text-[#8a7f72] font-mono">
+                            <time
+                              className={`${
+                                fontSize === "large" ? "text-xs" : "text-[11px]"
+                              } text-[#8a7f72] font-mono`}
+                            >
                               {formatDate(note.createdAt)}
                             </time>
                             <button
@@ -556,7 +825,11 @@ export default function Home() {
                                   isMenuThisNoteOpen ? null : note.id
                                 );
                               }}
-                              className="w-6 h-6 flex items-center justify-center rounded-lg text-[#9c9184] hover:text-[#3d3731] hover:bg-[#f4f0e8] text-sm leading-none font-bold transition-colors"
+                              className={`${
+                                buttonSize === "large"
+                                  ? "w-8 h-8 text-base"
+                                  : "w-6 h-6 text-sm"
+                              } flex items-center justify-center rounded-lg text-[#9c9184] hover:text-[#3d3731] hover:bg-[#f4f0e8] leading-none font-bold transition-colors`}
                               aria-label="操作メニュー"
                             >
                               …
@@ -565,11 +838,15 @@ export default function Home() {
 
                           {/* タップした時だけ開くポップアップメニュー */}
                           {isMenuThisNoteOpen && (
-                            <div className="absolute right-0 top-7 w-32 bg-white rounded-xl shadow-lg border border-[#e5ded2] p-1 z-30 transition-all">
+                            <div className="absolute right-0 top-7 w-36 bg-white rounded-xl shadow-lg border border-[#e5ded2] p-1 z-30 transition-all">
                               <button
                                 type="button"
                                 onClick={() => handleMoveToTrash(note.id)}
-                                className="w-full text-left px-2.5 py-1.5 text-xs text-[#b85448] hover:bg-[#fdf2f0] rounded-lg flex items-center gap-1.5 font-medium transition-colors"
+                                className={`w-full text-left ${
+                                  buttonSize === "large"
+                                    ? "px-3 py-2 text-sm"
+                                    : "px-2.5 py-1.5 text-xs"
+                                } text-[#b85448] hover:bg-[#fdf2f0] rounded-lg flex items-center gap-1.5 font-medium transition-colors`}
                               >
                                 <span>🗑️</span> ゴミ箱へ移動
                               </button>
@@ -578,7 +855,25 @@ export default function Home() {
                         </div>
                       </div>
 
-                      <p className="text-sm text-[#453f38] whitespace-pre-wrap leading-relaxed">
+                      {/* カテゴリタグ一覧 */}
+                      {note.categories && note.categories.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mb-2">
+                          {note.categories.map((cat) => (
+                            <span
+                              key={cat}
+                              className="text-[10px] bg-[#eae3d7] text-[#6b6257] px-2 py-0.5 rounded-md font-medium border border-[#ded6c9]"
+                            >
+                              🏷️ {cat}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      <p
+                        className={`${
+                          fontSize === "large" ? "text-base" : "text-sm"
+                        } text-[#453f38] whitespace-pre-wrap leading-relaxed`}
+                      >
                         {note.content}
                       </p>
                     </article>
@@ -604,7 +899,9 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => setActiveTab("home")}
-                className="text-xs text-[#7d7367] hover:text-[#3d3731]"
+                className={`${
+                  buttonSize === "large" ? "text-sm py-1 px-2" : "text-xs"
+                } text-[#7d7367] hover:text-[#3d3731]`}
               >
                 ← ホームへ
               </button>
@@ -622,27 +919,161 @@ export default function Home() {
                     className="p-4 rounded-xl bg-white/70 border border-[#e5ded2] opacity-80"
                   >
                     <div className="flex items-baseline justify-between gap-2 mb-1.5">
-                      <h3 className="font-bold text-[#3d3731] text-sm">
+                      <h3
+                        className={`font-bold text-[#3d3731] ${
+                          fontSize === "large" ? "text-base" : "text-sm"
+                        }`}
+                      >
                         {note.title || <span className="text-[#b0a598] font-normal italic">（無題）</span>}
                       </h3>
-                      <time className="text-xs text-[#8a7f72] shrink-0 font-mono">
+                      <time
+                        className={`${
+                          fontSize === "large" ? "text-xs" : "text-[11px]"
+                        } text-[#8a7f72] shrink-0 font-mono`}
+                      >
                         {formatDate(note.createdAt)}
                       </time>
                     </div>
-                    <p className="text-sm text-[#5c5348] whitespace-pre-wrap leading-relaxed mb-3">
+
+                    {/* カテゴリタグ一覧 */}
+                    {note.categories && note.categories.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-2">
+                        {note.categories.map((cat) => (
+                          <span
+                            key={cat}
+                            className="text-[10px] bg-[#eae3d7] text-[#6b6257] px-2 py-0.5 rounded-md font-medium border border-[#ded6c9]"
+                          >
+                            🏷️ {cat}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <p
+                      className={`${
+                        fontSize === "large" ? "text-base" : "text-sm"
+                      } text-[#5c5348] whitespace-pre-wrap leading-relaxed mb-3`}
+                    >
                       {note.content}
                     </p>
                     <div className="flex justify-end pt-2 border-t border-[#f4f0e8]">
                       <button
                         type="button"
                         onClick={() => handleRestoreFromTrash(note.id)}
-                        className="text-xs text-[#6b6257] hover:text-[#2d2926] bg-[#eae3d7] px-3 py-1 rounded-lg transition-colors flex items-center gap-1 font-medium"
+                        className={`${
+                          buttonSize === "large"
+                            ? "text-sm px-4 py-2"
+                            : "text-xs px-3 py-1"
+                        } text-[#6b6257] hover:text-[#2d2926] bg-[#eae3d7] rounded-lg transition-colors flex items-center gap-1 font-medium`}
                       >
                         <span>↩️</span> 元に戻す
                       </button>
                     </div>
                   </article>
                 ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ③-2 カテゴリ管理画面 */}
+        {activeTab === "categories" && (
+          <div className="bg-[#f2efe9] rounded-2xl p-6 border border-[#d5cdc0] shadow-sm max-h-[75vh] flex flex-col">
+            <div className="flex items-center justify-between mb-4 pb-2 border-b border-[#ded5c8]">
+              <div>
+                <h2 className="text-sm font-bold text-[#3d3731]">
+                  カテゴリ管理 ({categoriesList.length}件)
+                </h2>
+                <span className="text-[11px] text-[#8a7f72]">
+                  メモを分類するタグの作成と整理ができます
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab("home")}
+                className={`${
+                  buttonSize === "large" ? "text-sm py-1 px-2" : "text-xs"
+                } text-[#7d7367] hover:text-[#3d3731]`}
+              >
+                ← ホームへ
+              </button>
+            </div>
+
+            {/* 新規カテゴリ作成フォーム */}
+            <div className="mb-4 p-3.5 bg-white rounded-xl border border-[#e5ded2]">
+              <span className="block text-xs font-bold text-[#3d3731] mb-2">
+                新しいカテゴリを追加
+              </span>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="カテゴリ名を入力..."
+                  value={newCategoryInput}
+                  onChange={(e) => setNewCategoryInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleCreateCategoryFromManagement();
+                    }
+                  }}
+                  className={`flex-1 ${
+                    fontSize === "large" ? "text-sm px-3.5 py-2" : "text-xs px-3 py-1.5"
+                  } bg-[#faf8f5] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] placeholder-[#b0a598]`}
+                />
+                <button
+                  type="button"
+                  onClick={handleCreateCategoryFromManagement}
+                  className={`${
+                    buttonSize === "large" ? "px-5 py-2 text-sm" : "px-4 py-1.5 text-xs"
+                  } rounded-xl font-medium bg-[#3d3731] text-[#faf8f5] hover:bg-[#292420] transition-all shadow-xs shrink-0`}
+                >
+                  追加
+                </button>
+              </div>
+            </div>
+
+            {/* 登録済みカテゴリ一覧 */}
+            <div className="flex-1 min-h-0 overflow-y-auto pr-1 flex flex-col gap-2">
+              <span className="text-xs font-bold text-[#3d3731] mb-0.5">
+                登録済みカテゴリ
+              </span>
+              {categoriesList.length === 0 ? (
+                <div className="text-center py-8 text-xs text-[#8a7f72] bg-white/60 rounded-xl border border-dashed border-[#ded6c9] p-4">
+                  まだ登録されたカテゴリはありません。<br />
+                  上の入力欄から追加するか、メモを書くときに「＋ 新規」から作成できます。
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {categoriesList.map((cat) => {
+                    const count = notes.filter(
+                      (n) => !n.isTrash && n.categories && n.categories.includes(cat)
+                    ).length;
+
+                    return (
+                      <div
+                        key={cat}
+                        className="flex items-center justify-between p-3 bg-white rounded-xl border border-[#e5ded2] transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-[#3d3731]">
+                            🏷️ {cat}
+                          </span>
+                          <span className="text-[11px] text-[#8a7f72] font-mono">
+                            ({count}件のメモ)
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setCategoryToDelete(cat)}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg text-[#9c9184] hover:text-[#b85448] hover:bg-[#fdf2f0] transition-colors text-xs font-bold"
+                          title="カテゴリを消去"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
           </div>
@@ -656,13 +1087,80 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => setActiveTab("home")}
-                className="text-xs text-[#7d7367] hover:text-[#3d3731]"
+                className={`${
+                  buttonSize === "large" ? "text-sm py-1 px-2" : "text-xs"
+                } text-[#7d7367] hover:text-[#3d3731]`}
               >
                 ← ホームへ
               </button>
             </div>
 
-            <div className="flex flex-col gap-5 text-sm">
+            <div className="flex flex-col gap-4 text-sm">
+              {/* 文字の大きさ */}
+              <div className="flex items-center justify-between p-3.5 bg-white rounded-xl border border-[#e5ded2]">
+                <div>
+                  <span className="font-medium text-[#3d3731] block">文字の大きさ</span>
+                  <span className="text-xs text-[#8a7f72]">メモの本文や入力欄の文字サイズ</span>
+                </div>
+                <div className="flex gap-1.5 bg-[#f4f0e8] p-1 rounded-lg border border-[#e5ded2]">
+                  <button
+                    type="button"
+                    onClick={() => handleFontSizeChange("normal")}
+                    className={`px-3 py-1.5 text-xs rounded-md font-medium transition-all ${
+                      fontSize === "normal"
+                        ? "bg-[#3d3731] text-white shadow-xs"
+                        : "text-[#6b6257] hover:text-[#2d2926]"
+                    }`}
+                  >
+                    標準
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleFontSizeChange("large")}
+                    className={`px-3 py-1.5 text-xs rounded-md font-medium transition-all ${
+                      fontSize === "large"
+                        ? "bg-[#3d3731] text-white shadow-xs"
+                        : "text-[#6b6257] hover:text-[#2d2926]"
+                    }`}
+                  >
+                    大きめ
+                  </button>
+                </div>
+              </div>
+
+              {/* ボタンの大きさ */}
+              <div className="flex items-center justify-between p-3.5 bg-white rounded-xl border border-[#e5ded2]">
+                <div>
+                  <span className="font-medium text-[#3d3731] block">ボタンの大きさ</span>
+                  <span className="text-xs text-[#8a7f72]">メニューや保存ボタンなどの押しやすさ</span>
+                </div>
+                <div className="flex gap-1.5 bg-[#f4f0e8] p-1 rounded-lg border border-[#e5ded2]">
+                  <button
+                    type="button"
+                    onClick={() => handleButtonSizeChange("normal")}
+                    className={`px-3 py-1.5 text-xs rounded-md font-medium transition-all ${
+                      buttonSize === "normal"
+                        ? "bg-[#3d3731] text-white shadow-xs"
+                        : "text-[#6b6257] hover:text-[#2d2926]"
+                    }`}
+                  >
+                    標準
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleButtonSizeChange("large")}
+                    className={`px-3 py-1.5 text-xs rounded-md font-medium transition-all ${
+                      buttonSize === "large"
+                        ? "bg-[#3d3731] text-white shadow-xs"
+                        : "text-[#6b6257] hover:text-[#2d2926]"
+                    }`}
+                  >
+                    大きめ
+                  </button>
+                </div>
+              </div>
+
+              {/* 保存通知 */}
               <div className="flex items-center justify-between p-3.5 bg-white rounded-xl border border-[#e5ded2]">
                 <div>
                   <span className="font-medium text-[#3d3731] block">保存通知</span>
@@ -676,6 +1174,7 @@ export default function Home() {
                 />
               </div>
 
+              {/* 容量・メモ情報 */}
               <div className="p-3.5 bg-white rounded-xl border border-[#e5ded2]">
                 <span className="font-medium text-[#3d3731] block mb-2">容量・メモ情報</span>
                 <div className="text-xs text-[#7d7367] flex flex-col gap-1">
@@ -757,6 +1256,45 @@ export default function Home() {
                   </div>
                 );
               })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* カテゴリ消去の確認モーダル */}
+      {categoryToDelete && (
+        <div
+          className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4"
+          onClick={() => setCategoryToDelete(null)}
+        >
+          <div
+            className="bg-[#f4f0e8] rounded-2xl p-6 sm:p-7 max-w-sm w-full border border-[#ded6c9] shadow-2xl transition-all"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-base font-bold text-[#3d3731] mb-1">
+              「{categoryToDelete}」
+            </h3>
+            <p className="text-sm font-bold text-[#2d2926] mb-3">
+              本当にこのカテゴリを消去しますか？
+            </p>
+            <p className="text-xs text-[#786f66] leading-relaxed mb-6 bg-[#eae4d9] p-3 rounded-xl border border-[#ded6c9]">
+              （※このカテゴリに分類されているメモは未分類、または他のカテゴリがついている場合は消去するカテゴリのみなくなります）
+            </p>
+            <div className="flex justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setCategoryToDelete(null)}
+                className="px-4 py-2 rounded-xl text-xs font-medium text-[#6b6257] hover:bg-[#e8e0d3] transition-colors"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteCategory}
+                className="px-4 py-2 rounded-xl text-xs font-medium bg-[#b85448] text-white hover:bg-[#a34438] transition-colors shadow-xs"
+              >
+                消去
+              </button>
             </div>
           </div>
         </div>
