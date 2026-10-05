@@ -223,6 +223,8 @@ export default function Home() {
   const [editCategories, setEditCategories] = useState<string[]>([]);
   const [isAddingCategoryInEdit, setIsAddingCategoryInEdit] = useState(false);
   const [inlineNewCategoryInEdit, setInlineNewCategoryInEdit] = useState("");
+  const [showDiscardConfirmModal, setShowDiscardConfirmModal] = useState(false);
+  const [confirmDiscardOnEdit, setConfirmDiscardOnEdit] = useState(true);
 
   // 検索・絞り込みパネルとお気に入りのState
   const [isSearchPanelOpen, setIsSearchPanelOpen] = useState(false);
@@ -253,6 +255,10 @@ export default function Home() {
       const savedCategories = localStorage.getItem("seednote_categories");
       if (savedCategories) {
         setCategoriesList(JSON.parse(savedCategories));
+      }
+      const savedConfirmDiscard = localStorage.getItem("seednote_confirm_discard");
+      if (savedConfirmDiscard !== null) {
+        setConfirmDiscardOnEdit(savedConfirmDiscard === "true");
       }
     } catch (e) {
       console.error("データの読み込みに失敗しました", e);
@@ -385,6 +391,44 @@ export default function Home() {
     setNotes(updatedNotes);
     localStorage.setItem("seednote_items", JSON.stringify(updatedNotes));
     setEditingNote(null);
+    setIsAddingCategoryInEdit(false);
+    setInlineNewCategoryInEdit("");
+  };
+
+  // 編集モーダルを閉じる前の確認処理（フールプルーフ）
+  const handleRequestCloseEditModal = () => {
+    if (!editingNote) {
+      setEditingNote(null);
+      return;
+    }
+
+    const originalTitle = (editingNote.title || "").trim();
+    const currentTitle = editTitleInput.trim();
+    const originalCats = [...(editingNote.categories || [])].sort();
+    const currentCats = [...editCategories].sort();
+
+    const isTitleChanged = originalTitle !== currentTitle;
+    const isCatsChanged =
+      originalCats.length !== currentCats.length ||
+      originalCats.some((c, i) => c !== currentCats[i]);
+
+    const hasChanges = isTitleChanged || isCatsChanged;
+
+    if (hasChanges && confirmDiscardOnEdit) {
+      setShowDiscardConfirmModal(true);
+    } else {
+      setEditingNote(null);
+      setIsAddingCategoryInEdit(false);
+      setInlineNewCategoryInEdit("");
+    }
+  };
+
+  // 編集の破棄を確定して閉じる
+  const handleConfirmDiscardEdit = () => {
+    setShowDiscardConfirmModal(false);
+    setEditingNote(null);
+    setIsAddingCategoryInEdit(false);
+    setInlineNewCategoryInEdit("");
   };
 
   // メモを保存する処理
@@ -448,6 +492,12 @@ export default function Home() {
   const handleToggleToast = (checked: boolean) => {
     setEnableToast(checked);
     localStorage.setItem("seednote_enable_toast", String(checked));
+  };
+
+  // 編集破棄時の確認設定の切り替え（フールプルーフ）
+  const handleToggleConfirmDiscard = (checked: boolean) => {
+    setConfirmDiscardOnEdit(checked);
+    localStorage.setItem("seednote_confirm_discard", String(checked));
   };
 
   // 文字サイズの切り替え
@@ -726,90 +776,6 @@ export default function Home() {
               />
             </div>
 
-            {/* 本文に文字が入った時だけ現れるカテゴリ選択エリア（タイトルのすぐ下） */}
-            <div
-              className={`overflow-hidden transition-all duration-300 ease-out ${
-                hasContent ? "max-h-32 opacity-100 mb-3" : "max-h-0 opacity-0 mb-0 pointer-events-none"
-              }`}
-            >
-              <div className="flex flex-wrap items-center gap-1.5 text-xs pt-0.5">
-                <span className="text-[#8a7f72] flex items-center gap-1 text-[11px] font-medium mr-0.5 select-none">
-                  🏷️ カテゴリ:
-                </span>
-
-                {/* 登録済みカテゴリチップ */}
-                {categoriesList.map((cat) => {
-                  const isSelected = selectedCategories.includes(cat);
-                  return (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => handleToggleCategory(cat)}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                        isSelected
-                          ? "bg-[#3d3731] text-[#faf8f5] shadow-xs"
-                          : "bg-[#e8e0d3] text-[#5c5348] hover:bg-[#ded6c9]"
-                      }`}
-                    >
-                      {cat}
-                    </button>
-                  );
-                })}
-
-                {/* インライン新規追加フォーム or 「＋ 新規」ボタン */}
-                {isAddingCategoryInline ? (
-                  <div className="flex items-center gap-1 bg-white p-0.5 rounded-lg border border-[#ded5c8]">
-                    <input
-                      type="text"
-                      placeholder="新しいカテゴリ"
-                      value={inlineNewCategoryName}
-                      onChange={(e) => setInlineNewCategoryName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          handleSaveInlineCategory();
-                        }
-                      }}
-                      autoFocus
-                      className="px-2 py-0.5 text-xs text-[#2d2926] bg-transparent focus:outline-none w-28"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleSaveInlineCategory}
-                      className="px-2 py-0.5 rounded-md bg-[#3d3731] text-[#faf8f5] text-[11px] font-medium hover:bg-[#292420]"
-                    >
-                      追加
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsAddingCategoryInline(false);
-                        setInlineNewCategoryName("");
-                      }}
-                      className="px-1 text-[11px] text-[#8a7f72] hover:text-[#3d3731]"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setIsAddingCategoryInline(true)}
-                    className="px-2.5 py-1 rounded-lg border border-dashed border-[#b8aea2] text-[#7d7367] hover:border-[#3d3731] hover:text-[#3d3731] transition-colors text-xs font-medium"
-                  >
-                    ＋ 新規
-                  </button>
-                )}
-
-                {/* 1つも選んでいない時の未分類案内 */}
-                {selectedCategories.length === 0 && !isAddingCategoryInline && (
-                  <span className="text-[11px] text-[#a09485] select-none">
-                    （未選択＝未分類）
-                  </span>
-                )}
-              </div>
-            </div>
-
             {/* 本文入力欄（文字はゼロ、薄い鉛筆マークのみ） */}
             <div className="relative min-h-[160px]">
               {!content && (
@@ -830,30 +796,116 @@ export default function Home() {
               />
             </div>
 
-            {/* 本文に文字が入った時だけ現れる保存ボタン */}
+            {/* 本文に文字が入った時だけ現れる下部エリア（左：カテゴリ選択、右：保存ボタン） */}
             <div
-              className={`flex justify-end pt-3 transition-all duration-300 ease-out ${
-                hasContent ? "opacity-100" : "opacity-0 pointer-events-none"
+              className={`overflow-hidden transition-all duration-300 ease-out border-t border-[#ded5c8]/50 pt-3 mt-1 ${
+                hasContent ? "max-h-60 opacity-100" : "max-h-0 opacity-0 pointer-events-none pt-0 mt-0 border-t-0"
               }`}
             >
-              <button
-                type="button"
-                onClick={handleSave}
-                className={`${
-                  buttonSize === "large" ? "px-8 py-3 text-base" : "px-6 py-2 text-sm"
-                } rounded-xl font-medium bg-[#3d3731] text-[#faf8f5] hover:bg-[#292420] transition-all shadow-sm`}
-              >
-                保存
-              </button>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                {/* カテゴリ選択エリア */}
+                <div className="flex flex-wrap items-center gap-1.5 text-xs flex-1">
+                  <span className="text-[#8a7f72] flex items-center gap-1 text-[11px] font-medium mr-0.5 select-none">
+                    🏷️ カテゴリ:
+                  </span>
+
+                  {/* 登録済みカテゴリチップ */}
+                  {categoriesList.map((cat) => {
+                    const isSelected = selectedCategories.includes(cat);
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => handleToggleCategory(cat)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                          isSelected
+                            ? "bg-[#3d3731] text-[#faf8f5] shadow-xs"
+                            : "bg-[#e8e0d3] text-[#5c5348] hover:bg-[#ded6c9]"
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    );
+                  })}
+
+                  {/* インライン新規追加フォーム or 「＋ 新規」ボタン */}
+                  {isAddingCategoryInline ? (
+                    <div className="flex items-center gap-1 bg-white p-0.5 rounded-lg border border-[#ded5c8]">
+                      <input
+                        type="text"
+                        placeholder="新しいカテゴリ"
+                        value={inlineNewCategoryName}
+                        onChange={(e) => setInlineNewCategoryName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleSaveInlineCategory();
+                          }
+                        }}
+                        autoFocus
+                        className="px-2 py-0.5 text-xs text-[#2d2926] bg-transparent focus:outline-none w-28"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleSaveInlineCategory}
+                        className="px-2 py-0.5 rounded-md bg-[#3d3731] text-[#faf8f5] text-[11px] font-medium hover:bg-[#292420]"
+                      >
+                        追加
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAddingCategoryInline(false);
+                          setInlineNewCategoryName("");
+                        }}
+                        className="px-1 text-[11px] text-[#8a7f72] hover:text-[#3d3731]"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingCategoryInline(true)}
+                      className="px-2.5 py-1 rounded-lg border border-dashed border-[#b8aea2] text-[#7d7367] hover:border-[#3d3731] hover:text-[#3d3731] transition-colors text-xs font-medium"
+                    >
+                      ＋ 新規
+                    </button>
+                  )}
+
+                  {selectedCategories.length === 0 && !isAddingCategoryInline && (
+                    <span className="text-[11px] text-[#a09485] select-none">
+                      （未選択＝未分類）
+                    </span>
+                  )}
+                </div>
+
+                {/* 保存ボタン */}
+                <div className="shrink-0 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    className={`${
+                      buttonSize === "large" ? "px-7 py-2.5 text-base" : "px-6 py-2 text-sm"
+                    } rounded-xl font-medium bg-[#3d3731] text-[#faf8f5] hover:bg-[#292420] transition-all shadow-sm`}
+                  >
+                    保存
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
 
-        {/* ② メモを見る（通常一覧） */}
+        {/* ② メモを見る（通常一覧：Twitter風のすっきり二層表示） */}
         {activeTab === "list" && (
-          <div className="bg-[#f2efe9] rounded-2xl p-6 border border-[#d5cdc0] shadow-sm max-h-[75vh] flex flex-col">
-            <div className="flex items-center justify-between mb-4 pb-2 border-b border-[#ded5c8]">
-              <h2 className="text-sm font-bold text-[#3d3731]">
+          <div className="flex flex-col max-h-[78vh]">
+            <div className="flex items-center justify-between mb-3 pb-2 border-b border-[#d5cdc0]">
+              <h2
+                className={`${
+                  fontSize === "large" ? "text-xl" : "text-lg"
+                } font-bold text-[#3d3731]`}
+              >
                 メモ一覧 ({activeNotes.length}件)
               </h2>
               <button
@@ -861,13 +913,13 @@ export default function Home() {
                 onClick={() => setActiveTab("home")}
                 className={`${
                   buttonSize === "large" ? "text-sm py-1 px-2" : "text-xs"
-                } text-[#7d7367] hover:text-[#3d3731]`}
+                } text-[#7d7367] hover:text-[#3d3731] font-medium transition-colors`}
               >
                 ← ホームへ
               </button>
             </div>
 
-            {/* 検索・絞り込み機能エリア（イメージ図の実装） */}
+            {/* 検索・絞り込み機能エリア（スケッチの実装） */}
             {!isSearchPanelOpen ? (
               <div className="mb-3 flex items-center justify-between">
                 <button
@@ -903,9 +955,9 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() => setIsSearchPanelOpen(false)}
-                    className="text-xs text-[#7d7367] hover:text-[#3d3731] font-medium px-2 py-0.5 rounded-lg hover:bg-[#f4f0e8] transition-colors"
+                    className="flex items-center gap-1 px-2 py-0.5 rounded-lg border border-[#c4b9aa] text-xs text-[#5c5348] hover:text-[#3d3731] hover:border-[#8a7f72] transition-colors"
                   >
-                    とじる
+                    <span>✕</span> とじる
                   </button>
                 </div>
 
@@ -1141,12 +1193,16 @@ export default function Home() {
           </div>
         )}
 
-        {/* ③ ゴミ箱画面 */}
+        {/* ③ ゴミ箱画面（二層化） */}
         {activeTab === "trash" && (
-          <div className="bg-[#f2efe9] rounded-2xl p-6 border border-[#d5cdc0] shadow-sm max-h-[75vh] flex flex-col">
-            <div className="flex items-center justify-between mb-4 pb-2 border-b border-[#ded5c8]">
+          <div className="flex flex-col max-h-[78vh]">
+            <div className="flex items-center justify-between mb-3 pb-2 border-b border-[#d5cdc0]">
               <div>
-                <h2 className="text-sm font-bold text-[#3d3731]">
+                <h2
+                  className={`${
+                    fontSize === "large" ? "text-xl" : "text-lg"
+                  } font-bold text-[#3d3731]`}
+                >
                   ゴミ箱 ({trashNotes.length}件)
                 </h2>
                 <span className="text-[11px] text-[#8a7f72]">
@@ -1158,7 +1214,7 @@ export default function Home() {
                 onClick={() => setActiveTab("home")}
                 className={`${
                   buttonSize === "large" ? "text-sm py-1 px-2" : "text-xs"
-                } text-[#7d7367] hover:text-[#3d3731]`}
+                } text-[#7d7367] hover:text-[#3d3731] font-medium transition-colors`}
               >
                 ← ホームへ
               </button>
@@ -1233,12 +1289,16 @@ export default function Home() {
           </div>
         )}
 
-        {/* ③-2 カテゴリ管理画面 */}
+        {/* ③-2 カテゴリ管理画面（二層化） */}
         {activeTab === "categories" && (
-          <div className="bg-[#f2efe9] rounded-2xl p-6 border border-[#d5cdc0] shadow-sm max-h-[75vh] flex flex-col">
-            <div className="flex items-center justify-between mb-4 pb-2 border-b border-[#ded5c8]">
+          <div className="flex flex-col max-h-[78vh]">
+            <div className="flex items-center justify-between mb-3 pb-2 border-b border-[#d5cdc0]">
               <div>
-                <h2 className="text-sm font-bold text-[#3d3731]">
+                <h2
+                  className={`${
+                    fontSize === "large" ? "text-xl" : "text-lg"
+                  } font-bold text-[#3d3731]`}
+                >
                   カテゴリ管理 ({categoriesList.length}件)
                 </h2>
                 <span className="text-[11px] text-[#8a7f72]">
@@ -1250,7 +1310,7 @@ export default function Home() {
                 onClick={() => setActiveTab("home")}
                 className={`${
                   buttonSize === "large" ? "text-sm py-1 px-2" : "text-xs"
-                } text-[#7d7367] hover:text-[#3d3731]`}
+                } text-[#7d7367] hover:text-[#3d3731] font-medium transition-colors`}
               >
                 ← ホームへ
               </button>
@@ -1288,6 +1348,9 @@ export default function Home() {
                 </button>
               </div>
             </div>
+
+            {/* エリアの仕切り線と余白 */}
+            <div className="border-b border-[#ded5c8] my-4" />
 
             {/* 登録済みカテゴリ一覧 */}
             <div className="flex-1 min-h-0 overflow-y-auto pr-1 flex flex-col gap-2">
@@ -1340,7 +1403,13 @@ export default function Home() {
         {activeTab === "settings" && (
           <div className="bg-[#f2efe9] rounded-2xl p-6 border border-[#d5cdc0] shadow-sm">
             <div className="flex items-center justify-between mb-6 pb-2 border-b border-[#ded5c8]">
-              <h2 className="text-sm font-bold text-[#3d3731]">設定</h2>
+              <h2
+                className={`${
+                  fontSize === "large" ? "text-xl" : "text-lg"
+                } font-bold text-[#3d3731]`}
+              >
+                設定
+              </h2>
               <button
                 type="button"
                 onClick={() => setActiveTab("home")}
@@ -1427,6 +1496,20 @@ export default function Home() {
                   type="checkbox"
                   checked={enableToast}
                   onChange={(e) => handleToggleToast(e.target.checked)}
+                  className="w-4 h-4 accent-[#3d3731] cursor-pointer"
+                />
+              </div>
+
+              {/* 編集破棄の確認（フールプルーフ設定） */}
+              <div className="flex items-center justify-between p-3.5 bg-white rounded-xl border border-[#e5ded2]">
+                <div>
+                  <span className="font-medium text-[#3d3731] block">編集破棄の確認</span>
+                  <span className="text-xs text-[#8a7f72]">タイトルやカテゴリを変更中に保存せず閉じる際、確認ダイアログを表示する</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={confirmDiscardOnEdit}
+                  onChange={(e) => handleToggleConfirmDiscard(e.target.checked)}
                   className="w-4 h-4 accent-[#3d3731] cursor-pointer"
                 />
               </div>
@@ -1560,29 +1643,20 @@ export default function Home() {
       {editingNote && (
         <div
           className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4"
-          onClick={() => setEditingNote(null)}
+          onClick={handleRequestCloseEditModal}
         >
           <div
             className="bg-[#f4f0e8] rounded-2xl p-6 sm:p-7 max-w-md w-full border border-[#ded6c9] shadow-2xl transition-all max-h-[90vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             {/* モーダルのヘッダー */}
-            <div className="shrink-0 flex items-center justify-between pb-3 mb-4 border-b border-[#ded6c9]">
-              <div>
-                <h2 className="text-base font-bold text-[#3d3731] flex items-center gap-1.5">
-                  <span>🏷️</span> タイトル・カテゴリの変更
-                </h2>
-                <span className="text-[11px] text-[#8a7f72]">
-                  見出しやジャンルを整理できます（※本文は保護されます）
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setEditingNote(null)}
-                className="w-7 h-7 rounded-full bg-[#e8e0d3] text-xs font-bold text-[#5c5348] hover:bg-[#ded6c9] transition-colors flex items-center justify-center shrink-0"
-              >
-                ✕
-              </button>
+            <div className="shrink-0 pb-3 mb-4 border-b border-[#ded6c9]">
+              <h2 className="text-base font-bold text-[#3d3731] flex items-center gap-1.5">
+                <span>🏷️</span> タイトル・カテゴリの変更
+              </h2>
+              <span className="text-[11px] text-[#8a7f72]">
+                見出しやジャンルを整理できます（※本文は保護されます）
+              </span>
             </div>
 
             {/* スクロール可能な編集エリア */}
@@ -1696,7 +1770,7 @@ export default function Home() {
             <div className="shrink-0 flex justify-end gap-2.5 pt-4 mt-3 border-t border-[#ded6c9]">
               <button
                 type="button"
-                onClick={() => setEditingNote(null)}
+                onClick={handleRequestCloseEditModal}
                 className="px-4 py-2 rounded-xl text-xs font-medium text-[#6b6257] hover:bg-[#e8e0d3] transition-colors"
               >
                 キャンセル
@@ -1707,6 +1781,42 @@ export default function Home() {
                 className="px-5 py-2 rounded-xl text-xs font-medium bg-[#3d3731] text-[#faf8f5] hover:bg-[#292420] transition-all shadow-xs"
               >
                 保存する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ⑥ 編集内容破棄の確認モーダル（フールプルーフ） */}
+      {showDiscardConfirmModal && (
+        <div
+          className="fixed inset-0 bg-black/40 backdrop-blur-xs z-60 flex items-center justify-center p-4"
+          onClick={() => setShowDiscardConfirmModal(false)}
+        >
+          <div
+            className="bg-[#f4f0e8] rounded-2xl p-6 sm:p-7 max-w-sm w-full border border-[#ded6c9] shadow-2xl transition-all"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-base font-bold text-[#3d3731] mb-2">
+              変更内容を破棄しますか？
+            </h3>
+            <p className="text-xs text-[#786f66] leading-relaxed mb-6 bg-[#eae4d9] p-3 rounded-xl border border-[#ded6c9]">
+              保存されていないタイトルやカテゴリの変更は失われます。
+            </p>
+            <div className="flex justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setShowDiscardConfirmModal(false)}
+                className="px-4 py-2 rounded-xl text-xs font-medium text-[#6b6257] hover:bg-[#e8e0d3] transition-colors"
+              >
+                編集を続ける
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDiscardEdit}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-[#b85448] text-white hover:bg-[#a34438] transition-colors shadow-xs"
+              >
+                破棄する
               </button>
             </div>
           </div>
