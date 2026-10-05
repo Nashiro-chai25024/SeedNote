@@ -10,6 +10,7 @@ interface Note {
   createdAt: string;
   isTrash?: boolean; // ゴミ箱フラグ（完全削除せず退避する）
   categories?: string[]; // カテゴリタグ一覧
+  isFavorite?: boolean; // お気に入りフラグ
 }
 
 type TabType = "home" | "list" | "categories" | "trash" | "settings";
@@ -222,6 +223,11 @@ export default function Home() {
   const [editCategories, setEditCategories] = useState<string[]>([]);
   const [isAddingCategoryInEdit, setIsAddingCategoryInEdit] = useState(false);
   const [inlineNewCategoryInEdit, setInlineNewCategoryInEdit] = useState("");
+
+  // 検索・絞り込みパネルとお気に入りのState
+  const [isSearchPanelOpen, setIsSearchPanelOpen] = useState(false);
+  const [filterOnlyFavorite, setFilterOnlyFavorite] = useState(false);
+  const [filterCategory, setFilterCategory] = useState<string | null>(null);
 
   const [isLoaded, setIsLoaded] = useState(false);
 
@@ -474,9 +480,31 @@ export default function Home() {
     return `${month}月${date}日 ${hours}:${minutes}`;
   };
 
+  // お気に入りの切り替え（☆ ⇄ ★）
+  const handleToggleFavorite = (id: string) => {
+    const updatedNotes = notes.map((note) =>
+      note.id === id ? { ...note, isFavorite: !note.isFavorite } : note
+    );
+    setNotes(updatedNotes);
+    localStorage.setItem("seednote_items", JSON.stringify(updatedNotes));
+  };
+
   const hasContent = content.trim().length > 0;
   const activeNotes = notes.filter((n) => !n.isTrash);
   const trashNotes = notes.filter((n) => n.isTrash);
+
+  // 検索・絞り込み適用後のメモ一覧
+  const displayedNotes = activeNotes.filter((note) => {
+    if (filterOnlyFavorite && !note.isFavorite) return false;
+    if (filterCategory !== null) {
+      if (filterCategory === "uncategorized") {
+        if (note.categories && note.categories.length > 0) return false;
+      } else {
+        if (!note.categories || !note.categories.includes(filterCategory)) return false;
+      }
+    }
+    return true;
+  });
 
   return (
     <div className="min-h-screen bg-[#e8e2d5] text-[#2d2926] font-sans flex flex-col justify-between p-4 sm:p-8 relative overflow-x-hidden">
@@ -839,6 +867,137 @@ export default function Home() {
               </button>
             </div>
 
+            {/* 検索・絞り込み機能エリア（イメージ図の実装） */}
+            {!isSearchPanelOpen ? (
+              <div className="mb-3 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setIsSearchPanelOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#ded5c8] text-xs font-bold text-[#5c5348] hover:bg-[#faf8f5] shadow-2xs transition-all"
+                >
+                  <span>🔍</span> 検索機能
+                  {(filterOnlyFavorite || filterCategory !== null) && (
+                    <span className="w-2 h-2 rounded-full bg-[#d49e35]" title="絞り込み中" />
+                  )}
+                </button>
+                {(filterOnlyFavorite || filterCategory !== null) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFilterOnlyFavorite(false);
+                      setFilterCategory(null);
+                    }}
+                    className="text-[11px] text-[#8a7f72] hover:text-[#3d3731] underline font-medium"
+                  >
+                    絞り込みを解除
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="mb-3 p-3.5 bg-white rounded-xl border border-[#ded5c8] shadow-xs flex flex-col gap-3 transition-all">
+                {/* パネル上部: タイトル & とじるボタン */}
+                <div className="flex items-center justify-between pb-2 border-b border-[#f0eae1]">
+                  <span className="text-xs font-bold text-[#3d3731] flex items-center gap-1.5">
+                    <span>🔍</span> 検索機能
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsSearchPanelOpen(false)}
+                    className="text-xs text-[#7d7367] hover:text-[#3d3731] font-medium px-2 py-0.5 rounded-lg hover:bg-[#f4f0e8] transition-colors"
+                  >
+                    とじる
+                  </button>
+                </div>
+
+                {/* ① お気に入り表示 */}
+                <div>
+                  <span className="block text-[11px] font-bold text-[#8a7f72] mb-1.5">
+                    ⭐ お気に入り
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setFilterOnlyFavorite(!filterOnlyFavorite)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+                      filterOnlyFavorite
+                        ? "bg-[#d49e35] text-white shadow-xs font-bold"
+                        : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
+                    }`}
+                  >
+                    <span>{filterOnlyFavorite ? "★" : "☆"}</span>
+                    {filterOnlyFavorite ? "お気に入りのみ表示中" : "お気に入りのみ表示"}
+                  </button>
+                </div>
+
+                {/* ② タグからさがす */}
+                <div>
+                  <span className="block text-[11px] font-bold text-[#8a7f72] mb-1.5">
+                    🏷️ タグからさがす
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setFilterCategory(null)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                        filterCategory === null
+                          ? "bg-[#3d3731] text-white shadow-xs"
+                          : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
+                      }`}
+                    >
+                      すべて
+                    </button>
+                    {categoriesList.map((cat) => (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() =>
+                          setFilterCategory(filterCategory === cat ? null : cat)
+                        }
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                          filterCategory === cat
+                            ? "bg-[#3d3731] text-white shadow-xs"
+                            : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setFilterCategory(
+                          filterCategory === "uncategorized" ? null : "uncategorized"
+                        )
+                      }
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                        filterCategory === "uncategorized"
+                          ? "bg-[#3d3731] text-white shadow-xs"
+                          : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
+                      }`}
+                    >
+                      未分類
+                    </button>
+                  </div>
+                </div>
+
+                {/* ヒット件数 */}
+                {(filterOnlyFavorite || filterCategory !== null) && (
+                  <div className="text-[11px] text-[#8a7f72] pt-1 border-t border-[#f4f0e8] flex items-center justify-between">
+                    <span>該当するメモ: {displayedNotes.length}件</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFilterOnlyFavorite(false);
+                        setFilterCategory(null);
+                      }}
+                      className="text-[11px] text-[#8a7f72] hover:text-[#3d3731] underline"
+                    >
+                      条件をリセット
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="overflow-y-auto flex flex-col gap-3 pr-1">
               {!isLoaded ? (
                 <div className="text-center py-8 text-sm text-[#b0a598]">
@@ -848,8 +1007,22 @@ export default function Home() {
                 <div className="text-center py-10 text-sm text-[#8a7f72]">
                   まだメモがありません。ホームから思いつきを書いてみましょう。
                 </div>
+              ) : displayedNotes.length === 0 ? (
+                <div className="text-center py-10 text-xs text-[#8a7f72] bg-white/50 rounded-xl border border-dashed border-[#ded6c9] p-4">
+                  条件に一致するメモが見つかりませんでした。<br />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFilterOnlyFavorite(false);
+                      setFilterCategory(null);
+                    }}
+                    className="mt-2 text-xs text-[#3d3731] font-bold underline hover:text-black"
+                  >
+                    条件をリセットして全件表示
+                  </button>
+                </div>
               ) : (
-                activeNotes.map((note) => {
+                displayedNotes.map((note) => {
                   const isMenuThisNoteOpen = activeMenuNoteId === note.id;
 
                   return (
@@ -866,8 +1039,21 @@ export default function Home() {
                           {note.title || <span className="text-[#b0a598] font-normal italic">（無題）</span>}
                         </h3>
 
-                        {/* 右上：控えめな「…」メニューボタン */}
-                        <div className="relative shrink-0">
+                        {/* 右上：お気に入りボタン ＆ 控えめな「…」メニューボタン */}
+                        <div className="relative shrink-0 flex items-center gap-1.5">
+                          {/* お気に入りボタン */}
+                          <button
+                            type="button"
+                            onClick={() => handleToggleFavorite(note.id)}
+                            className="w-7 h-7 flex items-center justify-center rounded-lg text-base leading-none transition-colors hover:bg-[#f4f0e8]"
+                            aria-label={note.isFavorite ? "お気に入りを解除" : "お気に入りに登録"}
+                            title={note.isFavorite ? "お気に入り解除" : "お気に入り登録"}
+                          >
+                            <span className={note.isFavorite ? "text-[#d49e35]" : "text-[#c2b8aa]"}>
+                              {note.isFavorite ? "★" : "☆"}
+                            </span>
+                          </button>
+
                           <div className="flex items-center gap-2">
                             <time
                               className={`${
