@@ -216,6 +216,13 @@ export default function Home() {
   const [newCategoryInput, setNewCategoryInput] = useState("");
   const [categoryToDelete, setCategoryToDelete] = useState<string | null>(null);
 
+  // メモのタイトル・カテゴリ変更モーダル関連のState
+  const [editingNote, setEditingNote] = useState<Note | null>(null);
+  const [editTitleInput, setEditTitleInput] = useState("");
+  const [editCategories, setEditCategories] = useState<string[]>([]);
+  const [isAddingCategoryInEdit, setIsAddingCategoryInEdit] = useState(false);
+  const [inlineNewCategoryInEdit, setInlineNewCategoryInEdit] = useState("");
+
   const [isLoaded, setIsLoaded] = useState(false);
 
   // 初回読み込み時にブラウザの保存領域 (localStorage) からデータを復元
@@ -320,6 +327,58 @@ export default function Home() {
 
     // モーダルを閉じる
     setCategoryToDelete(null);
+  };
+
+  // メモのタイトル・カテゴリ変更モーダルを開く
+  const handleOpenEditModal = (note: Note) => {
+    setEditingNote(note);
+    setEditTitleInput(note.title || "");
+    setEditCategories(note.categories || []);
+    setIsAddingCategoryInEdit(false);
+    setInlineNewCategoryInEdit("");
+    setActiveMenuNoteId(null);
+  };
+
+  // 編集モーダル内でのカテゴリ選択切り替え
+  const handleToggleEditCategory = (catName: string) => {
+    setEditCategories((prev) =>
+      prev.includes(catName)
+        ? prev.filter((c) => c !== catName)
+        : [...prev, catName]
+    );
+  };
+
+  // 編集モーダル内での新規カテゴリ作成
+  const handleSaveCategoryInEdit = () => {
+    const trimmed = inlineNewCategoryInEdit.trim();
+    if (trimmed) {
+      handleAddCategory(trimmed);
+      if (!editCategories.includes(trimmed)) {
+        setEditCategories((prev) => [...prev, trimmed]);
+      }
+    }
+    setInlineNewCategoryInEdit("");
+    setIsAddingCategoryInEdit(false);
+  };
+
+  // メモのタイトル・カテゴリ変更の確定保存
+  const handleSaveNoteEdit = () => {
+    if (!editingNote) return;
+
+    const updatedNotes = notes.map((n) => {
+      if (n.id === editingNote.id) {
+        return {
+          ...n,
+          title: editTitleInput.trim() || undefined,
+          categories: editCategories.length > 0 ? editCategories : undefined,
+        };
+      }
+      return n;
+    });
+
+    setNotes(updatedNotes);
+    localStorage.setItem("seednote_items", JSON.stringify(updatedNotes));
+    setEditingNote(null);
   };
 
   // メモを保存する処理
@@ -838,7 +897,19 @@ export default function Home() {
 
                           {/* タップした時だけ開くポップアップメニュー */}
                           {isMenuThisNoteOpen && (
-                            <div className="absolute right-0 top-7 w-36 bg-white rounded-xl shadow-lg border border-[#e5ded2] p-1 z-30 transition-all">
+                            <div className="absolute right-0 top-7 w-48 bg-white rounded-xl shadow-lg border border-[#e5ded2] p-1 z-30 transition-all flex flex-col gap-0.5">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditModal(note)}
+                                className={`w-full text-left ${
+                                  buttonSize === "large"
+                                    ? "px-3 py-2 text-sm"
+                                    : "px-2.5 py-1.5 text-xs"
+                                } text-[#3d3731] hover:bg-[#f4f0e8] rounded-lg flex items-center gap-1.5 font-medium transition-colors`}
+                              >
+                                <span>🏷️</span> タイトル・カテゴリの変更
+                              </button>
+                              <div className="my-0.5 border-t border-[#f0eae1]" />
                               <button
                                 type="button"
                                 onClick={() => handleMoveToTrash(note.id)}
@@ -1294,6 +1365,162 @@ export default function Home() {
                 className="px-4 py-2 rounded-xl text-xs font-medium bg-[#b85448] text-white hover:bg-[#a34438] transition-colors shadow-xs"
               >
                 消去
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ⑤ メモのタイトル・カテゴリ変更モーダル */}
+      {editingNote && (
+        <div
+          className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4"
+          onClick={() => setEditingNote(null)}
+        >
+          <div
+            className="bg-[#f4f0e8] rounded-2xl p-6 sm:p-7 max-w-md w-full border border-[#ded6c9] shadow-2xl transition-all max-h-[90vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* モーダルのヘッダー */}
+            <div className="shrink-0 flex items-center justify-between pb-3 mb-4 border-b border-[#ded6c9]">
+              <div>
+                <h2 className="text-base font-bold text-[#3d3731] flex items-center gap-1.5">
+                  <span>🏷️</span> タイトル・カテゴリの変更
+                </h2>
+                <span className="text-[11px] text-[#8a7f72]">
+                  見出しやジャンルを整理できます（※本文は保護されます）
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingNote(null)}
+                className="w-7 h-7 rounded-full bg-[#e8e0d3] text-xs font-bold text-[#5c5348] hover:bg-[#ded6c9] transition-colors flex items-center justify-center shrink-0"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* スクロール可能な編集エリア */}
+            <div className="flex-1 min-h-0 overflow-y-auto pr-1 flex flex-col gap-4">
+              {/* タイトル入力 */}
+              <div>
+                <label className="block text-xs font-bold text-[#3d3731] mb-1.5">
+                  タイトル
+                </label>
+                <input
+                  type="text"
+                  placeholder="タイトルを入力（空欄なら無題）"
+                  value={editTitleInput}
+                  onChange={(e) => setEditTitleInput(e.target.value)}
+                  className={`w-full ${
+                    fontSize === "large" ? "px-4 py-2.5 text-base" : "px-3.5 py-2 text-sm"
+                  } bg-[#faf8f5] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] placeholder-[#b0a598]`}
+                />
+              </div>
+
+              {/* カテゴリ選択エリア */}
+              <div>
+                <label className="block text-xs font-bold text-[#3d3731] mb-1.5">
+                  カテゴリ
+                </label>
+                <div className="flex flex-wrap items-center gap-1.5 p-2.5 bg-white/70 rounded-xl border border-[#ded5c8]">
+                  {categoriesList.map((cat) => {
+                    const isSelected = editCategories.includes(cat);
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => handleToggleEditCategory(cat)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                          isSelected
+                            ? "bg-[#3d3731] text-[#faf8f5] shadow-xs"
+                            : "bg-[#e8e0d3] text-[#5c5348] hover:bg-[#ded6c9]"
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    );
+                  })}
+
+                  {/* モーダル内インライン新規作成 */}
+                  {isAddingCategoryInEdit ? (
+                    <div className="flex items-center gap-1 bg-white p-0.5 rounded-lg border border-[#ded5c8]">
+                      <input
+                        type="text"
+                        placeholder="新しいカテゴリ"
+                        value={inlineNewCategoryInEdit}
+                        onChange={(e) => setInlineNewCategoryInEdit(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleSaveCategoryInEdit();
+                          }
+                        }}
+                        autoFocus
+                        className="px-2 py-0.5 text-xs text-[#2d2926] bg-transparent focus:outline-none w-24"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleSaveCategoryInEdit}
+                        className="px-2 py-0.5 rounded-md bg-[#3d3731] text-[#faf8f5] text-[11px] font-medium hover:bg-[#292420]"
+                      >
+                        追加
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAddingCategoryInEdit(false);
+                          setInlineNewCategoryInEdit("");
+                        }}
+                        className="px-1 text-[11px] text-[#8a7f72] hover:text-[#3d3731]"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingCategoryInEdit(true)}
+                      className="px-2.5 py-1 rounded-lg border border-dashed border-[#b8aea2] text-[#7d7367] hover:border-[#3d3731] hover:text-[#3d3731] transition-colors text-xs font-medium"
+                    >
+                      ＋ 新規
+                    </button>
+                  )}
+
+                  {editCategories.length === 0 && !isAddingCategoryInEdit && (
+                    <span className="text-[11px] text-[#a09485] select-none ml-1">
+                      （未選択＝未分類）
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* 本文の確認プレビュー（編集不可・思考の不可逆性を保護） */}
+              <div>
+                <label className="block text-xs font-bold text-[#8a7f72] mb-1.5 flex items-center justify-between">
+                  <span>本文（プレビュー）</span>
+                  <span className="text-[10px] text-[#a09485] font-normal">※本文の編集はできません</span>
+                </label>
+                <div className="p-3.5 rounded-xl bg-white/50 border border-[#e5ded2] text-xs sm:text-sm text-[#5c5348] whitespace-pre-wrap leading-relaxed max-h-36 overflow-y-auto select-text">
+                  {editingNote.content}
+                </div>
+              </div>
+            </div>
+
+            {/* モーダルのフッターボタン */}
+            <div className="shrink-0 flex justify-end gap-2.5 pt-4 mt-3 border-t border-[#ded6c9]">
+              <button
+                type="button"
+                onClick={() => setEditingNote(null)}
+                className="px-4 py-2 rounded-xl text-xs font-medium text-[#6b6257] hover:bg-[#e8e0d3] transition-colors"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveNoteEdit}
+                className="px-5 py-2 rounded-xl text-xs font-medium bg-[#3d3731] text-[#faf8f5] hover:bg-[#292420] transition-all shadow-xs"
+              >
+                保存する
               </button>
             </div>
           </div>
