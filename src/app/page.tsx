@@ -267,6 +267,12 @@ export default function Home() {
   const [isSearchPanelOpen, setIsSearchPanelOpen] = useState(false);
   const [filterOnlyFavorite, setFilterOnlyFavorite] = useState(false);
   const [filterCategories, setFilterCategories] = useState<string[]>([]);
+  const [includeTrashInSearch, setIncludeTrashInSearch] = useState(false);
+
+  // ゴミ箱専用の検索・絞り込みState
+  const [isTrashSearchPanelOpen, setIsTrashSearchPanelOpen] = useState(false);
+  const [trashFilterOnlyFavorite, setTrashFilterOnlyFavorite] = useState(false);
+  const [trashFilterCategories, setTrashFilterCategories] = useState<string[]>([]);
 
   const [isLoaded, setIsLoaded] = useState(false);
 
@@ -595,11 +601,29 @@ export default function Home() {
   const activeNotes = notes.filter((n) => !n.isTrash);
   const trashNotes = notes.filter((n) => n.isTrash);
 
+  // 通常一覧の対象メモ（ゴミ箱も含めるフラグがONなら全体、OFFなら通常メモのみ）
+  const baseNotesForList = includeTrashInSearch ? notes : activeNotes;
+
   // 検索・絞り込み適用後のメモ一覧（複数AND検索対応）
-  const displayedNotes = activeNotes.filter((note) => {
+  const displayedNotes = baseNotesForList.filter((note) => {
     if (filterOnlyFavorite && !note.isFavorite) return false;
     if (filterCategories.length > 0) {
       const matchesAll = filterCategories.every((cat) => {
+        if (cat === "uncategorized") {
+          return !note.categories || note.categories.length === 0;
+        }
+        return note.categories && note.categories.includes(cat);
+      });
+      if (!matchesAll) return false;
+    }
+    return true;
+  });
+
+  // ゴミ箱画面用の検索・絞り込み適用後メモ一覧
+  const displayedTrashNotes = trashNotes.filter((note) => {
+    if (trashFilterOnlyFavorite && !note.isFavorite) return false;
+    if (trashFilterCategories.length > 0) {
+      const matchesAll = trashFilterCategories.every((cat) => {
         if (cat === "uncategorized") {
           return !note.categories || note.categories.length === 0;
         }
@@ -736,7 +760,9 @@ export default function Home() {
                   : "text-[#5c5348] hover:bg-[#eae3d7]"
               }`}
             >
-              <span>⌂</span> ホーム
+              <div className="flex items-center gap-3">
+                <span>✏️</span> メモを書く
+              </div>
             </button>
 
             <button
@@ -989,15 +1015,6 @@ export default function Home() {
               >
                 メモ一覧 ({activeNotes.length}件)
               </h2>
-              <button
-                type="button"
-                onClick={() => setActiveTab("home")}
-                className={`${
-                  buttonSize === "large" ? "text-sm py-1 px-2" : "text-xs"
-                } text-[#7d7367] hover:text-[#3d3731] font-medium transition-colors`}
-              >
-                ← ホームへ
-              </button>
             </div>
 
             {/* 検索・絞り込み機能エリア（スケッチの実装） */}
@@ -1007,24 +1024,25 @@ export default function Home() {
                   type="button"
                   onClick={() => setIsSearchPanelOpen(true)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                    filterOnlyFavorite || filterCategories.length > 0
+                    filterOnlyFavorite || filterCategories.length > 0 || includeTrashInSearch
                       ? "bg-[#d49e35] text-white shadow-xs hover:bg-[#c28e2d]"
                       : "bg-white border border-[#ded5c8] text-[#5c5348] hover:bg-[#faf8f5] shadow-2xs"
                   }`}
                 >
                   <span>🔍</span>
-                  {filterOnlyFavorite || filterCategories.length > 0 ? (
+                  {filterOnlyFavorite || filterCategories.length > 0 || includeTrashInSearch ? (
                     <span>絞り込み中 ({displayedNotes.length}件)</span>
                   ) : (
                     <span>検索機能</span>
                   )}
                 </button>
-                {(filterOnlyFavorite || filterCategories.length > 0) && (
+                {(filterOnlyFavorite || filterCategories.length > 0 || includeTrashInSearch) && (
                   <button
                     type="button"
                     onClick={() => {
                       setFilterOnlyFavorite(false);
                       setFilterCategories([]);
+                      setIncludeTrashInSearch(false);
                     }}
                     className="text-[11px] text-[#8a7f72] hover:text-[#3d3731] underline font-medium"
                   >
@@ -1145,8 +1163,29 @@ export default function Home() {
                   </div>
                 </div>
 
+                {/* ③ ゴミ箱も含める */}
+                <div>
+                  <span className="block text-[11px] font-bold text-[#8a7f72] mb-1.5">
+                    🗑️ ゴミ箱の検索
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIncludeTrashInSearch(!includeTrashInSearch)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+                      includeTrashInSearch
+                        ? "bg-[#3d3731] text-white shadow-xs font-bold"
+                        : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
+                    }`}
+                  >
+                    <span>🗑️</span>
+                    {includeTrashInSearch
+                      ? "ゴミ箱のメモも含めて検索中"
+                      : "ゴミ箱のメモも含めて探す"}
+                  </button>
+                </div>
+
                 {/* ヒット件数 */}
-                {(filterOnlyFavorite || filterCategories.length > 0) && (
+                {(filterOnlyFavorite || filterCategories.length > 0 || includeTrashInSearch) && (
                   <div className="text-[11px] text-[#8a7f72] pt-1 border-t border-[#f4f0e8] flex items-center justify-between">
                     <span>該当するメモ: {displayedNotes.length}件</span>
                     <button
@@ -1154,6 +1193,7 @@ export default function Home() {
                       onClick={() => {
                         setFilterOnlyFavorite(false);
                         setFilterCategories([]);
+                        setIncludeTrashInSearch(false);
                       }}
                       className="text-[11px] text-[#8a7f72] hover:text-[#3d3731] underline"
                     >
@@ -1181,6 +1221,7 @@ export default function Home() {
                     onClick={() => {
                       setFilterOnlyFavorite(false);
                       setFilterCategories([]);
+                      setIncludeTrashInSearch(false);
                     }}
                     className="mt-2 text-xs text-[#3d3731] font-bold underline hover:text-black"
                   >
@@ -1194,18 +1235,29 @@ export default function Home() {
                   return (
                     <article
                       key={note.id}
-                      className="p-4 rounded-xl bg-white border border-[#e5ded2] shadow-2xs relative"
+                      className={`p-4 rounded-xl shadow-2xs relative ${
+                        note.isTrash
+                          ? "bg-[#f5f1eb] border border-dashed border-[#c7bcac] opacity-90"
+                          : "bg-white border border-[#e5ded2]"
+                      }`}
                     >
                       <div className="flex items-start justify-between gap-2 mb-1.5">
-                        <h3
-                          className={`font-bold text-[#3d3731] ${
-                            fontSize === "large" ? "text-base" : "text-sm"
-                          } pr-6`}
-                        >
-                          {note.title || <span className="text-[#b0a598] font-normal italic">（無題）</span>}
-                        </h3>
+                        <div className="flex items-center gap-2 flex-wrap pr-2">
+                          <h3
+                            className={`font-bold text-[#3d3731] ${
+                              fontSize === "large" ? "text-base" : "text-sm"
+                            }`}
+                          >
+                            {note.title || <span className="text-[#b0a598] font-normal italic">（無題）</span>}
+                          </h3>
+                          {note.isTrash && (
+                            <span className="text-[10px] bg-[#eedcd8] text-[#a6483b] px-1.5 py-0.5 rounded font-medium border border-[#e0c0b8] shrink-0">
+                              🗑️ ゴミ箱内
+                            </span>
+                          )}
+                        </div>
 
-                        {/* 右上：お気に入りボタン ＆ 控えめな「…」メニューボタン */}
+                        {/* 右上：お気に入りボタン ＆ 控えめな「…」メニューまたは「元に戻す」ボタン */}
                         <div className="relative shrink-0 flex items-center gap-1.5">
                           {/* お気に入りボタン */}
                           <button
@@ -1228,23 +1280,38 @@ export default function Home() {
                             >
                               {formatDate(note.createdAt)}
                             </time>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setActiveMenuNoteId(
-                                  isMenuThisNoteOpen ? null : note.id
-                                );
-                              }}
-                              className={`${
-                                buttonSize === "large"
-                                  ? "w-8 h-8 text-base"
-                                  : "w-6 h-6 text-sm"
-                              } flex items-center justify-center rounded-lg text-[#9c9184] hover:text-[#3d3731] hover:bg-[#f4f0e8] leading-none font-bold transition-colors`}
-                              aria-label="操作メニュー"
-                            >
-                              …
-                            </button>
+                            {note.isTrash ? (
+                              <button
+                                type="button"
+                                onClick={() => handleRestoreFromTrash(note.id)}
+                                className={`${
+                                  buttonSize === "large"
+                                    ? "text-xs px-2.5 py-1.5"
+                                    : "text-[11px] px-2 py-1"
+                                } text-[#6b6257] hover:text-[#2d2926] bg-[#eae3d7] hover:bg-[#ded5c8] rounded-lg transition-colors flex items-center gap-1 font-medium shrink-0`}
+                                title="ゴミ箱から通常メモに戻す"
+                              >
+                                <span>↩️</span> 元に戻す
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveMenuNoteId(
+                                    isMenuThisNoteOpen ? null : note.id
+                                  );
+                                }}
+                                className={`${
+                                  buttonSize === "large"
+                                    ? "w-8 h-8 text-base"
+                                    : "w-6 h-6 text-sm"
+                                } flex items-center justify-center rounded-lg text-[#9c9184] hover:text-[#3d3731] hover:bg-[#f4f0e8] leading-none font-bold transition-colors`}
+                                aria-label="操作メニュー"
+                              >
+                                …
+                              </button>
+                            )}
                           </div>
 
                           {/* タップした時だけ開くポップアップメニュー */}
@@ -1334,13 +1401,193 @@ export default function Home() {
               </button>
             </div>
 
+            {/* 検索・絞り込み機能エリア（ゴミ箱内） */}
+            {trashNotes.length > 0 && (
+              !isTrashSearchPanelOpen ? (
+                <div className="mb-3 flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => setIsTrashSearchPanelOpen(true)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                      trashFilterOnlyFavorite || trashFilterCategories.length > 0
+                        ? "bg-[#d49e35] text-white shadow-xs hover:bg-[#c28e2d]"
+                        : "bg-white border border-[#ded5c8] text-[#5c5348] hover:bg-[#faf8f5] shadow-2xs"
+                    }`}
+                  >
+                    <span>🔍</span>
+                    {trashFilterOnlyFavorite || trashFilterCategories.length > 0 ? (
+                      <span>絞り込み中 ({displayedTrashNotes.length}件)</span>
+                    ) : (
+                      <span>検索機能</span>
+                    )}
+                  </button>
+                  {(trashFilterOnlyFavorite || trashFilterCategories.length > 0) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTrashFilterOnlyFavorite(false);
+                        setTrashFilterCategories([]);
+                      }}
+                      className="text-[11px] text-[#8a7f72] hover:text-[#3d3731] underline font-medium"
+                    >
+                      絞り込みを解除
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="mb-3 p-3.5 bg-white rounded-xl border border-[#ded5c8] shadow-xs flex flex-col gap-3 transition-all">
+                  {/* パネル上部: タイトル & とじるボタン */}
+                  <div className="flex items-center justify-between pb-2 border-b border-[#f0eae1]">
+                    <span className="text-xs font-bold text-[#3d3731] flex items-center gap-1.5">
+                      <span>🔍</span> ゴミ箱内の検索機能
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setIsTrashSearchPanelOpen(false)}
+                      className="flex items-center gap-1 px-2 py-0.5 rounded-lg border border-[#c4b9aa] text-xs text-[#5c5348] hover:text-[#3d3731] hover:border-[#8a7f72] transition-colors"
+                    >
+                      <span>✕</span> とじる
+                    </button>
+                  </div>
+
+                  {/* ① お気に入り表示 */}
+                  <div>
+                    <span className="block text-[11px] font-bold text-[#8a7f72] mb-1.5">
+                      ⭐ お気に入り
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setTrashFilterOnlyFavorite(!trashFilterOnlyFavorite)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+                        trashFilterOnlyFavorite
+                          ? "bg-[#d49e35] text-white shadow-xs font-bold"
+                          : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
+                      }`}
+                    >
+                      <span>{trashFilterOnlyFavorite ? "★" : "☆"}</span>
+                      {trashFilterOnlyFavorite ? "お気に入りのみ表示中" : "お気に入りのみ表示"}
+                    </button>
+                  </div>
+
+                  {/* ② タグからさがす（複数AND選択対応） */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[11px] font-bold text-[#8a7f72]">
+                        🏷️ タグからさがす
+                      </span>
+                      {trashFilterCategories.includes("uncategorized") ? (
+                        <span className="text-[10px] text-[#8a7f72] bg-[#f4f0e8] px-2 py-0.5 rounded-md">
+                          ”未分類” のメモを表示中
+                        </span>
+                      ) : trashFilterCategories.length > 1 ? (
+                        <span className="text-[10px] text-[#8a7f72] bg-[#f4f0e8] px-2 py-0.5 rounded-md">
+                          {trashFilterCategories.length}個のタグで絞り込み中 (AND検索)
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {/* ”すべてのメモ” ボタン（全解除） */}
+                      <button
+                        type="button"
+                        onClick={() => setTrashFilterCategories([])}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                          trashFilterCategories.length === 0
+                            ? "bg-[#3d3731] text-white shadow-xs font-bold"
+                            : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
+                        }`}
+                      >
+                        ”すべてのメモ”
+                      </button>
+
+                      {/* ”未分類” ボタン（単独選択） */}
+                      {(() => {
+                        const isUncategorizedSelected = trashFilterCategories.includes("uncategorized");
+                        return (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setTrashFilterCategories(isUncategorizedSelected ? [] : ["uncategorized"])
+                            }
+                            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                              isUncategorizedSelected
+                                ? "bg-[#3d3731] text-white shadow-xs font-bold"
+                                : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
+                            }`}
+                          >
+                            ”未分類”
+                          </button>
+                        );
+                      })()}
+
+                      {/* 各カテゴリタグボタン（トグル複数AND選択） */}
+                      {categoriesList.map((cat) => {
+                        const isSelected = trashFilterCategories.includes(cat);
+                        return (
+                          <button
+                            key={cat}
+                            type="button"
+                            onClick={() =>
+                              setTrashFilterCategories((prev) => {
+                                const withoutUncategorized = prev.filter((c) => c !== "uncategorized");
+                                return isSelected
+                                  ? withoutUncategorized.filter((c) => c !== cat)
+                                  : [...withoutUncategorized, cat];
+                              })
+                            }
+                            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                              isSelected
+                                ? "bg-[#3d3731] text-white shadow-xs font-bold"
+                                : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
+                            }`}
+                          >
+                            {cat}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* ヒット件数 */}
+                  {(trashFilterOnlyFavorite || trashFilterCategories.length > 0) && (
+                    <div className="text-[11px] text-[#8a7f72] pt-1 border-t border-[#f4f0e8] flex items-center justify-between">
+                      <span>該当するメモ: {displayedTrashNotes.length}件</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTrashFilterOnlyFavorite(false);
+                          setTrashFilterCategories([]);
+                        }}
+                        className="text-[11px] text-[#8a7f72] hover:text-[#3d3731] underline"
+                      >
+                        条件をリセット
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )
+            )}
+
             <div className="overflow-y-auto flex flex-col gap-3 pr-1">
               {trashNotes.length === 0 ? (
                 <div className="text-center py-10 text-sm text-[#8a7f72]">
                   ゴミ箱は空です。
                 </div>
+              ) : displayedTrashNotes.length === 0 ? (
+                <div className="text-center py-10 text-xs text-[#8a7f72] bg-white/50 rounded-xl border border-dashed border-[#ded6c9] p-4">
+                  条件に一致するメモが見つかりませんでした。<br />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTrashFilterOnlyFavorite(false);
+                      setTrashFilterCategories([]);
+                    }}
+                    className="mt-2 text-xs text-[#3d3731] font-bold underline hover:text-black"
+                  >
+                    条件をリセットして全件表示
+                  </button>
+                </div>
               ) : (
-                trashNotes.map((note) => (
+                displayedTrashNotes.map((note) => (
                   <article
                     key={note.id}
                     className="p-4 rounded-xl bg-white/70 border border-[#e5ded2] opacity-80"
