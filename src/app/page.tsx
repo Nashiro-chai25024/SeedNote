@@ -2,6 +2,13 @@
 
 import { useState, useEffect } from "react";
 
+// メモへの追記（リプライ）のデータ型定義
+interface NoteReply {
+  id: string;
+  content: string;
+  createdAt: string;
+}
+
 // メモのデータ型定義
 interface Note {
   id: string;
@@ -11,6 +18,7 @@ interface Note {
   isTrash?: boolean; // ゴミ箱フラグ（完全削除せず退避する）
   categories?: string[]; // カテゴリタグ一覧
   isFavorite?: boolean; // お気に入りフラグ
+  replies?: NoteReply[]; // 追記リスト（大元のメモにぶら下がる1階層の時系列ログ）
 }
 
 type TabType = "home" | "list" | "categories" | "trash" | "settings";
@@ -273,6 +281,11 @@ export default function Home() {
   const [isTrashSearchPanelOpen, setIsTrashSearchPanelOpen] = useState(false);
   const [trashFilterOnlyFavorite, setTrashFilterOnlyFavorite] = useState(false);
   const [trashFilterCategories, setTrashFilterCategories] = useState<string[]>([]);
+
+  // 追記（リプライ）機能のState（デフォルトは折りたたみ）
+  const [replyingNoteId, setReplyingNoteId] = useState<string | null>(null);
+  const [replyContent, setReplyContent] = useState("");
+  const [expandedReplyNoteIds, setExpandedReplyNoteIds] = useState<string[]>([]);
 
   const [isLoaded, setIsLoaded] = useState(false);
 
@@ -595,6 +608,46 @@ export default function Home() {
     );
     setNotes(updatedNotes);
     localStorage.setItem("seednote_items", JSON.stringify(updatedNotes));
+  };
+
+  // メモへの追記（リプライ）を保存（大元のメモにぶら下がる不可逆ログ）
+  const handleAddReply = (parentNoteId: string) => {
+    if (!replyContent.trim()) return;
+    const newReply: NoteReply = {
+      id: crypto.randomUUID(),
+      content: replyContent.trim(),
+      createdAt: new Date().toISOString(),
+    };
+    const updatedNotes = notes.map((n) => {
+      if (n.id === parentNoteId) {
+        return {
+          ...n,
+          replies: [...(n.replies || []), newReply],
+        };
+      }
+      return n;
+    });
+    setNotes(updatedNotes);
+    localStorage.setItem("seednote_items", JSON.stringify(updatedNotes));
+    setReplyContent("");
+    setReplyingNoteId(null);
+    // 追記した直後はそのメモの追記スレッドを展開して確認できるようにする
+    setExpandedReplyNoteIds((prev) =>
+      prev.includes(parentNoteId) ? prev : [...prev, parentNoteId]
+    );
+    if (enableToast) {
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 2000);
+    }
+  };
+
+  // 追記スレッドの展開・折りたたみ切り替え（デフォルトは折りたたみ）
+  const handleToggleReplies = (noteId: string) => {
+    setExpandedReplyNoteIds((prev) =>
+      prev.includes(noteId)
+        ? prev.filter((id) => id !== noteId)
+        : [...prev, noteId]
+    );
   };
 
   const hasContent = content.trim().length > 0;
@@ -1328,6 +1381,24 @@ export default function Home() {
                               >
                                 <span>🏷️</span> タイトル・カテゴリの変更
                               </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setReplyingNoteId(note.id);
+                                  setReplyContent("");
+                                  setActiveMenuNoteId(null);
+                                  setExpandedReplyNoteIds((prev) =>
+                                    prev.includes(note.id) ? prev : [...prev, note.id]
+                                  );
+                                }}
+                                className={`w-full text-left ${
+                                  buttonSize === "large"
+                                    ? "px-3 py-2 text-sm"
+                                    : "px-2.5 py-1.5 text-xs"
+                                } text-[#3d3731] hover:bg-[#f4f0e8] rounded-lg flex items-center gap-1.5 font-medium transition-colors`}
+                              >
+                                <span>💬</span> 追記する
+                              </button>
                               <div className="my-0.5 border-t border-[#f0eae1]" />
                               <button
                                 type="button"
@@ -1366,6 +1437,104 @@ export default function Home() {
                       >
                         {note.content}
                       </p>
+
+                      {/* 追記スレッド表示（デフォルトは折りたたみ） */}
+                      {note.replies && note.replies.length > 0 && (
+                        <div className="mt-3 pt-2.5 border-t border-[#ede7de] flex flex-col gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleReplies(note.id)}
+                            className="text-[11px] font-bold text-[#7d7367] hover:text-[#3d3731] flex items-center justify-between w-full text-left py-1 px-1.5 rounded-lg hover:bg-[#f4f0e8] transition-colors group cursor-pointer"
+                          >
+                            <span className="flex items-center gap-1.5">
+                              <span>💬</span> 追記 ({note.replies.length}件)
+                            </span>
+                            <span className="text-[10px] text-[#9c9184] group-hover:text-[#3d3731] flex items-center gap-1 font-normal font-mono">
+                              {expandedReplyNoteIds.includes(note.id) ? (
+                                <>
+                                  <span>たたむ</span>
+                                  <span className="text-xs">▼</span>
+                                </>
+                              ) : (
+                                <>
+                                  <span>表示する</span>
+                                  <span className="text-xs">▶</span>
+                                </>
+                              )}
+                            </span>
+                          </button>
+
+                          {expandedReplyNoteIds.includes(note.id) && (
+                            <div className="flex flex-col gap-2 pl-2.5 border-l-2 border-[#d5cdc0]">
+                              {note.replies.map((reply) => (
+                                <div
+                                  key={reply.id}
+                                  className="p-2.5 rounded-xl bg-[#faf8f5] border border-[#e8e2d5] shadow-3xs"
+                                >
+                                  <div className="flex justify-between items-baseline gap-2 mb-1">
+                                    <span className="text-[10px] text-[#9c9184] font-medium flex items-center gap-1">
+                                      <span>🌱</span> 思考の追記
+                                    </span>
+                                    <time className="text-[10px] text-[#8a7f72] font-mono">
+                                      {formatDate(reply.createdAt)}
+                                    </time>
+                                  </div>
+                                  <p
+                                    className={`${
+                                      fontSize === "large" ? "text-sm" : "text-xs"
+                                    } text-[#453f38] whitespace-pre-wrap leading-relaxed`}
+                                  >
+                                    {reply.content}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* 追記入力フォーム（「💬 追記する」を押した時だけスッと展開） */}
+                      {replyingNoteId === note.id && (
+                        <div className="mt-3 pt-2.5 border-t border-[#ede7de] flex flex-col gap-2">
+                          <span className="text-[11px] font-bold text-[#3d3731] flex items-center gap-1">
+                            <span>💬</span> このメモに追記する
+                          </span>
+                          <textarea
+                            rows={3}
+                            placeholder="後から思いついたことや、思考のアップデートを入力..."
+                            value={replyContent}
+                            onChange={(e) => setReplyContent(e.target.value)}
+                            className={`w-full ${
+                              fontSize === "large" ? "text-sm p-3" : "text-xs p-2.5"
+                            } bg-[#faf8f5] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] placeholder-[#b0a598] resize-none`}
+                            autoFocus
+                          />
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setReplyingNoteId(null);
+                                setReplyContent("");
+                              }}
+                              className={`${
+                                buttonSize === "large" ? "px-3.5 py-1.5 text-xs" : "px-3 py-1 text-[11px]"
+                              } rounded-lg text-[#7d7367] hover:text-[#3d3731] hover:bg-[#eae3d7] font-medium transition-colors`}
+                            >
+                              キャンセル
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleAddReply(note.id)}
+                              disabled={!replyContent.trim()}
+                              className={`${
+                                buttonSize === "large" ? "px-4 py-1.5 text-xs" : "px-3.5 py-1 text-[11px]"
+                              } rounded-lg bg-[#3d3731] text-[#faf8f5] hover:bg-[#292420] disabled:opacity-40 font-medium transition-all shadow-2xs`}
+                            >
+                              追記を保存
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </article>
                   );
                 })
@@ -1626,10 +1795,59 @@ export default function Home() {
                     <p
                       className={`${
                         fontSize === "large" ? "text-base" : "text-sm"
-                      } text-[#5c5348] whitespace-pre-wrap leading-relaxed mb-3`}
+                      } text-[#5c5348] whitespace-pre-wrap leading-relaxed mb-2`}
                     >
                       {note.content}
                     </p>
+
+                    {/* 追記スレッド表示（デフォルトは折りたたみ） */}
+                    {note.replies && note.replies.length > 0 && (
+                      <div className="mt-2 mb-3 pt-2 border-t border-[#ede7de] flex flex-col gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleReplies(note.id)}
+                          className="text-[11px] font-bold text-[#7d7367] hover:text-[#3d3731] flex items-center justify-between w-full text-left py-1 px-1.5 rounded-lg hover:bg-[#f4f0e8] transition-colors group cursor-pointer"
+                        >
+                          <span className="flex items-center gap-1.5">
+                            <span>💬</span> 追記 ({note.replies.length}件)
+                          </span>
+                          <span className="text-[10px] text-[#9c9184] group-hover:text-[#3d3731] flex items-center gap-1 font-normal font-mono">
+                            {expandedReplyNoteIds.includes(note.id) ? (
+                              <>
+                                <span>たたむ</span>
+                                <span className="text-xs">▼</span>
+                              </>
+                            ) : (
+                              <>
+                                <span>表示する</span>
+                                <span className="text-xs">▶</span>
+                              </>
+                            )}
+                          </span>
+                        </button>
+
+                        {expandedReplyNoteIds.includes(note.id) && (
+                          <div className="flex flex-col gap-1.5 pl-2.5 border-l-2 border-[#d5cdc0]">
+                            {note.replies.map((reply) => (
+                              <div
+                                key={reply.id}
+                                className="p-2 rounded-lg bg-[#faf8f5]/80 border border-[#e8e2d5] text-xs"
+                              >
+                                <div className="flex justify-between items-baseline gap-2 mb-0.5">
+                                  <span className="text-[10px] text-[#9c9184] font-medium">🌱 追記</span>
+                                  <time className="text-[10px] text-[#8a7f72] font-mono">
+                                    {formatDate(reply.createdAt)}
+                                  </time>
+                                </div>
+                                <p className="text-[#5c5348] whitespace-pre-wrap leading-relaxed">
+                                  {reply.content}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                     <div className="flex justify-end pt-2 border-t border-[#f4f0e8]">
                       <button
                         type="button"
