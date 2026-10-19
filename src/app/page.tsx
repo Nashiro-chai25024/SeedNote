@@ -33,14 +33,15 @@ interface TimeSlotConfig {
   icon: string;
   startHour: number; // 0〜23
   endHour: number;   // 0〜23
+  color: string;     // 目に優しい識別カラー
 }
 
 const DEFAULT_TIME_SLOTS: Record<TimeSlotKey, TimeSlotConfig> = {
-  morning: { label: "朝", icon: "🌅", startHour: 5, endHour: 10 },
-  afternoon: { label: "昼", icon: "☀️", startHour: 11, endHour: 16 },
-  evening: { label: "夕方", icon: "🌆", startHour: 17, endHour: 19 },
-  night: { label: "夜", icon: "🌙", startHour: 20, endHour: 23 },
-  lateNight: { label: "深夜", icon: "🌌", startHour: 0, endHour: 4 },
+  morning: { label: "朝", icon: "🌅", startHour: 5, endHour: 10, color: "#529961" },
+  afternoon: { label: "昼", icon: "☀️", startHour: 11, endHour: 16, color: "#d9a036" },
+  evening: { label: "夕方", icon: "🌆", startHour: 17, endHour: 19, color: "#d4693b" },
+  night: { label: "夜", icon: "🌙", startHour: 20, endHour: 22, color: "#8562a6" },
+  lateNight: { label: "深夜", icon: "🌌", startHour: 23, endHour: 4, color: "#4a7bb0" },
 };
 
 // ガイド・ヘルプの全項目データ
@@ -291,6 +292,8 @@ export default function Home() {
 
   // 時間帯の定義（朝・昼・夕方・夜・深夜）
   const [timeSlots, setTimeSlots] = useState<Record<TimeSlotKey, TimeSlotConfig>>(DEFAULT_TIME_SLOTS);
+  const [selectedSlotForEdit, setSelectedSlotForEdit] = useState<TimeSlotKey>("morning");
+  const [isTimeSlotsAccordionOpen, setIsTimeSlotsAccordionOpen] = useState(false);
 
   // ゴミ箱専用の検索・絞り込みState
   const [isTrashSearchPanelOpen, setIsTrashSearchPanelOpen] = useState(false);
@@ -334,7 +337,18 @@ export default function Home() {
       }
       const savedTimeSlots = localStorage.getItem("seednote_time_slots");
       if (savedTimeSlots) {
-        setTimeSlots(JSON.parse(savedTimeSlots));
+        const parsed = JSON.parse(savedTimeSlots);
+        const merged: Record<TimeSlotKey, TimeSlotConfig> = { ...DEFAULT_TIME_SLOTS };
+        (Object.keys(DEFAULT_TIME_SLOTS) as TimeSlotKey[]).forEach((key) => {
+          if (parsed[key]) {
+            merged[key] = {
+              ...DEFAULT_TIME_SLOTS[key],
+              ...parsed[key],
+              color: parsed[key].color || DEFAULT_TIME_SLOTS[key].color,
+            };
+          }
+        });
+        setTimeSlots(merged);
       }
     } catch (e) {
       console.error("データの読み込みに失敗しました", e);
@@ -650,6 +664,73 @@ export default function Home() {
   const handleResetTimeSlots = () => {
     setTimeSlots(DEFAULT_TIME_SLOTS);
     localStorage.removeItem("seednote_time_slots");
+  };
+
+  // ある時間が指定された時間帯に含まれるか判定（0〜23）
+  const isHourInSlotDef = (hour: number, slot: TimeSlotConfig) => {
+    if (slot.startHour <= slot.endHour) {
+      return hour >= slot.startHour && hour <= slot.endHour;
+    } else {
+      // 日付をまたぐ場合（例: 23時〜4時）
+      return hour >= slot.startHour || hour <= slot.endHour;
+    }
+  };
+
+  // 1時間単位での増減処理（0〜23を循環）
+  const handleStepHour = (
+    key: TimeSlotKey,
+    field: "startHour" | "endHour",
+    delta: number
+  ) => {
+    const current = timeSlots[key]?.[field] ?? DEFAULT_TIME_SLOTS[key][field];
+    const nextVal = (current + delta + 24) % 24;
+    handleUpdateTimeSlot(key, field, nextVal);
+  };
+
+  // タイムラインバーの各時間（0〜23）の背景スタイル（単色または斜線ストライプ）を算出
+  const getHourBackgroundStyle = (hour: number) => {
+    const active = (Object.keys(DEFAULT_TIME_SLOTS) as TimeSlotKey[])
+      .map((k) => timeSlots[k] || DEFAULT_TIME_SLOTS[k])
+      .filter((s) => isHourInSlotDef(hour, s));
+
+    if (active.length === 0) {
+      return { backgroundColor: "#e8e1d5" };
+    }
+    if (active.length === 1) {
+      return { backgroundColor: active[0].color };
+    }
+    // 2つ以上の重複（重なりOK）：斜線ストライプパターン
+    if (active.length === 2) {
+      return {
+        backgroundImage: `repeating-linear-gradient(135deg, ${active[0].color}, ${active[0].color} 6px, ${active[1].color} 6px, ${active[1].color} 12px)`,
+      };
+    }
+    // 3つ以上の重複
+    const stripeParts = active
+      .map((s, idx) => `${s.color} ${idx * 5}px, ${s.color} ${(idx + 1) * 5}px`)
+      .join(", ");
+    return {
+      backgroundImage: `repeating-linear-gradient(135deg, ${stripeParts})`,
+    };
+  };
+
+  // 各時間帯の重複（重なり）している他の時間帯名を取得
+  const getSlotOverlaps = (key: TimeSlotKey) => {
+    const slot = timeSlots[key] || DEFAULT_TIME_SLOTS[key];
+    const otherKeys = (Object.keys(DEFAULT_TIME_SLOTS) as TimeSlotKey[]).filter(
+      (k) => k !== key
+    );
+    const overlappingLabels: string[] = [];
+    otherKeys.forEach((otherKey) => {
+      const other = timeSlots[otherKey] || DEFAULT_TIME_SLOTS[otherKey];
+      for (let h = 0; h < 24; h++) {
+        if (isHourInSlotDef(h, slot) && isHourInSlotDef(h, other)) {
+          overlappingLabels.push(other.label);
+          break;
+        }
+      }
+    });
+    return overlappingLabels;
   };
 
   // 日時を読みやすい形式に変換する関数
@@ -1359,6 +1440,10 @@ export default function Home() {
                               : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
                           }`}
                         >
+                          <span
+                            className="w-2 h-2 rounded-full inline-block shrink-0 shadow-xs"
+                            style={{ backgroundColor: slot.color }}
+                          />
                           <span>{slot.icon}</span>
                           <span>{slot.label}</span>
                           <span className="text-[10px] opacity-75 font-mono">
@@ -2282,73 +2367,362 @@ export default function Home() {
                 />
               </div>
 
-              {/* 時間帯の設定 */}
-              <div className="p-4 bg-white rounded-xl border border-[#e5ded2]">
-                <div className="flex items-center justify-between mb-3 pb-2 border-b border-[#f4f0e8]">
+              {/* 時間帯の設定（アコーディオン形式で折りたたみ可能） */}
+              <div className="bg-white rounded-xl border border-[#e5ded2] overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setIsTimeSlotsAccordionOpen(!isTimeSlotsAccordionOpen)}
+                  className="w-full p-4 flex items-center justify-between text-left hover:bg-[#faf8f5] transition-colors"
+                >
                   <div>
                     <span className="font-bold text-[#3d3731] block">
                       ⏰ 時間帯の設定
                     </span>
                     <span className="text-xs text-[#8a7f72]">
-                      朝・昼・夕方・夜・深夜の区切りを、生活リズムに合わせて調整できます
+                      {isTimeSlotsAccordionOpen
+                        ? "バーの操作やボタンで、生活リズムに合わせて調整できます（重なりOK）"
+                        : "生活リズムに合わせて調整（タップして設定を展開）"}
                     </span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleResetTimeSlots}
-                    className="text-xs text-[#8a7f72] hover:text-[#3d3731] bg-[#f4f0e8] hover:bg-[#eae3d7] px-2.5 py-1 rounded-lg transition-colors font-medium shrink-0"
-                  >
-                    標準に戻す
-                  </button>
-                </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {!isTimeSlotsAccordionOpen && (
+                      <span className="text-[11px] text-[#8a7f72] hidden sm:inline">
+                        5つの時間帯
+                      </span>
+                    )}
+                    <span
+                      className={`text-xs text-[#8a7f72] transition-transform duration-200 ${
+                        isTimeSlotsAccordionOpen ? "rotate-90" : ""
+                      }`}
+                    >
+                      ▶
+                    </span>
+                  </div>
+                </button>
 
-                <div className="space-y-2.5">
-                  {(Object.keys(DEFAULT_TIME_SLOTS) as TimeSlotKey[]).map((key) => {
-                    const slot = timeSlots[key] || DEFAULT_TIME_SLOTS[key];
-                    return (
-                      <div
-                        key={key}
-                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 bg-[#faf8f5] rounded-lg border border-[#ede7dd]"
+                {isTimeSlotsAccordionOpen && (
+                  <div className="p-4 pt-1 border-t border-[#f4f0e8]">
+                    <div className="flex justify-end pt-1 mb-2">
+                      <button
+                        type="button"
+                        onClick={handleResetTimeSlots}
+                        className="text-xs text-[#8a7f72] hover:text-[#3d3731] bg-[#f4f0e8] hover:bg-[#eae3d7] px-2.5 py-1 rounded-lg transition-colors font-medium shrink-0"
                       >
-                        <div className="flex items-center gap-2 min-w-[100px]">
-                          <span className="text-base">{slot.icon}</span>
-                          <span className="font-medium text-xs text-[#3d3731]">
-                            {slot.label}
+                        標準に戻す
+                      </button>
+                    </div>
+
+                    {/* ── 24時間タイムラインバー ── */}
+                    <div className="my-4 p-3 bg-[#faf8f5] rounded-xl border border-[#ede7dd]">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold text-[#5c5348] flex items-center gap-1.5">
+                          <span>📊 24時間タイムライン</span>
+                          <span className="text-[10px] font-normal text-[#8a7f72]">
+                            （タップで時間帯を選択・調整）
                           </span>
-                        </div>
-                        <div className="flex items-center gap-2 text-xs text-[#6b6257]">
-                          <select
-                            value={slot.startHour}
-                            onChange={(e) =>
-                              handleUpdateTimeSlot(key, "startHour", Number(e.target.value))
-                            }
-                            className="bg-white border border-[#ded5c8] rounded-md px-2 py-1 text-xs text-[#2d2926] focus:outline-none focus:border-[#968979]"
-                          >
-                            {Array.from({ length: 24 }, (_, i) => (
-                              <option key={i} value={i}>
-                                {i}:00
-                              </option>
-                            ))}
-                          </select>
-                          <span>〜</span>
-                          <select
-                            value={slot.endHour}
-                            onChange={(e) =>
-                              handleUpdateTimeSlot(key, "endHour", Number(e.target.value))
-                            }
-                            className="bg-white border border-[#ded5c8] rounded-md px-2 py-1 text-xs text-[#2d2926] focus:outline-none focus:border-[#968979]"
-                          >
-                            {Array.from({ length: 24 }, (_, i) => (
-                              <option key={i} value={i}>
-                                {i}:59
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                        </span>
+                        <span className="text-[11px] font-medium text-[#7d7367]">
+                          調整中: <span className="font-bold text-[#3d3731]">{timeSlots[selectedSlotForEdit]?.icon} {timeSlots[selectedSlotForEdit]?.label}</span>
+                        </span>
                       </div>
-                    );
-                  })}
-                </div>
+
+                      {/* タイムライン上部の目盛りラベル (0:00, 6:00, 12:00, 18:00, 24:00) */}
+                      <div className="relative h-4 text-[10px] text-[#9c9184] font-mono select-none">
+                        <span className="absolute left-0 -translate-x-0">0:00</span>
+                        <span className="absolute left-1/4 -translate-x-1/2">6:00</span>
+                        <span className="absolute left-2/4 -translate-x-1/2">12:00</span>
+                        <span className="absolute left-3/4 -translate-x-1/2">18:00</span>
+                        <span className="absolute right-0 translate-x-0">24:00</span>
+                      </div>
+
+                      {/* ピン配置エリア（選択中の時間帯の開始・終了ピン） */}
+                      <div className="relative h-7 select-none">
+                        {/* 開始ピン */}
+                        {(() => {
+                          const cur = timeSlots[selectedSlotForEdit] || DEFAULT_TIME_SLOTS[selectedSlotForEdit];
+                          const leftPercent = (cur.startHour / 24) * 100;
+                          return (
+                            <div
+                              className="absolute bottom-0 -translate-x-1/2 flex flex-col items-center cursor-ew-resize z-20 touch-none group"
+                              style={{ left: `${leftPercent}%` }}
+                              onPointerDown={(e) => {
+                                e.preventDefault();
+                                e.currentTarget.setPointerCapture(e.pointerId);
+                              }}
+                              onPointerMove={(e) => {
+                                if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+                                  const track = e.currentTarget.parentElement?.nextElementSibling;
+                                  if (track) {
+                                    const rect = track.getBoundingClientRect();
+                                    const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+                                    const hour = Math.min(23, Math.max(0, Math.floor((x / rect.width) * 24)));
+                                    handleUpdateTimeSlot(selectedSlotForEdit, "startHour", hour);
+                                  }
+                                }
+                              }}
+                              onPointerUp={(e) => {
+                                if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+                                  e.currentTarget.releasePointerCapture(e.pointerId);
+                                }
+                              }}
+                            >
+                              <div
+                                className="px-1.5 py-0.5 rounded text-[10px] font-bold text-white shadow-sm flex items-center gap-0.5 whitespace-nowrap"
+                                style={{ backgroundColor: cur.color }}
+                              >
+                                <span>◀</span>
+                                <span>開始 {cur.startHour}:00</span>
+                                <span>▶</span>
+                              </div>
+                              <div
+                                className="w-1.5 h-1.5 rotate-45 -mt-0.5"
+                                style={{ backgroundColor: cur.color }}
+                              />
+                            </div>
+                          );
+                        })()}
+                      </div>
+
+                      {/* 24時間のカラーバー本体（24分割） */}
+                      <div
+                        data-timeline-track
+                        className="w-full h-9 rounded-lg overflow-hidden border border-[#d5cdc0] flex shadow-inner relative cursor-pointer"
+                      >
+                        {Array.from({ length: 24 }, (_, h) => {
+                          const activeSlots = (Object.keys(DEFAULT_TIME_SLOTS) as TimeSlotKey[])
+                            .map((k) => timeSlots[k] || DEFAULT_TIME_SLOTS[k])
+                            .filter((s) => isHourInSlotDef(h, s));
+                          const activeLabels = activeSlots.map((s) => s.label).join("・");
+                          const bgStyle = getHourBackgroundStyle(h);
+                          const isHourInSelected = isHourInSlotDef(
+                            h,
+                            timeSlots[selectedSlotForEdit] || DEFAULT_TIME_SLOTS[selectedSlotForEdit]
+                          );
+
+                          return (
+                            <div
+                              key={h}
+                              onClick={() => {
+                                if (activeSlots.length > 0) {
+                                  const matchingKey = (Object.keys(DEFAULT_TIME_SLOTS) as TimeSlotKey[]).find(
+                                    (k) => isHourInSlotDef(h, timeSlots[k] || DEFAULT_TIME_SLOTS[k])
+                                  );
+                                  if (matchingKey) setSelectedSlotForEdit(matchingKey);
+                                }
+                              }}
+                              title={`${h}:00〜${h}:59\n該当: ${activeLabels || "（未設定）"}`}
+                              style={bgStyle}
+                              className={`flex-1 h-full border-r border-black/10 last:border-r-0 relative transition-opacity ${
+                                isHourInSelected ? "opacity-100" : "opacity-85 hover:opacity-100"
+                              }`}
+                            >
+                              {/* 選択中の時間帯に属している場合の控えめなドット */}
+                              {isHourInSelected && (
+                                <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-white/90 shadow-xs pointer-events-none" />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* ピン配置エリア（選択中の時間帯の終了ピン） */}
+                      <div className="relative h-7 select-none">
+                        {(() => {
+                          const cur = timeSlots[selectedSlotForEdit] || DEFAULT_TIME_SLOTS[selectedSlotForEdit];
+                          const endRightPercent = ((cur.endHour + 1) / 24) * 100;
+                          return (
+                            <div
+                              className="absolute top-0 -translate-x-1/2 flex flex-col items-center cursor-ew-resize z-20 touch-none group"
+                              style={{ left: `${endRightPercent}%` }}
+                              onPointerDown={(e) => {
+                                e.preventDefault();
+                                e.currentTarget.setPointerCapture(e.pointerId);
+                              }}
+                              onPointerMove={(e) => {
+                                if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+                                  const track = e.currentTarget.parentElement?.previousElementSibling;
+                                  if (track) {
+                                    const rect = track.getBoundingClientRect();
+                                    const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+                                    const hour = Math.min(23, Math.max(0, Math.floor((x / rect.width) * 24)));
+                                    handleUpdateTimeSlot(selectedSlotForEdit, "endHour", hour);
+                                  }
+                                }
+                              }}
+                              onPointerUp={(e) => {
+                                if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+                                  e.currentTarget.releasePointerCapture(e.pointerId);
+                                }
+                              }}
+                            >
+                              <div
+                                className="w-1.5 h-1.5 rotate-45 -mb-0.5"
+                                style={{ backgroundColor: cur.color }}
+                              />
+                              <div
+                                className="px-1.5 py-0.5 rounded text-[10px] font-bold text-white shadow-sm flex items-center gap-0.5 whitespace-nowrap"
+                                style={{ backgroundColor: cur.color }}
+                              >
+                                <span>◀</span>
+                                <span>終了 {cur.endHour}:59</span>
+                                <span>▶</span>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+
+                      {/* 重なりOK（斜線ストライプ）の説明キャプション */}
+                      <div className="mt-1 flex items-center justify-between text-[11px] text-[#7d7367]">
+                        <span className="flex items-center gap-1.5">
+                          <span
+                            className="inline-block w-4 h-3 rounded-xs border border-[#b8aea2]"
+                            style={{
+                              backgroundImage:
+                                "repeating-linear-gradient(135deg, #529961, #529961 3px, #4a7bb0 3px, #4a7bb0 6px)",
+                            }}
+                          />
+                          <span>斜線の区間＝複数時間帯の重複（重なりOK）</span>
+                        </span>
+                        <span className="text-[10px] text-[#8a7f72]">ピンを左右にドラッグして伸縮</span>
+                      </div>
+                    </div>
+
+                    {/* ── 縦並びの時間帯リスト ── */}
+                    <div className="space-y-2.5">
+                      {(Object.keys(DEFAULT_TIME_SLOTS) as TimeSlotKey[]).map((key) => {
+                        const slot = timeSlots[key] || DEFAULT_TIME_SLOTS[key];
+                        const isSelected = selectedSlotForEdit === key;
+                        const overlaps = getSlotOverlaps(key);
+
+                        return (
+                          <div
+                            key={key}
+                            onClick={() => setSelectedSlotForEdit(key)}
+                            className={`p-3 rounded-xl transition-all cursor-pointer border ${
+                              isSelected
+                                ? "bg-[#faf8f5] border-[#3d3731] shadow-xs ring-1 ring-[#3d3731]"
+                                : "bg-[#faf8f5]/60 hover:bg-[#faf8f5] border-[#ede7dd]"
+                            }`}
+                          >
+                            {/* 上段：アイコン・名称・現在の範囲・重なりバッジ */}
+                            <div className="flex flex-wrap items-center justify-between gap-1.5 mb-2.5">
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className="w-3.5 h-3.5 rounded-full shrink-0 shadow-xs"
+                                  style={{ backgroundColor: slot.color }}
+                                />
+                                <span className="text-base leading-none">{slot.icon}</span>
+                                <span className="font-bold text-xs text-[#3d3731]">
+                                  {slot.label}
+                                </span>
+                                <span className="font-mono text-xs font-semibold text-[#5c5348] bg-white px-2 py-0.5 rounded-md border border-[#e5ded2]">
+                                  {slot.startHour}:00 〜 {slot.endHour}:59
+                                  {slot.endHour < slot.startHour && (
+                                    <span className="ml-1 text-[10px] text-[#8a7f72] font-normal">
+                                      (翌日)
+                                    </span>
+                                  )}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-1.5">
+                                {overlaps.length > 0 && (
+                                  <span className="text-[10px] bg-[#f0eade] text-[#6b6257] px-2 py-0.5 rounded-full border border-[#dcd4c6]">
+                                    🔄 「{overlaps.join("・")}」と重なり
+                                  </span>
+                                )}
+                                {isSelected && (
+                                  <span className="text-[10px] bg-[#3d3731] text-white px-2 py-0.5 rounded-full font-medium">
+                                    選択中
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* 下段：開始・終了時間の微調整（[-] / [+] ステッパー ＆ セレクト） */}
+                            <div
+                              className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-2 border-t border-[#ede7dd]"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {/* 開始時間 */}
+                              <div className="flex items-center justify-between sm:justify-start gap-2 bg-white px-2.5 py-1.5 rounded-lg border border-[#e5ded2]">
+                                <span className="text-[#8a7f72] text-[11px] font-medium shrink-0">開始:</span>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStepHour(key, "startHour", -1)}
+                                    className="w-6 h-6 rounded flex items-center justify-center bg-[#f4f0e8] hover:bg-[#e8e0d3] active:bg-[#ded5c8] text-[#3d3731] font-bold text-xs transition-colors"
+                                    title="1時間戻す"
+                                  >
+                                    －
+                                  </button>
+                                  <select
+                                    value={slot.startHour}
+                                    onChange={(e) =>
+                                      handleUpdateTimeSlot(key, "startHour", Number(e.target.value))
+                                    }
+                                    className="bg-[#faf8f5] border border-[#ded5c8] rounded px-1.5 py-0.5 text-xs font-mono font-bold text-[#2d2926] focus:outline-none focus:border-[#968979]"
+                                  >
+                                    {Array.from({ length: 24 }, (_, i) => (
+                                      <option key={i} value={i}>
+                                        {i}:00
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStepHour(key, "startHour", 1)}
+                                    className="w-6 h-6 rounded flex items-center justify-center bg-[#f4f0e8] hover:bg-[#e8e0d3] active:bg-[#ded5c8] text-[#3d3731] font-bold text-xs transition-colors"
+                                    title="1時間進める"
+                                  >
+                                    ＋
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* 終了時間 */}
+                              <div className="flex items-center justify-between sm:justify-start gap-2 bg-white px-2.5 py-1.5 rounded-lg border border-[#e5ded2]">
+                                <span className="text-[#8a7f72] text-[11px] font-medium shrink-0">終了:</span>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStepHour(key, "endHour", -1)}
+                                    className="w-6 h-6 rounded flex items-center justify-center bg-[#f4f0e8] hover:bg-[#e8e0d3] active:bg-[#ded5c8] text-[#3d3731] font-bold text-xs transition-colors"
+                                    title="1時間戻す"
+                                  >
+                                    －
+                                  </button>
+                                  <select
+                                    value={slot.endHour}
+                                    onChange={(e) =>
+                                      handleUpdateTimeSlot(key, "endHour", Number(e.target.value))
+                                    }
+                                    className="bg-[#faf8f5] border border-[#ded5c8] rounded px-1.5 py-0.5 text-xs font-mono font-bold text-[#2d2926] focus:outline-none focus:border-[#968979]"
+                                  >
+                                    {Array.from({ length: 24 }, (_, i) => (
+                                      <option key={i} value={i}>
+                                        {i}:59
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStepHour(key, "endHour", 1)}
+                                    className="w-6 h-6 rounded flex items-center justify-center bg-[#f4f0e8] hover:bg-[#e8e0d3] active:bg-[#ded5c8] text-[#3d3731] font-bold text-xs transition-colors"
+                                    title="1時間進める"
+                                  >
+                                    ＋
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* 容量・メモ情報 */}
