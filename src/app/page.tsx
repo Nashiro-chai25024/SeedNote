@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
+import type { User } from "@supabase/supabase-js";
 
 // メモへの追記（リプライ）のデータ型定義
 interface NoteReply {
@@ -20,6 +22,44 @@ interface Note {
   isFavorite?: boolean; // お気に入りフラグ
   replies?: NoteReply[]; // 追記リスト（大元のメモにぶら下がる1階層の時系列ログ）
 }
+
+// Supabase DB用レコード定義
+interface DbNoteRow {
+  id: string;
+  user_id: string;
+  title: string | null;
+  content: string;
+  created_at: string;
+  is_trash: boolean;
+  is_favorite: boolean;
+  categories: string[] | null;
+  replies: NoteReply[] | null;
+}
+
+// DB行からNoteオブジェクトへのマッピング
+const mapDbRowToNote = (row: DbNoteRow): Note => ({
+  id: row.id,
+  title: row.title || undefined,
+  content: row.content,
+  createdAt: row.created_at,
+  isTrash: Boolean(row.is_trash),
+  isFavorite: Boolean(row.is_favorite),
+  categories: row.categories && row.categories.length > 0 ? row.categories : undefined,
+  replies: Array.isArray(row.replies) && row.replies.length > 0 ? row.replies : undefined,
+});
+
+// NoteオブジェクトからDB行へのマッピング
+const mapNoteToDbRow = (note: Note, userId: string): DbNoteRow => ({
+  id: note.id,
+  user_id: userId,
+  title: note.title || null,
+  content: note.content,
+  created_at: note.createdAt,
+  is_trash: Boolean(note.isTrash),
+  is_favorite: Boolean(note.isFavorite),
+  categories: note.categories || [],
+  replies: note.replies || [],
+});
 
 type TabType = "home" | "list" | "categories" | "trash" | "settings";
 type FontSize = "normal" | "large";
@@ -306,6 +346,18 @@ export default function Home() {
   const [replyContent, setReplyContent] = useState("");
   const [expandedReplyNoteIds, setExpandedReplyNoteIds] = useState<string[]>([]);
 
+  // 認証・クラウド同期関連のState
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUsername, setCurrentUsername] = useState<string>("");
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const [authUsernameInput, setAuthUsernameInput] = useState("");
+  const [authPasswordInput, setAuthPasswordInput] = useState("");
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authSuccessMsg, setAuthSuccessMsg] = useState<string | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+
   const [isLoaded, setIsLoaded] = useState(false);
 
   // 初回読み込み時にブラウザの保存領域 (localStorage) からデータを復元
@@ -356,6 +408,193 @@ export default function Home() {
       setIsLoaded(true);
     }
   }, []);
+
+  // クラウド（Supabase）からメモを取得＆ローカルメモの自動引き継ぎ
+  const fetchCloudNotes = async (userId: string, currentLocalNotes?: Note[]) => {
+    setIsSyncing(true);
+    try {
+      const { data, error } = await supabase
+        .from("notes")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("クラウドメモの取得に失敗しました", error);
+        return;
+      }
+
+      if (data) {
+        const cloudNotes: Note[] = (data as DbNoteRow[]).map(mapDbRowToNote);
+        const baseLocalNotes = currentLocalNotes ?? notes;
+
+        // ローカルにしか存在しないメモがあれば、クラウドにアップロード（引き継ぎ）
+        const localOnlyNotes = baseLocalNotes.filter(
+          (loc) => !cloudNotes.some((c) => c.id === loc.id)
+        );
+
+        if (localOnlyNotes.length > 0) {
+          const rowsToInsert = localOnlyNotes.map((n) => mapNoteToDbRow(n, userId));
+          const { error: insertErr } = await supabase.from("notes").insert(rowsToInsert);
+          if (!insertErr) {
+            const merged = [...cloudNotes, ...localOnlyNotes].sort(
+              (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+            );
+            setNotes(merged);
+            localStorage.setItem("seednote_items", JSON.stringify(merged));
+            return;
+          }
+        }
+
+        // クラウドのメモで更新
+        setNotes(cloudNotes);
+        localStorage.setItem("seednote_items", JSON.stringify(cloudNotes));
+      }
+    } catch (e) {
+      console.error("同期処理中にエラーが発生しました", e);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // 初回ロード時にSupabaseセッションを復元＆状態変化を監視
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const u = session?.user ?? null;
+      setCurrentUser(u);
+      if (u) {
+        const name = (u.user_metadata?.username as string) || u.email?.split("@")[0] || "";
+        setCurrentUsername(name);
+        fetchCloudNotes(u.id);
+      }
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      const u = session?.user ?? null;
+      setCurrentUser(u);
+      if (u) {
+        const name = (u.user_metadata?.username as string) || u.email?.split("@")[0] || "";
+        setCurrentUsername(name);
+        fetchCloudNotes(u.id);
+      } else {
+        setCurrentUsername("");
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  // ユーザー名から内部メールアドレスを生成
+  const getInternalEmail = (username: string) => {
+    return `${username.trim().toLowerCase()}@seednote.local`;
+  };
+
+  // ログイン／新規登録の送信処理
+  const handleAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    setAuthSuccessMsg(null);
+
+    const username = authUsernameInput.trim();
+    const password = authPasswordInput.trim();
+
+    if (!username) {
+      setAuthError("ユーザー名を入力してください");
+      return;
+    }
+    if (!/^[a-zA-Z0-9._-]+$/.test(username)) {
+      setAuthError("ユーザー名は半角英数字（またはピリオド・ハイフン・アンダースコア）で入力してください");
+      return;
+    }
+    if (!password) {
+      setAuthError("パスワードを入力してください");
+      return;
+    }
+    if (password.length < 6) {
+      setAuthError("パスワードは6文字以上で設定してください");
+      return;
+    }
+
+    setIsAuthLoading(true);
+    const internalEmail = getInternalEmail(username);
+
+    try {
+      if (authMode === "login") {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: internalEmail,
+          password: password,
+        });
+        if (error) {
+          if (error.message.includes("Invalid login credentials")) {
+            setAuthError("ユーザー名またはパスワードが正しくありません");
+          } else {
+            setAuthError(`ログインに失敗しました: ${error.message}`);
+          }
+          return;
+        }
+        if (data.user) {
+          setCurrentUser(data.user);
+          setCurrentUsername(username);
+          setAuthSuccessMsg("ログインしました！同期を開始します...");
+          await fetchCloudNotes(data.user.id, notes);
+          setTimeout(() => {
+            setIsAuthModalOpen(false);
+            setAuthUsernameInput("");
+            setAuthPasswordInput("");
+            setAuthSuccessMsg(null);
+          }, 800);
+        }
+      } else {
+        // 新規登録
+        const { data, error } = await supabase.auth.signUp({
+          email: internalEmail,
+          password: password,
+          options: {
+            data: {
+              username: username,
+            },
+          },
+        });
+        if (error) {
+          if (
+            error.message.includes("already registered") ||
+            error.message.includes("User already registered")
+          ) {
+            setAuthError("このユーザー名はすでに使われています。別の名前をお試しください。");
+          } else {
+            setAuthError(`登録に失敗しました: ${error.message}`);
+          }
+          return;
+        }
+        if (data.user) {
+          setCurrentUser(data.user);
+          setCurrentUsername(username);
+          setAuthSuccessMsg("アカウントを作成しました！クラウド同期を有効化しました。");
+          await fetchCloudNotes(data.user.id, notes);
+          setTimeout(() => {
+            setIsAuthModalOpen(false);
+            setAuthUsernameInput("");
+            setAuthPasswordInput("");
+            setAuthSuccessMsg(null);
+          }, 800);
+        }
+      }
+    } catch {
+      setAuthError("通信エラーが発生しました。接続を確認してください。");
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
+
+  // ログアウト処理
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setCurrentUser(null);
+    setCurrentUsername("");
+  };
 
   // カテゴリの選択・解除切り替え
   const handleToggleCategory = (catName: string) => {
@@ -495,6 +734,19 @@ export default function Home() {
 
     setNotes(updatedNotes);
     localStorage.setItem("seednote_items", JSON.stringify(updatedNotes));
+
+    // Supabaseに反映
+    if (currentUser) {
+      supabase
+        .from("notes")
+        .update({
+          title: editTitleInput.trim() || null,
+          categories: editCategories.length > 0 ? editCategories : [],
+        })
+        .eq("id", editingNote.id)
+        .then();
+    }
+
     setEditingNote(null);
     setIsAddingCategoryInEdit(false);
     setInlineNewCategoryInEdit("");
@@ -558,6 +810,16 @@ export default function Home() {
       console.error("メモの保存に失敗しました", e);
     }
 
+    // ログイン中ならSupabaseへ保存
+    if (currentUser) {
+      supabase
+        .from("notes")
+        .insert(mapNoteToDbRow(newNote, currentUser.id))
+        .then(({ error }) => {
+          if (error) console.error("クラウド保存エラー", error);
+        });
+    }
+
     // 入力欄をクリア
     setContent("");
     setTitle("");
@@ -581,6 +843,10 @@ export default function Home() {
     );
     setNotes(updatedNotes);
     localStorage.setItem("seednote_items", JSON.stringify(updatedNotes));
+
+    if (currentUser) {
+      supabase.from("notes").update({ is_trash: true }).eq("id", id).then();
+    }
     setActiveMenuNoteId(null); // メニューを閉じる
   };
 
@@ -591,6 +857,10 @@ export default function Home() {
     );
     setNotes(updatedNotes);
     localStorage.setItem("seednote_items", JSON.stringify(updatedNotes));
+
+    if (currentUser) {
+      supabase.from("notes").update({ is_trash: false }).eq("id", id).then();
+    }
   };
 
   // 通知設定の切り替え
@@ -745,11 +1015,20 @@ export default function Home() {
 
   // お気に入りの切り替え（☆ ⇄ ★）
   const handleToggleFavorite = (id: string) => {
-    const updatedNotes = notes.map((note) =>
-      note.id === id ? { ...note, isFavorite: !note.isFavorite } : note
-    );
+    let nextFav = false;
+    const updatedNotes = notes.map((note) => {
+      if (note.id === id) {
+        nextFav = !note.isFavorite;
+        return { ...note, isFavorite: nextFav };
+      }
+      return note;
+    });
     setNotes(updatedNotes);
     localStorage.setItem("seednote_items", JSON.stringify(updatedNotes));
+
+    if (currentUser) {
+      supabase.from("notes").update({ is_favorite: nextFav }).eq("id", id).then();
+    }
   };
 
   // メモへの追記（リプライ）を保存（大元のメモにぶら下がる不可逆ログ）
@@ -760,17 +1039,24 @@ export default function Home() {
       content: replyContent.trim(),
       createdAt: new Date().toISOString(),
     };
+    let updatedReplies: NoteReply[] = [];
     const updatedNotes = notes.map((n) => {
       if (n.id === parentNoteId) {
+        updatedReplies = [...(n.replies || []), newReply];
         return {
           ...n,
-          replies: [...(n.replies || []), newReply],
+          replies: updatedReplies,
         };
       }
       return n;
     });
     setNotes(updatedNotes);
     localStorage.setItem("seednote_items", JSON.stringify(updatedNotes));
+
+    if (currentUser && updatedReplies.length > 0) {
+      supabase.from("notes").update({ replies: updatedReplies }).eq("id", parentNoteId).then();
+    }
+
     setReplyContent("");
     setReplyingNoteId(null);
     // 追記した直後はそのメモの追記スレッドを展開して確認できるようにする
@@ -943,7 +1229,7 @@ export default function Home() {
         }`}
       >
         <div>
-          <div className="flex items-center justify-between mb-8 pb-3 border-b border-[#ded6c9]">
+          <div className="flex items-center justify-between mb-6 pb-3 border-b border-[#ded6c9]">
             <div>
               <h2 className="font-bold text-base text-[#3d3731] flex items-center gap-1.5">
                 <span>🌱</span> SeedNote
@@ -959,6 +1245,65 @@ export default function Home() {
             >
               ✕
             </button>
+          </div>
+
+          {/* クラウド同期・アカウント状態 */}
+          <div className="mb-5 p-3 rounded-xl bg-white/70 border border-[#ded6c9] shadow-2xs">
+            {currentUser ? (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="w-2 h-2 rounded-full bg-[#529961] shrink-0" />
+                    <span className="text-xs font-bold text-[#3d3731] truncate">
+                      {currentUsername || "ログイン中"}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-[#529961] bg-[#eef6f0] px-1.5 py-0.5 rounded font-medium shrink-0">
+                    同期中
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 pt-1 border-t border-[#ede7dd]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (currentUser) fetchCloudNotes(currentUser.id);
+                    }}
+                    disabled={isSyncing}
+                    className="flex-1 py-1 px-2 rounded-lg bg-[#f4f0e8] hover:bg-[#eae3d7] text-[11px] font-medium text-[#5c5348] transition-colors flex items-center justify-center gap-1"
+                  >
+                    <span>🔄</span> {isSyncing ? "同期中..." : "今すぐ同期"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="py-1 px-2 rounded-lg hover:bg-[#fdeeed] text-[11px] font-medium text-[#b85448] transition-colors"
+                  >
+                    ログアウト
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAuthModalOpen(true);
+                  setIsMenuOpen(false);
+                }}
+                className="w-full text-left group"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-[#3d3731] flex items-center gap-1.5">
+                    <span>🔐</span> クラウド同期
+                  </span>
+                  <span className="text-[10px] text-[#8a7f72] group-hover:text-[#3d3731]">
+                    ログイン ›
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#8a7f72] mt-0.5 leading-snug">
+                  PCとスマホでメモを同期（※IDとパスワードのみ）
+                </p>
+              </button>
+            )}
           </div>
 
           <nav className="flex flex-col gap-1.5">
@@ -3030,6 +3375,143 @@ export default function Home() {
                 破棄する
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ⑦ ユーザー名＋パスワードによるクラウドログイン／新規登録モーダル */}
+      {isAuthModalOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 backdrop-blur-xs z-60 flex items-center justify-center p-4"
+          onClick={() => {
+            setIsAuthModalOpen(false);
+            setAuthError(null);
+            setAuthSuccessMsg(null);
+          }}
+        >
+          <div
+            className="bg-[#f4f0e8] rounded-2xl p-6 sm:p-7 max-w-sm w-full border border-[#ded6c9] shadow-2xl transition-all"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* ヘッダー */}
+            <div className="flex items-center justify-between mb-4 pb-2 border-b border-[#ded6c9]">
+              <h2 className="text-base font-bold text-[#3d3731] flex items-center gap-1.5">
+                <span>🔐</span> クラウド同期
+              </h2>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAuthModalOpen(false);
+                  setAuthError(null);
+                  setAuthSuccessMsg(null);
+                }}
+                className="text-[#8a7f72] hover:text-[#3d3731] text-xs px-2 py-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* モード切り替えタブ（ログイン / 新規登録） */}
+            <div className="flex bg-[#e8e0d3] p-1 rounded-xl mb-4 border border-[#ded6c9]">
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode("login");
+                  setAuthError(null);
+                  setAuthSuccessMsg(null);
+                }}
+                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                  authMode === "login"
+                    ? "bg-[#3d3731] text-[#faf8f5] shadow-xs"
+                    : "text-[#6b6257] hover:text-[#2d2926]"
+                }`}
+              >
+                ログイン
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode("signup");
+                  setAuthError(null);
+                  setAuthSuccessMsg(null);
+                }}
+                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                  authMode === "signup"
+                    ? "bg-[#3d3731] text-[#faf8f5] shadow-xs"
+                    : "text-[#6b6257] hover:text-[#2d2926]"
+                }`}
+              >
+                新規登録
+              </button>
+            </div>
+
+            <form onSubmit={handleAuthSubmit} className="space-y-3.5">
+              {/* ユーザー名入力 */}
+              <div>
+                <label className="block text-xs font-bold text-[#3d3731] mb-1">
+                  ユーザー名（ID）
+                </label>
+                <input
+                  type="text"
+                  placeholder="例: nickname"
+                  value={authUsernameInput}
+                  onChange={(e) => setAuthUsernameInput(e.target.value)}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  required
+                  className="w-full px-3 py-2 text-sm bg-[#faf8f5] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] placeholder-[#b0a598]"
+                />
+              </div>
+
+              {/* パスワード入力 */}
+              <div>
+                <label className="block text-xs font-bold text-[#3d3731] mb-1">
+                  パスワード（6文字以上）
+                </label>
+                <input
+                  type="password"
+                  placeholder="パスワードを入力"
+                  value={authPasswordInput}
+                  onChange={(e) => setAuthPasswordInput(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 text-sm bg-[#faf8f5] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] placeholder-[#b0a598]"
+                />
+              </div>
+
+              {/* プライバシー安心注釈 */}
+              <div className="p-2.5 rounded-lg bg-[#eae4d9] border border-[#ded6c9] text-[11px] text-[#6b6257] leading-relaxed">
+                🛡️ <strong>メールアドレスは不要です</strong>。個人情報は一切収集せず、IDとパスワードのみで安全に端末間同期を行います。
+              </div>
+
+              {/* エラーメッセージ */}
+              {authError && (
+                <div className="p-2 rounded-lg bg-[#fdeeed] border border-[#f5c6cb] text-xs text-[#b85448]">
+                  {authError}
+                </div>
+              )}
+
+              {/* 成功メッセージ */}
+              {authSuccessMsg && (
+                <div className="p-2 rounded-lg bg-[#eef6f0] border border-[#c3e6cb] text-xs text-[#529961] font-bold">
+                  {authSuccessMsg}
+                </div>
+              )}
+
+              {/* 送信ボタン */}
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  disabled={isAuthLoading}
+                  className="w-full py-2.5 rounded-xl bg-[#3d3731] text-[#faf8f5] text-sm font-bold hover:bg-[#292420] active:scale-[0.99] transition-all disabled:opacity-50 shadow-xs cursor-pointer"
+                >
+                  {isAuthLoading
+                    ? "通信中..."
+                    : authMode === "login"
+                    ? "ログインする"
+                    : "アカウントを作成する"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
