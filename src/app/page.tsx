@@ -365,6 +365,9 @@ export default function Home() {
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [authUsernameInput, setAuthUsernameInput] = useState("");
   const [authPasswordInput, setAuthPasswordInput] = useState("");
+  const [authPasswordConfirmInput, setAuthPasswordConfirmInput] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [authSuccessMsg, setAuthSuccessMsg] = useState<string | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(false);
@@ -712,6 +715,17 @@ export default function Home() {
       setAuthError("パスワードは6文字以上で設定してください");
       return;
     }
+    if (authMode === "signup") {
+      const confirmPass = authPasswordConfirmInput.trim();
+      if (!confirmPass) {
+        setAuthError("確認用パスワードを入力してください");
+        return;
+      }
+      if (password !== confirmPass) {
+        setAuthError("パスワードと確認用パスワードが一致しません");
+        return;
+      }
+    }
 
     setIsAuthLoading(true);
     const internalEmail = getInternalEmail(username);
@@ -740,6 +754,9 @@ export default function Home() {
             setIsAuthModalOpen(false);
             setAuthUsernameInput("");
             setAuthPasswordInput("");
+            setAuthPasswordConfirmInput("");
+            setShowPassword(false);
+            setShowPasswordConfirm(false);
             setAuthSuccessMsg(null);
           }, 800);
         }
@@ -775,6 +792,9 @@ export default function Home() {
             setIsAuthModalOpen(false);
             setAuthUsernameInput("");
             setAuthPasswordInput("");
+            setAuthPasswordConfirmInput("");
+            setShowPassword(false);
+            setShowPasswordConfirm(false);
             setAuthSuccessMsg(null);
           }, 800);
         }
@@ -1363,13 +1383,13 @@ export default function Home() {
         />
       )}
 
-      {/* 保存通知トースト */}
+      {/* 保存通知トースト（画面下部の中央に表示し、ヘッダーのボタンと重ならないようにする） */}
       <div
-        className={`fixed top-5 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 pointer-events-none ${
-          showToast ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-3"
+        className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 pointer-events-none ${
+          showToast ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3"
         }`}
       >
-        <div className="bg-[#3d3731] text-[#faf8f5] px-4 py-2 rounded-full text-xs font-medium shadow-md flex items-center gap-1.5">
+        <div className="bg-[#3d3731] text-[#faf8f5] px-4 py-2 rounded-full text-xs font-medium shadow-lg flex items-center gap-1.5">
           <span>🌱</span> 保存しました
         </div>
       </div>
@@ -2276,10 +2296,7 @@ export default function Home() {
                                   key={reply.id}
                                   className="p-2.5 rounded-xl bg-[#faf8f5] border border-[#e8e2d5] shadow-3xs"
                                 >
-                                  <div className="flex justify-between items-baseline gap-2 mb-1">
-                                    <span className="text-[10px] text-[#9c9184] font-medium flex items-center gap-1">
-                                      <span>🌱</span> 思考の追記
-                                    </span>
+                                  <div className="flex justify-end mb-1">
                                     <time className="text-[10px] text-[#8a7f72] font-mono">
                                       {formatDate(reply.createdAt)}
                                     </time>
@@ -2306,7 +2323,7 @@ export default function Home() {
                           </span>
                           <textarea
                             rows={3}
-                            placeholder="後から思いついたことや、思考のアップデートを入力..."
+                            placeholder="追記を入力..."
                             value={replyContent}
                             onChange={(e) => setReplyContent(e.target.value)}
                             className={`w-full ${
@@ -2669,8 +2686,7 @@ export default function Home() {
                                 key={reply.id}
                                 className="p-2 rounded-lg bg-[#faf8f5]/80 border border-[#e8e2d5] text-xs"
                               >
-                                <div className="flex justify-between items-baseline gap-2 mb-0.5">
-                                  <span className="text-[10px] text-[#9c9184] font-medium">🌱 追記</span>
+                                <div className="flex justify-end mb-0.5">
                                   <time className="text-[10px] text-[#8a7f72] font-mono">
                                     {formatDate(reply.createdAt)}
                                   </time>
@@ -3604,6 +3620,9 @@ export default function Home() {
             setIsAuthModalOpen(false);
             setAuthError(null);
             setAuthSuccessMsg(null);
+            setAuthPasswordConfirmInput("");
+            setShowPassword(false);
+            setShowPasswordConfirm(false);
           }}
         >
           <div
@@ -3621,6 +3640,9 @@ export default function Home() {
                   setIsAuthModalOpen(false);
                   setAuthError(null);
                   setAuthSuccessMsg(null);
+                  setAuthPasswordConfirmInput("");
+                  setShowPassword(false);
+                  setShowPasswordConfirm(false);
                 }}
                 className="text-[#8a7f72] hover:text-[#3d3731] text-xs px-2 py-1"
               >
@@ -3636,6 +3658,9 @@ export default function Home() {
                   setAuthMode("login");
                   setAuthError(null);
                   setAuthSuccessMsg(null);
+                  setAuthPasswordConfirmInput("");
+                  setShowPassword(false);
+                  setShowPasswordConfirm(false);
                 }}
                 className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
                   authMode === "login"
@@ -3651,6 +3676,9 @@ export default function Home() {
                   setAuthMode("signup");
                   setAuthError(null);
                   setAuthSuccessMsg(null);
+                  setAuthPasswordConfirmInput("");
+                  setShowPassword(false);
+                  setShowPasswordConfirm(false);
                 }}
                 className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
                   authMode === "signup"
@@ -3685,15 +3713,54 @@ export default function Home() {
                 <label className="block text-xs font-bold text-[#3d3731] mb-1">
                   パスワード（6文字以上）
                 </label>
-                <input
-                  type="password"
-                  placeholder="パスワードを入力"
-                  value={authPasswordInput}
-                  onChange={(e) => setAuthPasswordInput(e.target.value)}
-                  required
-                  className="w-full px-3 py-2 text-sm bg-[#faf8f5] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] placeholder-[#b0a598]"
-                />
+                <div className="relative flex items-center">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="パスワードを入力"
+                    value={authPasswordInput}
+                    onChange={(e) => setAuthPasswordInput(e.target.value)}
+                    required
+                    className="w-full px-3 py-2 pr-10 text-sm bg-[#faf8f5] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] placeholder-[#b0a598]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-2.5 text-[#8a7f72] hover:text-[#3d3731] text-sm p-1 transition-colors"
+                    title={showPassword ? "パスワードを隠す" : "パスワードを表示する"}
+                    aria-label={showPassword ? "パスワードを隠す" : "パスワードを表示する"}
+                  >
+                    {showPassword ? "🙈" : "👁️"}
+                  </button>
+                </div>
               </div>
+
+              {/* 新規登録時のみ：パスワード確認用入力 */}
+              {authMode === "signup" && (
+                <div>
+                  <label className="block text-xs font-bold text-[#3d3731] mb-1">
+                    パスワード（確認用）
+                  </label>
+                  <div className="relative flex items-center">
+                    <input
+                      type={showPasswordConfirm ? "text" : "password"}
+                      placeholder="もう一度パスワードを入力"
+                      value={authPasswordConfirmInput}
+                      onChange={(e) => setAuthPasswordConfirmInput(e.target.value)}
+                      required
+                      className="w-full px-3 py-2 pr-10 text-sm bg-[#faf8f5] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] placeholder-[#b0a598]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPasswordConfirm(!showPasswordConfirm)}
+                      className="absolute right-2.5 text-[#8a7f72] hover:text-[#3d3731] text-sm p-1 transition-colors"
+                      title={showPasswordConfirm ? "パスワードを隠す" : "パスワードを表示する"}
+                      aria-label={showPasswordConfirm ? "パスワードを隠す" : "パスワードを表示する"}
+                    >
+                      {showPasswordConfirm ? "🙈" : "👁️"}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* プライバシー安心注釈 */}
               <div className="p-2.5 rounded-lg bg-[#eae4d9] border border-[#ded6c9] text-[11px] text-[#6b6257] leading-relaxed">
