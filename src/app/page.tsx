@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
 
@@ -64,6 +64,7 @@ const mapNoteToDbRow = (note: Note, userId: string): DbNoteRow => ({
 type TabType = "home" | "list" | "categories" | "trash" | "settings";
 type FontSize = "normal" | "large";
 type ButtonSize = "normal" | "large";
+type CategorySortOrder = "usage" | "alphabetical" | "created";
 
 // 時間帯の定義（朝・昼・夕方・夜・深夜）
 type TimeSlotKey = "morning" | "afternoon" | "evening" | "night" | "lateNight";
@@ -341,6 +342,15 @@ export default function Home() {
   const [includeTrashInSearch, setIncludeTrashInSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterTimeSlots, setFilterTimeSlots] = useState<TimeSlotKey[]>([]);
+  const [categorySortOrder, setCategorySortOrder] = useState<CategorySortOrder>("usage");
+
+  // 検索パネル内の折りたたみアコーディオンState
+  const [isSearchCategoryOpen, setIsSearchCategoryOpen] = useState(true);
+  const [isSearchTimeSlotOpen, setIsSearchTimeSlotOpen] = useState(false);
+  const [isSearchTrashAccordionOpen, setIsSearchTrashAccordionOpen] = useState(false);
+
+  // ゴミ箱検索パネル内の折りたたみアコーディオンState
+  const [isTrashSearchCategoryOpen, setIsTrashSearchCategoryOpen] = useState(true);
 
   // 時間帯の定義（朝・昼・夕方・夜・深夜）
   const [timeSlots, setTimeSlots] = useState<Record<TimeSlotKey, TimeSlotConfig>>(DEFAULT_TIME_SLOTS);
@@ -417,12 +427,47 @@ export default function Home() {
         });
         setTimeSlots(merged);
       }
+      const savedSortOrder = localStorage.getItem("seednote_category_sort_order");
+      if (savedSortOrder === "usage" || savedSortOrder === "alphabetical" || savedSortOrder === "created") {
+        setCategorySortOrder(savedSortOrder as CategorySortOrder);
+      }
     } catch (e) {
       console.error("データの読み込みに失敗しました", e);
     } finally {
       setIsLoaded(true);
     }
   }, []);
+
+  // カテゴリの並び順変更
+  const handleCategorySortOrderChange = (order: CategorySortOrder) => {
+    setCategorySortOrder(order);
+    localStorage.setItem("seednote_category_sort_order", order);
+  };
+
+  // カテゴリ一覧を指定された並び順でソート（よく使う順 / 五十音順 / 登録順）
+  const sortedCategories = useMemo(() => {
+    const list = [...categoriesList];
+    if (categorySortOrder === "usage") {
+      const counts = new Map<string, number>();
+      notes.forEach((n) => {
+        if (!n.isTrash && n.categories) {
+          n.categories.forEach((c) => {
+            counts.set(c, (counts.get(c) || 0) + 1);
+          });
+        }
+      });
+      return list.sort((a, b) => {
+        const countA = counts.get(a) || 0;
+        const countB = counts.get(b) || 0;
+        if (countB !== countA) return countB - countA;
+        return a.localeCompare(b, "ja");
+      });
+    } else if (categorySortOrder === "alphabetical") {
+      return list.sort((a, b) => a.localeCompare(b, "ja"));
+    } else {
+      return list;
+    }
+  }, [categoriesList, notes, categorySortOrder]);
 
   // 設定の最新値を保持するRef（非同期・クロージャの古い値を参照しないため）
   const latestSettingsRef = useRef({
@@ -1660,7 +1705,7 @@ export default function Home() {
       </aside>
 
       {/* メイン画面コンテンツ（タブによって切り替え） */}
-      <main className="max-w-xl w-full mx-auto my-auto py-8">
+      <main className="max-w-xl w-full mx-auto flex-1 flex flex-col justify-center py-3 sm:py-5 min-h-0">
         {/* ① ホーム（メモ入力：ノイズゼロのメイン空間） */}
         {activeTab === "home" && (
           <div className="relative bg-[#f2efe9] rounded-2xl p-6 sm:p-8 shadow-sm border border-[#d5cdc0] transition-all">
@@ -1804,8 +1849,8 @@ export default function Home() {
 
         {/* ② メモを見る（通常一覧：Twitter風のすっきり二層表示） */}
         {activeTab === "list" && (
-          <div className="flex flex-col max-h-[78vh]">
-            <div className="flex items-center justify-between mb-3 pb-2 border-b border-[#d5cdc0]">
+          <div className="flex flex-col flex-1 min-h-0 w-full">
+            <div className="flex items-center justify-between mb-3 pb-2 border-b border-[#d5cdc0] shrink-0">
               <h2
                 className={`${
                   fontSize === "large" ? "text-xl" : "text-lg"
@@ -1815,253 +1860,28 @@ export default function Home() {
               </h2>
             </div>
 
-            {/* 検索・絞り込み機能エリア（スケッチの実装） */}
-            {!isSearchPanelOpen ? (
-              <div className="mb-3 flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={() => setIsSearchPanelOpen(true)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                    filterOnlyFavorite || filterCategories.length > 0 || includeTrashInSearch || searchQuery.trim().length > 0 || filterTimeSlots.length > 0
-                      ? "bg-[#d49e35] text-white shadow-xs hover:bg-[#c28e2d]"
-                      : "bg-white border border-[#ded5c8] text-[#5c5348] hover:bg-[#faf8f5] shadow-2xs"
-                  }`}
-                >
-                  <span>🔍</span>
-                  {filterOnlyFavorite || filterCategories.length > 0 || includeTrashInSearch || searchQuery.trim().length > 0 || filterTimeSlots.length > 0 ? (
-                    <span>絞り込み中 ({displayedNotes.length}件)</span>
-                  ) : (
-                    <span>検索機能</span>
-                  )}
-                </button>
-                {(filterOnlyFavorite || filterCategories.length > 0 || includeTrashInSearch || searchQuery.trim().length > 0 || filterTimeSlots.length > 0) && (
+            {/* スクロール領域（検索バーとメモが一緒に流れるため、下スクロールでメモが画面いっぱいに広がる） */}
+            <div className="flex-1 overflow-y-auto pr-1 pb-16 flex flex-col">
+              {/* 検索・絞り込み機能エリア（スケッチの実装） */}
+              {!isSearchPanelOpen ? (
+                <div className="mb-3 flex items-center justify-between shrink-0">
                   <button
                     type="button"
-                    onClick={() => {
-                      setFilterOnlyFavorite(false);
-                      setFilterCategories([]);
-                      setIncludeTrashInSearch(false);
-                      setSearchQuery("");
-                      setFilterTimeSlots([]);
-                    }}
-                    className="text-[11px] text-[#8a7f72] hover:text-[#3d3731] underline font-medium"
-                  >
-                    絞り込みを解除
-                  </button>
-                )}
-              </div>
-            ) : (
-              <div className="mb-3 p-3.5 bg-white rounded-xl border border-[#ded5c8] shadow-xs flex flex-col gap-3 transition-all">
-                {/* パネル上部: タイトル & とじるボタン */}
-                <div className="flex items-center justify-between pb-2 border-b border-[#f0eae1]">
-                  <span className="text-xs font-bold text-[#3d3731] flex items-center gap-1.5">
-                    <span>🔍</span> 検索機能
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setIsSearchPanelOpen(false)}
-                    className="flex items-center gap-1 px-2 py-0.5 rounded-lg border border-[#c4b9aa] text-xs text-[#5c5348] hover:text-[#3d3731] hover:border-[#8a7f72] transition-colors"
-                  >
-                    <span>✕</span> とじる
-                  </button>
-                </div>
-
-                {/* ① キーワード検索入力欄 */}
-                <div>
-                  <span className="block text-[11px] font-bold text-[#8a7f72] mb-1.5">
-                    🔤 キーワードで探す
-                  </span>
-                  <div className="relative flex items-center">
-                    <input
-                      type="text"
-                      placeholder="タイトル、本文、追記から探す..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className={`w-full ${
-                        fontSize === "large" ? "text-sm py-2 px-3 pr-8" : "text-xs py-1.5 px-2.5 pr-7"
-                      } bg-[#faf8f5] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] placeholder-[#b0a598]`}
-                    />
-                    {searchQuery && (
-                      <button
-                        type="button"
-                        onClick={() => setSearchQuery("")}
-                        className="absolute right-2 text-xs text-[#9c9184] hover:text-[#3d3731] p-1 font-bold"
-                        title="入力をクリア"
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* ② お気に入り表示 */}
-                <div>
-                  <span className="block text-[11px] font-bold text-[#8a7f72] mb-1.5">
-                    ⭐ お気に入り
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setFilterOnlyFavorite(!filterOnlyFavorite)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
-                      filterOnlyFavorite
-                        ? "bg-[#d49e35] text-white shadow-xs font-bold"
-                        : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
+                    onClick={() => setIsSearchPanelOpen(true)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                      filterOnlyFavorite || filterCategories.length > 0 || includeTrashInSearch || searchQuery.trim().length > 0 || filterTimeSlots.length > 0
+                        ? "bg-[#d49e35] text-white shadow-xs hover:bg-[#c28e2d]"
+                        : "bg-white border border-[#ded5c8] text-[#5c5348] hover:bg-[#faf8f5] shadow-2xs"
                     }`}
                   >
-                    <span>{filterOnlyFavorite ? "★" : "☆"}</span>
-                    {filterOnlyFavorite ? "お気に入りのみ表示中" : "お気に入りのみ表示"}
-                  </button>
-                </div>
-
-                {/* ② タグからさがす（複数AND選択対応） */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[11px] font-bold text-[#8a7f72]">
-                      🏷️ タグからさがす
-                    </span>
-                    {filterCategories.includes("uncategorized") ? (
-                      <span className="text-[10px] text-[#8a7f72] bg-[#f4f0e8] px-2 py-0.5 rounded-md">
-                        ”未分類” のメモを表示中
-                      </span>
-                    ) : filterCategories.length > 1 ? (
-                      <span className="text-[10px] text-[#8a7f72] bg-[#f4f0e8] px-2 py-0.5 rounded-md">
-                        {filterCategories.length}個のタグで絞り込み中 (AND検索)
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {/* ”すべてのメモ” ボタン（全解除） */}
-                    <button
-                      type="button"
-                      onClick={() => setFilterCategories([])}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                        filterCategories.length === 0
-                          ? "bg-[#3d3731] text-white shadow-xs font-bold"
-                          : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
-                      }`}
-                    >
-                      ”すべてのメモ”
-                    </button>
-
-                    {/* ”未分類” ボタン（単独選択） */}
-                    {(() => {
-                      const isUncategorizedSelected = filterCategories.includes("uncategorized");
-                      return (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setFilterCategories(isUncategorizedSelected ? [] : ["uncategorized"])
-                          }
-                          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                            isUncategorizedSelected
-                              ? "bg-[#3d3731] text-white shadow-xs font-bold"
-                              : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
-                          }`}
-                        >
-                          ”未分類”
-                        </button>
-                      );
-                    })()}
-
-                    {/* 各カテゴリタグボタン（トグル複数AND選択） */}
-                    {categoriesList.map((cat) => {
-                      const isSelected = filterCategories.includes(cat);
-                      return (
-                        <button
-                          key={cat}
-                          type="button"
-                          onClick={() =>
-                            setFilterCategories((prev) => {
-                              const withoutUncategorized = prev.filter((c) => c !== "uncategorized");
-                              return isSelected
-                                ? withoutUncategorized.filter((c) => c !== cat)
-                                : [...withoutUncategorized, cat];
-                            })
-                          }
-                          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                            isSelected
-                              ? "bg-[#3d3731] text-white shadow-xs font-bold"
-                              : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
-                          }`}
-                        >
-                          {cat}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* ③ 時間帯から探す（複数選択可：論理和 OR） */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[11px] font-bold text-[#8a7f72]">
-                      ⏰ 時間帯から探す（複数選択可）
-                    </span>
-                    {filterTimeSlots.length > 0 && (
-                      <span className="text-[10px] text-[#8a7f72] bg-[#f4f0e8] px-2 py-0.5 rounded-md">
-                        {filterTimeSlots.length}個の時間帯を選択中
-                      </span>
+                    <span>🔍</span>
+                    {filterOnlyFavorite || filterCategories.length > 0 || includeTrashInSearch || searchQuery.trim().length > 0 || filterTimeSlots.length > 0 ? (
+                      <span>絞り込み中 ({displayedNotes.length}件)</span>
+                    ) : (
+                      <span>検索機能</span>
                     )}
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {(Object.keys(DEFAULT_TIME_SLOTS) as TimeSlotKey[]).map((key) => {
-                      const slot = timeSlots[key] || DEFAULT_TIME_SLOTS[key];
-                      const isSelected = filterTimeSlots.includes(key);
-                      return (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={() =>
-                            setFilterTimeSlots((prev) =>
-                              isSelected ? prev.filter((k) => k !== key) : [...prev, key]
-                            )
-                          }
-                          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${
-                            isSelected
-                              ? "bg-[#3d3731] text-white shadow-xs font-bold"
-                              : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
-                          }`}
-                        >
-                          <span
-                            className="w-2 h-2 rounded-full inline-block shrink-0 shadow-xs"
-                            style={{ backgroundColor: slot.color }}
-                          />
-                          <span>{slot.icon}</span>
-                          <span>{slot.label}</span>
-                          <span className="text-[10px] opacity-75 font-mono">
-                            ({slot.startHour}:00〜{slot.endHour}:59)
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* ④ ゴミ箱も含める */}
-                <div>
-                  <span className="block text-[11px] font-bold text-[#8a7f72] mb-1.5">
-                    🗑️ ゴミ箱の検索
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setIncludeTrashInSearch(!includeTrashInSearch)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
-                      includeTrashInSearch
-                        ? "bg-[#3d3731] text-white shadow-xs font-bold"
-                        : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
-                    }`}
-                  >
-                    <span>🗑️</span>
-                    {includeTrashInSearch
-                      ? "ゴミ箱のメモも含めて検索中"
-                      : "ゴミ箱のメモも含めて探す"}
                   </button>
-                </div>
-
-                {/* ヒット件数 */}
-                {(filterOnlyFavorite || filterCategories.length > 0 || includeTrashInSearch || searchQuery.trim().length > 0 || filterTimeSlots.length > 0) && (
-                  <div className="text-[11px] text-[#8a7f72] pt-1 border-t border-[#f4f0e8] flex items-center justify-between">
-                    <span>該当するメモ: {displayedNotes.length}件</span>
+                  {(filterOnlyFavorite || filterCategories.length > 0 || includeTrashInSearch || searchQuery.trim().length > 0 || filterTimeSlots.length > 0) && (
                     <button
                       type="button"
                       onClick={() => {
@@ -2071,16 +1891,297 @@ export default function Home() {
                         setSearchQuery("");
                         setFilterTimeSlots([]);
                       }}
-                      className="text-[11px] text-[#8a7f72] hover:text-[#3d3731] underline"
+                      className="text-[11px] text-[#8a7f72] hover:text-[#3d3731] underline font-medium"
                     >
-                      条件をリセット
+                      絞り込みを解除
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="mb-3 p-3.5 bg-white rounded-xl border border-[#ded5c8] shadow-xs flex flex-col gap-3 transition-all shrink-0">
+                  {/* パネル上部: タイトル & とじるボタン */}
+                  <div className="flex items-center justify-between pb-2 border-b border-[#f0eae1]">
+                    <span className="text-xs font-bold text-[#3d3731] flex items-center gap-1.5">
+                      <span>🔍</span> 検索機能
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setIsSearchPanelOpen(false)}
+                      className="flex items-center gap-1 px-2 py-0.5 rounded-lg border border-[#c4b9aa] text-xs text-[#5c5348] hover:text-[#3d3731] hover:border-[#8a7f72] transition-colors"
+                    >
+                      <span>✕</span> とじる
                     </button>
                   </div>
-                )}
-              </div>
-            )}
 
-            <div className="overflow-y-auto flex flex-col gap-3 pr-1">
+                  {/* ① キーワード検索入力欄 */}
+                  <div>
+                    <span className="block text-[11px] font-bold text-[#8a7f72] mb-1.5">
+                      🔤 キーワードで探す
+                    </span>
+                    <div className="relative flex items-center">
+                      <input
+                        type="text"
+                        placeholder="タイトル、本文、追記から探す..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className={`w-full ${
+                          fontSize === "large" ? "text-sm py-2 px-3 pr-8" : "text-xs py-1.5 px-2.5 pr-7"
+                        } bg-[#faf8f5] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] placeholder-[#b0a598]`}
+                      />
+                      {searchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setSearchQuery("")}
+                          className="absolute right-2 text-xs text-[#9c9184] hover:text-[#3d3731] p-1 font-bold"
+                          title="入力をクリア"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* ② お気に入り表示 */}
+                  <div>
+                    <span className="block text-[11px] font-bold text-[#8a7f72] mb-1.5">
+                      ⭐ お気に入り
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setFilterOnlyFavorite(!filterOnlyFavorite)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+                        filterOnlyFavorite
+                          ? "bg-[#d49e35] text-white shadow-xs font-bold"
+                          : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
+                      }`}
+                    >
+                      <span>{filterOnlyFavorite ? "★" : "☆"}</span>
+                      {filterOnlyFavorite ? "お気に入りのみ表示中" : "お気に入りのみ表示"}
+                    </button>
+                  </div>
+
+                  {/* ② カテゴリからさがす（アコーディオン） */}
+                  <div className="border-t border-[#f0eae1] pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsSearchCategoryOpen(!isSearchCategoryOpen)}
+                      className="flex items-center justify-between w-full text-left py-0.5 group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[11px] font-bold text-[#8a7f72] group-hover:text-[#3d3731] transition-colors flex items-center gap-1">
+                          <span className="text-[9px] font-mono">{isSearchCategoryOpen ? "▼" : "▶"}</span>
+                          <span>🏷️ カテゴリからさがす</span>
+                        </span>
+                        {filterCategories.length > 0 && !isSearchCategoryOpen && (
+                          <span className="text-[10px] text-[#8a7f72] bg-[#f4f0e8] px-2 py-0.5 rounded-md font-normal">
+                            {filterCategories.includes("uncategorized")
+                              ? "未分類"
+                              : `${filterCategories.length}個選択中`}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-[#9c9184] group-hover:text-[#5c5348] font-mono">
+                        {isSearchCategoryOpen ? "たたむ" : "広げる"}
+                      </span>
+                    </button>
+
+                    {isSearchCategoryOpen && (
+                      <div className="mt-2 flex flex-col gap-1.5">
+                        {filterCategories.length > 1 && (
+                          <span className="text-[10px] text-[#8a7f72] bg-[#f4f0e8] px-2 py-0.5 rounded-md self-start">
+                            {filterCategories.length}個のカテゴリで絞り込み中 (AND検索)
+                          </span>
+                        )}
+                        <div className="flex flex-wrap gap-1.5 pt-0.5">
+                          {/* ”すべてのメモ” ボタン（全解除） */}
+                          <button
+                            type="button"
+                            onClick={() => setFilterCategories([])}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                              filterCategories.length === 0
+                                ? "bg-[#3d3731] text-white shadow-xs font-bold"
+                                : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
+                            }`}
+                          >
+                            ”すべてのメモ”
+                          </button>
+
+                          {/* ”未分類” ボタン（単独選択） */}
+                          {(() => {
+                            const isUncategorizedSelected = filterCategories.includes("uncategorized");
+                            return (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setFilterCategories(isUncategorizedSelected ? [] : ["uncategorized"])
+                                }
+                                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                                  isUncategorizedSelected
+                                    ? "bg-[#3d3731] text-white shadow-xs font-bold"
+                                    : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
+                                }`}
+                              >
+                                ”未分類”
+                              </button>
+                            );
+                          })()}
+
+                          {/* 各カテゴリボタン（ソート順反映） */}
+                          {sortedCategories.map((cat) => {
+                            const isSelected = filterCategories.includes(cat);
+                            return (
+                              <button
+                                key={cat}
+                                type="button"
+                                onClick={() =>
+                                  setFilterCategories((prev) => {
+                                    const withoutUncategorized = prev.filter((c) => c !== "uncategorized");
+                                    return isSelected
+                                      ? withoutUncategorized.filter((c) => c !== cat)
+                                      : [...withoutUncategorized, cat];
+                                  })
+                                }
+                                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                                  isSelected
+                                    ? "bg-[#3d3731] text-white shadow-xs font-bold"
+                                    : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
+                                }`}
+                              >
+                                {cat}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ③ 時間帯から探す（アコーディオン） */}
+                  <div className="border-t border-[#f0eae1] pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsSearchTimeSlotOpen(!isSearchTimeSlotOpen)}
+                      className="flex items-center justify-between w-full text-left py-0.5 group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[11px] font-bold text-[#8a7f72] group-hover:text-[#3d3731] transition-colors flex items-center gap-1">
+                          <span className="text-[9px] font-mono">{isSearchTimeSlotOpen ? "▼" : "▶"}</span>
+                          <span>⏰ 時間帯から探す</span>
+                        </span>
+                        {filterTimeSlots.length > 0 && (
+                          <span className="text-[10px] text-[#8a7f72] bg-[#f4f0e8] px-2 py-0.5 rounded-md font-normal">
+                            {filterTimeSlots.length}個選択中
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-[#9c9184] group-hover:text-[#5c5348] font-mono">
+                        {isSearchTimeSlotOpen ? "たたむ" : "広げる"}
+                      </span>
+                    </button>
+
+                    {isSearchTimeSlotOpen && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {(Object.keys(DEFAULT_TIME_SLOTS) as TimeSlotKey[]).map((key) => {
+                          const slot = timeSlots[key] || DEFAULT_TIME_SLOTS[key];
+                          const isSelected = filterTimeSlots.includes(key);
+                          return (
+                            <button
+                              key={key}
+                              type="button"
+                              onClick={() =>
+                                setFilterTimeSlots((prev) =>
+                                  isSelected ? prev.filter((k) => k !== key) : [...prev, key]
+                                )
+                              }
+                              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${
+                                isSelected
+                                  ? "bg-[#3d3731] text-white shadow-xs font-bold"
+                                  : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
+                              }`}
+                            >
+                              <span
+                                className="w-2 h-2 rounded-full inline-block shrink-0 shadow-xs"
+                                style={{ backgroundColor: slot.color }}
+                              />
+                              <span>{slot.icon}</span>
+                              <span>{slot.label}</span>
+                              <span className="text-[10px] opacity-75 font-mono">
+                                ({slot.startHour}:00〜{slot.endHour}:59)
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ④ ゴミ箱も含める（アコーディオン） */}
+                  <div className="border-t border-[#f0eae1] pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsSearchTrashAccordionOpen(!isSearchTrashAccordionOpen)}
+                      className="flex items-center justify-between w-full text-left py-0.5 group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[11px] font-bold text-[#8a7f72] group-hover:text-[#3d3731] transition-colors flex items-center gap-1">
+                          <span className="text-[9px] font-mono">{isSearchTrashAccordionOpen ? "▼" : "▶"}</span>
+                          <span>🗑️ ゴミ箱の検索</span>
+                        </span>
+                        {includeTrashInSearch && (
+                          <span className="text-[10px] text-[#a6483b] bg-[#eedcd8] px-2 py-0.5 rounded-md font-medium">
+                            ゴミ箱含む
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-[#9c9184] group-hover:text-[#5c5348] font-mono">
+                        {isSearchTrashAccordionOpen ? "たたむ" : "広げる"}
+                      </span>
+                    </button>
+
+                    {isSearchTrashAccordionOpen && (
+                      <div className="mt-2">
+                        <button
+                          type="button"
+                          onClick={() => setIncludeTrashInSearch(!includeTrashInSearch)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+                            includeTrashInSearch
+                              ? "bg-[#3d3731] text-white shadow-xs font-bold"
+                              : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
+                          }`}
+                        >
+                          <span>🗑️</span>
+                          {includeTrashInSearch
+                            ? "ゴミ箱のメモも含めて検索中"
+                            : "ゴミ箱のメモも含めて探す"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ヒット件数 */}
+                  {(filterOnlyFavorite || filterCategories.length > 0 || includeTrashInSearch || searchQuery.trim().length > 0 || filterTimeSlots.length > 0) && (
+                    <div className="text-[11px] text-[#8a7f72] pt-1 border-t border-[#f4f0e8] flex items-center justify-between">
+                      <span>該当するメモ: {displayedNotes.length}件</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFilterOnlyFavorite(false);
+                          setFilterCategories([]);
+                          setIncludeTrashInSearch(false);
+                          setSearchQuery("");
+                          setFilterTimeSlots([]);
+                        }}
+                        className="text-[11px] text-[#8a7f72] hover:text-[#3d3731] underline font-medium"
+                      >
+                        条件をリセット
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* メモ一覧カードリスト */}
+              <div className="flex flex-col gap-3">
               {!isLoaded ? (
                 <div className="text-center py-8 text-sm text-[#b0a598]">
                   読み込み中...
@@ -2361,14 +2462,15 @@ export default function Home() {
                   );
                 })
               )}
+              </div>
             </div>
           </div>
         )}
 
         {/* ③ ゴミ箱画面（二層化） */}
         {activeTab === "trash" && (
-          <div className="flex flex-col max-h-[78vh]">
-            <div className="flex items-center justify-between mb-3 pb-2 border-b border-[#d5cdc0]">
+          <div className="flex flex-col flex-1 min-h-0 w-full">
+            <div className="flex items-center justify-between mb-3 pb-2 border-b border-[#d5cdc0] shrink-0">
               <div>
                 <h2
                   className={`${
@@ -2392,42 +2494,44 @@ export default function Home() {
               </button>
             </div>
 
-            {/* 検索・絞り込み機能エリア（ゴミ箱内） */}
-            {trashNotes.length > 0 && (
-              !isTrashSearchPanelOpen ? (
-                <div className="mb-3 flex items-center justify-between">
-                  <button
-                    type="button"
-                    onClick={() => setIsTrashSearchPanelOpen(true)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                      trashFilterOnlyFavorite || trashFilterCategories.length > 0 || trashSearchQuery.trim().length > 0
-                        ? "bg-[#d49e35] text-white shadow-xs hover:bg-[#c28e2d]"
-                        : "bg-white border border-[#ded5c8] text-[#5c5348] hover:bg-[#faf8f5] shadow-2xs"
-                    }`}
-                  >
-                    <span>🔍</span>
-                    {trashFilterOnlyFavorite || trashFilterCategories.length > 0 || trashSearchQuery.trim().length > 0 ? (
-                      <span>絞り込み中 ({displayedTrashNotes.length}件)</span>
-                    ) : (
-                      <span>検索機能</span>
-                    )}
-                  </button>
-                  {(trashFilterOnlyFavorite || trashFilterCategories.length > 0 || trashSearchQuery.trim().length > 0) && (
+            {/* スクロール領域（検索バーとメモが一緒に流れるため、下スクロールでメモが画面いっぱいに広がる） */}
+            <div className="flex-1 overflow-y-auto pr-1 pb-16 flex flex-col">
+              {/* 検索・絞り込み機能エリア（ゴミ箱内） */}
+              {trashNotes.length > 0 && (
+                !isTrashSearchPanelOpen ? (
+                  <div className="mb-3 flex items-center justify-between shrink-0">
                     <button
                       type="button"
-                      onClick={() => {
-                        setTrashFilterOnlyFavorite(false);
-                        setTrashFilterCategories([]);
-                        setTrashSearchQuery("");
-                      }}
-                      className="text-[11px] text-[#8a7f72] hover:text-[#3d3731] underline font-medium"
+                      onClick={() => setIsTrashSearchPanelOpen(true)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                        trashFilterOnlyFavorite || trashFilterCategories.length > 0 || trashSearchQuery.trim().length > 0
+                          ? "bg-[#d49e35] text-white shadow-xs hover:bg-[#c28e2d]"
+                          : "bg-white border border-[#ded5c8] text-[#5c5348] hover:bg-[#faf8f5] shadow-2xs"
+                      }`}
                     >
-                      絞り込みを解除
+                      <span>🔍</span>
+                      {trashFilterOnlyFavorite || trashFilterCategories.length > 0 || trashSearchQuery.trim().length > 0 ? (
+                        <span>絞り込み中 ({displayedTrashNotes.length}件)</span>
+                      ) : (
+                        <span>検索機能</span>
+                      )}
                     </button>
-                  )}
-                </div>
-              ) : (
-                <div className="mb-3 p-3.5 bg-white rounded-xl border border-[#ded5c8] shadow-xs flex flex-col gap-3 transition-all">
+                    {(trashFilterOnlyFavorite || trashFilterCategories.length > 0 || trashSearchQuery.trim().length > 0) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTrashFilterOnlyFavorite(false);
+                          setTrashFilterCategories([]);
+                          setTrashSearchQuery("");
+                        }}
+                        className="text-[11px] text-[#8a7f72] hover:text-[#3d3731] underline font-medium"
+                      >
+                        絞り込みを解除
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="mb-3 p-3.5 bg-white rounded-xl border border-[#ded5c8] shadow-xs flex flex-col gap-3 transition-all shrink-0">
                   {/* パネル上部: タイトル & とじるボタン */}
                   <div className="flex items-center justify-between pb-2 border-b border-[#f0eae1]">
                     <span className="text-xs font-bold text-[#3d3731] flex items-center gap-1.5">
@@ -2489,11 +2593,15 @@ export default function Home() {
                     </button>
                   </div>
 
-                  {/* ② タグからさがす（複数AND選択対応） */}
+                  {/* ③ カテゴリからさがす（折りたたみアコーディオン） */}
                   <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-[11px] font-bold text-[#8a7f72]">
-                        🏷️ タグからさがす
+                    <button
+                      type="button"
+                      onClick={() => setIsTrashSearchCategoryOpen(!isTrashSearchCategoryOpen)}
+                      className="w-full flex items-center justify-between mb-1.5 text-left group"
+                    >
+                      <span className="text-[11px] font-bold text-[#8a7f72] flex items-center gap-1 group-hover:text-[#3d3731] transition-colors">
+                        <span>{isTrashSearchCategoryOpen ? "▼" : "▶"}</span> 🏷️ カテゴリからさがす
                       </span>
                       {trashFilterCategories.includes("uncategorized") ? (
                         <span className="text-[10px] text-[#8a7f72] bg-[#f4f0e8] px-2 py-0.5 rounded-md">
@@ -2501,70 +2609,72 @@ export default function Home() {
                         </span>
                       ) : trashFilterCategories.length > 1 ? (
                         <span className="text-[10px] text-[#8a7f72] bg-[#f4f0e8] px-2 py-0.5 rounded-md">
-                          {trashFilterCategories.length}個のタグで絞り込み中 (AND検索)
+                          {trashFilterCategories.length}個のカテゴリで絞り込み中 (AND検索)
                         </span>
                       ) : null}
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {/* ”すべてのメモ” ボタン（全解除） */}
-                      <button
-                        type="button"
-                        onClick={() => setTrashFilterCategories([])}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                          trashFilterCategories.length === 0
-                            ? "bg-[#3d3731] text-white shadow-xs font-bold"
-                            : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
-                        }`}
-                      >
-                        ”すべてのメモ”
-                      </button>
+                    </button>
+                    {isTrashSearchCategoryOpen && (
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {/* ”すべてのメモ” ボタン（全解除） */}
+                        <button
+                          type="button"
+                          onClick={() => setTrashFilterCategories([])}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                            trashFilterCategories.length === 0
+                              ? "bg-[#3d3731] text-white shadow-xs font-bold"
+                              : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
+                          }`}
+                        >
+                          ”すべてのメモ”
+                        </button>
 
-                      {/* ”未分類” ボタン（単独選択） */}
-                      {(() => {
-                        const isUncategorizedSelected = trashFilterCategories.includes("uncategorized");
-                        return (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setTrashFilterCategories(isUncategorizedSelected ? [] : ["uncategorized"])
-                            }
-                            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                              isUncategorizedSelected
-                                ? "bg-[#3d3731] text-white shadow-xs font-bold"
-                                : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
-                            }`}
-                          >
-                            ”未分類”
-                          </button>
-                        );
-                      })()}
+                        {/* ”未分類” ボタン（単独選択） */}
+                        {(() => {
+                          const isUncategorizedSelected = trashFilterCategories.includes("uncategorized");
+                          return (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setTrashFilterCategories(isUncategorizedSelected ? [] : ["uncategorized"])
+                              }
+                              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                                isUncategorizedSelected
+                                  ? "bg-[#3d3731] text-white shadow-xs font-bold"
+                                  : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
+                              }`}
+                            >
+                              ”未分類”
+                            </button>
+                          );
+                        })()}
 
-                      {/* 各カテゴリタグボタン（トグル複数AND選択） */}
-                      {categoriesList.map((cat) => {
-                        const isSelected = trashFilterCategories.includes(cat);
-                        return (
-                          <button
-                            key={cat}
-                            type="button"
-                            onClick={() =>
-                              setTrashFilterCategories((prev) => {
-                                const withoutUncategorized = prev.filter((c) => c !== "uncategorized");
-                                return isSelected
-                                  ? withoutUncategorized.filter((c) => c !== cat)
-                                  : [...withoutUncategorized, cat];
-                              })
-                            }
-                            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                              isSelected
-                                ? "bg-[#3d3731] text-white shadow-xs font-bold"
-                                : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
-                            }`}
-                          >
-                            {cat}
-                          </button>
-                        );
-                      })}
-                    </div>
+                        {/* 各カテゴリボタン（トグル複数AND選択：並び順設定を反映） */}
+                        {sortedCategories.map((cat) => {
+                          const isSelected = trashFilterCategories.includes(cat);
+                          return (
+                            <button
+                              key={cat}
+                              type="button"
+                              onClick={() =>
+                                setTrashFilterCategories((prev) => {
+                                  const withoutUncategorized = prev.filter((c) => c !== "uncategorized");
+                                  return isSelected
+                                    ? withoutUncategorized.filter((c) => c !== cat)
+                                    : [...withoutUncategorized, cat];
+                                })
+                              }
+                              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                                isSelected
+                                  ? "bg-[#3d3731] text-white shadow-xs font-bold"
+                                  : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
+                              }`}
+                            >
+                              {cat}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
 
                   {/* ヒット件数 */}
@@ -2588,7 +2698,8 @@ export default function Home() {
               )
             )}
 
-            <div className="overflow-y-auto flex flex-col gap-3 pr-1">
+              {/* メモ一覧カードリスト */}
+              <div className="flex flex-col gap-3">
               {trashNotes.length === 0 ? (
                 <div className="text-center py-10 text-sm text-[#8a7f72]">
                   ゴミ箱は空です。
@@ -2716,14 +2827,15 @@ export default function Home() {
                   </article>
                 ))
               )}
+              </div>
             </div>
           </div>
         )}
 
         {/* ③-2 カテゴリ管理画面（二層化） */}
         {activeTab === "categories" && (
-          <div className="flex flex-col max-h-[78vh]">
-            <div className="flex items-center justify-between mb-3 pb-2 border-b border-[#d5cdc0]">
+          <div className="flex flex-col flex-1 min-h-0 w-full">
+            <div className="flex items-center justify-between mb-3 pb-2 border-b border-[#d5cdc0] shrink-0">
               <div>
                 <h2
                   className={`${
@@ -2733,7 +2845,7 @@ export default function Home() {
                   カテゴリ管理 ({categoriesList.length}件)
                 </h2>
                 <span className="text-[11px] text-[#8a7f72]">
-                  メモを分類するタグの作成と整理ができます
+                  メモを分類するカテゴリの作成・並び順設定ができます
                 </span>
               </div>
               <button
@@ -2748,7 +2860,7 @@ export default function Home() {
             </div>
 
             {/* 新規カテゴリ作成フォーム */}
-            <div className="mb-4 p-3.5 bg-white rounded-xl border border-[#e5ded2]">
+            <div className="mb-4 p-3.5 bg-white rounded-xl border border-[#e5ded2] shrink-0">
               <span className="block text-xs font-bold text-[#3d3731] mb-2">
                 新しいカテゴリを追加
               </span>
@@ -2780,14 +2892,56 @@ export default function Home() {
               </div>
             </div>
 
-            {/* エリアの仕切り線と余白 */}
-            <div className="border-b border-[#ded5c8] my-4" />
+            {/* エリアの仕切り線 */}
+            <div className="border-b border-[#ded5c8] mb-3 shrink-0" />
+
+            {/* 登録済みカテゴリ一覧ヘッダー & 並び順切り替え */}
+            <div className="flex items-center justify-between mb-2 shrink-0 flex-wrap gap-2">
+              <span className="text-xs font-bold text-[#3d3731]">
+                登録済みカテゴリ ({categoriesList.length}件)
+              </span>
+              <div className="flex items-center gap-1 bg-[#ede6da] p-0.5 rounded-lg border border-[#ded5c8]">
+                <button
+                  type="button"
+                  onClick={() => handleCategorySortOrderChange("usage")}
+                  className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all ${
+                    categorySortOrder === "usage"
+                      ? "bg-[#3d3731] text-white shadow-2xs font-bold"
+                      : "text-[#6b6257] hover:text-[#2d2926]"
+                  }`}
+                  title="メモ件数が多い順に並べる"
+                >
+                  🔥 よく使う順
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleCategorySortOrderChange("alphabetical")}
+                  className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all ${
+                    categorySortOrder === "alphabetical"
+                      ? "bg-[#3d3731] text-white shadow-2xs font-bold"
+                      : "text-[#6b6257] hover:text-[#2d2926]"
+                  }`}
+                  title="あいうえお順に並べる"
+                >
+                  🔤 五十音順
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleCategorySortOrderChange("created")}
+                  className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all ${
+                    categorySortOrder === "created"
+                      ? "bg-[#3d3731] text-white shadow-2xs font-bold"
+                      : "text-[#6b6257] hover:text-[#2d2926]"
+                  }`}
+                  title="作成した順に並べる"
+                >
+                  🕒 登録順
+                </button>
+              </div>
+            </div>
 
             {/* 登録済みカテゴリ一覧 */}
-            <div className="flex-1 min-h-0 overflow-y-auto pr-1 flex flex-col gap-2">
-              <span className="text-xs font-bold text-[#3d3731] mb-0.5">
-                登録済みカテゴリ
-              </span>
+            <div className="flex-1 min-h-0 overflow-y-auto pr-1 pb-12 flex flex-col gap-2">
               {categoriesList.length === 0 ? (
                 <div className="text-center py-8 text-xs text-[#8a7f72] bg-white/60 rounded-xl border border-dashed border-[#ded6c9] p-4">
                   まだ登録されたカテゴリはありません。<br />
@@ -2795,7 +2949,7 @@ export default function Home() {
                 </div>
               ) : (
                 <div className="flex flex-col gap-2">
-                  {categoriesList.map((cat) => {
+                  {sortedCategories.map((cat) => {
                     const count = notes.filter(
                       (n) => !n.isTrash && n.categories && n.categories.includes(cat)
                     ).length;
