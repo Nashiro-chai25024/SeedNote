@@ -25,7 +25,25 @@ type TabType = "home" | "list" | "categories" | "trash" | "settings";
 type FontSize = "normal" | "large";
 type ButtonSize = "normal" | "large";
 
-// ガイド・ヘルプの全11項目データ
+// 時間帯の定義（朝・昼・夕方・夜・深夜）
+type TimeSlotKey = "morning" | "afternoon" | "evening" | "night" | "lateNight";
+
+interface TimeSlotConfig {
+  label: string;
+  icon: string;
+  startHour: number; // 0〜23
+  endHour: number;   // 0〜23
+}
+
+const DEFAULT_TIME_SLOTS: Record<TimeSlotKey, TimeSlotConfig> = {
+  morning: { label: "朝", icon: "🌅", startHour: 5, endHour: 10 },
+  afternoon: { label: "昼", icon: "☀️", startHour: 11, endHour: 16 },
+  evening: { label: "夕方", icon: "🌆", startHour: 17, endHour: 19 },
+  night: { label: "夜", icon: "🌙", startHour: 20, endHour: 23 },
+  lateNight: { label: "深夜", icon: "🌌", startHour: 0, endHour: 4 },
+};
+
+// ガイド・ヘルプの全項目データ
 const HELP_ITEMS = [
   {
     id: "about",
@@ -33,7 +51,7 @@ const HELP_ITEMS = [
     content: (
       <div className="space-y-1.5">
         <p>自分のアイデアや思いついたことを素早く記録し、あとから簡単に探し出せる自分専用のアプリです。</p>
-        <p>創作のアイデア、ゲームやアニメの考察、勉強メモ、英単語、Webサービスの思いつきなど、ジャンルを問わず自由に記録できます。</p>
+        <p>日記、仕事や勉強のメモ、読書記録、ふと思いついたアイデアなど、ジャンルを問わず自由に記録できます。</p>
         <p>SNSのように気軽に投稿できますが、書いた内容はすべて自分だけのプライベートな記録になります。</p>
       </div>
     ),
@@ -54,7 +72,6 @@ const HELP_ITEMS = [
     title: "はじめかた",
     content: (
       <div className="space-y-2">
-        <p>使い方はとてもシンプルです。</p>
         <ol className="list-decimal pl-5 space-y-1">
           <li>思いついたことをそのまま書く</li>
           <li>「保存」を押す</li>
@@ -88,17 +105,17 @@ const HELP_ITEMS = [
   },
   {
     id: "category",
-    title: "カテゴリ（未分類について）",
+    title: "カテゴリ（”未分類”について）",
     content: (
       <div className="space-y-2.5">
         <div>
           <strong className="block mb-0.5 text-[#3d3731]">カテゴリの作成：</strong>
-          <p>「創作」「ゲーム考察」「勉強」など、自分の好きなカテゴリを自由に作れます。一度使ったカテゴリは候補として表示されるので、次からはワンタップで選べます。</p>
+          <p>「日記」「仕事」「勉強」など、自分の好きなカテゴリを自由に作れます。一度使ったカテゴリは候補として表示されるので、次からはワンタップで選べます。</p>
         </div>
         <div className="pt-1.5 border-t border-[#e5ded2]">
-          <strong className="block mb-0.5 text-[#3d3731]">未分類での保存：</strong>
+          <strong className="block mb-0.5 text-[#3d3731]">”未分類”での保存：</strong>
           <p>
-            カテゴリで迷ったときは、何も選ばず<strong>「未分類」のまま保存して大丈夫</strong>です。「アイデアが浮かんだ瞬間にすぐ書くこと」を一番優先してほしいので、カテゴリは後からいつでも設定・変更できます。
+            カテゴリで迷ったときは、何も選ばず<strong>「”未分類”」のまま保存して大丈夫</strong>です。「アイデアが浮かんだ瞬間にすぐ書くこと」を一番優先してほしいので、カテゴリは後からいつでも設定・変更できます。
           </p>
         </div>
       </div>
@@ -125,33 +142,49 @@ const HELP_ITEMS = [
     title: "検索・絞り込みとお気に入り（☆/★）",
     content: (
       <div className="space-y-2">
-        <p>メモ一覧の「🔍 検索機能」ボタンから、見返したいメモを素早く絞り込めます。</p>
+        <p>メモ一覧の「🔍 検索機能」ボタンから、見返したいメモを素早く探せます。</p>
         <ul className="list-disc pl-5 space-y-1.5 text-xs">
-          <li><strong>⭐ お気に入りのみ表示：</strong> メモカードの右上にある星マーク（☆/★）で登録した大切なお気に入りのみを絞り込みます。</li>
-          <li><strong>🏷️ タグからさがす：</strong> 指定したカテゴリや「未分類」に絞って探せます。</li>
-          <li><strong>絞り込み中の表示：</strong> フィルター適用中は検索ボタンが黄色く光り、該当件数が一目でわかります。</li>
+          <li><strong>🔤 キーワードで探す：</strong> タイトル、本文、追記に含まれる言葉で一発検索できます。</li>
+          <li><strong>⭐ お気に入りのみ表示：</strong> メモカード右上にある星マーク（☆/★）で登録した大切なお気に入りを絞り込みます。</li>
+          <li><strong>🏷️ タグからさがす：</strong> 指定したカテゴリや「”未分類”」に絞って探せます（複数選んでのAND検索に対応）。</li>
+          <li><strong>⏰ 時間帯からさがす：</strong> 朝、昼、夕方、夜、深夜など、書いた時間帯で絞り込めます（複数選択可）。</li>
+          <li><strong>🗑️ ゴミ箱の検索：</strong> 「ゴミ箱のメモも含めて探す」を使えば、ゴミ箱内のメモも一緒に探してその場で元に戻せます。</li>
         </ul>
       </div>
     ),
   },
   {
+    id: "reply",
+    title: "メモへの追記",
+    content: (
+      <div className="space-y-1.5 text-xs">
+        <p>
+          メモカード右上の「…」メニューから「💬 追記する」を選ぶと、過去のメモの下にタイムスタンプ付きで思考の続きを書き足せます。
+        </p>
+        <p>
+          追記は普段折りたたまれており、タップして開いたり閉じたりできます。
+        </p>
+      </div>
+    ),
+  },
+  {
     id: "edit_metadata",
-    title: "タイトル・カテゴリの変更（本文保護と誤操作防止）",
+    title: "タイトル・カテゴリの変更",
     content: (
       <div className="space-y-2 text-xs">
         <p>
           メモカード右上の「…」メニューから「🏷️ タイトル・カテゴリの変更」を選ぶと、見出しやタグを後から整理できます。
         </p>
         <div className="pt-1.5 border-t border-[#e5ded2]">
-          <strong className="block mb-0.5 text-[#3d3731]">本文の保護（不可逆性の哲学）：</strong>
+          <strong className="block mb-0.5 text-[#3d3731]">本文の編集について：</strong>
           <p>
-            SeedNoteでは、過去の荒削りな思考や間違いの軌跡もアイデアの種として残すため、<strong>本文の編集や削除はあえてできない</strong>仕様になっています。
+            SeedNoteでは、過去の思考をありのまま残すため、<strong>本文の編集や削除はできない</strong>仕組みになっています（続きを書き足したい時は「追記」をご利用ください）。
           </p>
         </div>
         <div className="pt-1.5 border-t border-[#e5ded2]">
-          <strong className="block mb-0.5 text-[#3d3731]">誤操作防止（破棄確認・フールプルーフ）：</strong>
+          <strong className="block mb-0.5 text-[#3d3731]">変更途中で閉じる場合：</strong>
           <p>
-            タイトルやカテゴリの変更途中で誤って保存せずキャンセルしようとした場合、変更があれば「破棄しますか？」と警告が出ます（設定からON/OFF可能）。
+            タイトルやカテゴリの変更中に保存せずキャンセルしようとした場合、変更があれば「破棄しますか？」と確認画面が出ます（設定からON/OFF可能）。
           </p>
         </div>
       </div>
@@ -159,16 +192,13 @@ const HELP_ITEMS = [
   },
   {
     id: "trash",
-    title: "ゴミ箱（移動と復元・誤操作防止）",
+    title: "ゴミ箱",
     content: (
       <div className="space-y-2">
         <div>
           <strong className="block mb-0.5 text-[#3d3731]">ゴミ箱への移動手順：</strong>
           <p>
-            メモカードの右上にある「…」ボタンを押すと、「ゴミ箱へ移動」が表示されます。誤タップを防ぐため、2段階で移動する仕組みになっています。
-          </p>
-          <p className="text-xs text-[#786f66] mt-1">
-            ※メニュー以外の場所をタップすると、メニューを閉じることができます。
+            メモカード右上の「…」ボタンを押すと、「ゴミ箱へ移動」が表示されます。誤タップを防ぐため、2段階で移動する仕組みになっています。
           </p>
         </div>
         <div className="pt-1.5 border-t border-[#e5ded2]">
@@ -177,40 +207,20 @@ const HELP_ITEMS = [
             ゴミ箱に入れたメモは一覧からは見えなくなりますが、<strong>データが消えるわけではありません</strong>。
           </p>
           <p className="mt-1">
-            「間違えて入れちゃった！」という時も、左メニューの「ゴミ箱」画面から「↩️ 元に戻す」を押せば、いつでも元の場所に戻せます。
+            左メニューの「ゴミ箱」画面から「↩️ 元に戻す」を押せば、いつでも元の場所に戻せます。
           </p>
         </div>
       </div>
     ),
   },
   {
-    id: "archive",
-    title: "アーカイブ",
-    content: (
-      <div className="space-y-1.5">
-        <p>「削除したくはないけれど、普段の一覧には出しておきたくないメモ」をしまっておく場所です。</p>
-        <p>終了した企画や、過去の古い勉強メモ、今は使わない資料などを整理するのに役立ちます。</p>
-      </div>
-    ),
-  },
-  {
     id: "timezone",
-    title: "時間帯設定",
+    title: "時間帯の設定",
     content: (
       <div className="space-y-1.5">
         <p>「深夜」や「夕方」と感じる時間は人によって違います。</p>
-        <p>そのため、「自分の深夜は何時から何時までか」を自由に設定できます（例: 0:00〜4:59、2:00〜6:59など）。</p>
-        <p>ここで決めた自分だけの時間帯は、検索機能にもそのまま反映されます。</p>
-      </div>
-    ),
-  },
-  {
-    id: "theme",
-    title: "外観設定（テーマ）",
-    content: (
-      <div className="space-y-1.5">
-        <p>画面の見た目をお好みのテーマに変更できます。</p>
-        <p>目に優しいライトモードやダークモード、やわらかなパステルモード、黒を基調としたカスタムモードなどから選べます。</p>
+        <p>設定画面から「朝・昼・夕方・夜・深夜」の区切りを自分の生活リズムに合わせて自由に変更できます。</p>
+        <p>設定した時間帯は、検索機能にもそのまま反映されます。</p>
       </div>
     ),
   },
@@ -221,7 +231,7 @@ const HELP_ITEMS = [
       <div className="space-y-3">
         <div className="p-2.5 bg-[#eae4d9] rounded-xl">
           <p className="font-bold text-[#3d3731] text-xs">Q. カテゴリが決まりません</p>
-          <p className="mt-1 text-xs text-[#5c5348]">A. 「未分類」のまま保存してください。後からいつでも変更できます。</p>
+          <p className="mt-1 text-xs text-[#5c5348]">A. 「”未分類”」のまま保存してください。後からいつでも変更できます。</p>
         </div>
         <div className="p-2.5 bg-[#eae4d9] rounded-xl">
           <p className="font-bold text-[#3d3731] text-xs">Q. ゴミ箱に入れたメモは消えてしまいますか？</p>
@@ -276,11 +286,17 @@ export default function Home() {
   const [filterOnlyFavorite, setFilterOnlyFavorite] = useState(false);
   const [filterCategories, setFilterCategories] = useState<string[]>([]);
   const [includeTrashInSearch, setIncludeTrashInSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterTimeSlots, setFilterTimeSlots] = useState<TimeSlotKey[]>([]);
+
+  // 時間帯の定義（朝・昼・夕方・夜・深夜）
+  const [timeSlots, setTimeSlots] = useState<Record<TimeSlotKey, TimeSlotConfig>>(DEFAULT_TIME_SLOTS);
 
   // ゴミ箱専用の検索・絞り込みState
   const [isTrashSearchPanelOpen, setIsTrashSearchPanelOpen] = useState(false);
   const [trashFilterOnlyFavorite, setTrashFilterOnlyFavorite] = useState(false);
   const [trashFilterCategories, setTrashFilterCategories] = useState<string[]>([]);
+  const [trashSearchQuery, setTrashSearchQuery] = useState("");
 
   // 追記（リプライ）機能のState（デフォルトは折りたたみ）
   const [replyingNoteId, setReplyingNoteId] = useState<string | null>(null);
@@ -315,6 +331,10 @@ export default function Home() {
       const savedConfirmDiscard = localStorage.getItem("seednote_confirm_discard");
       if (savedConfirmDiscard !== null) {
         setConfirmDiscardOnEdit(savedConfirmDiscard === "true");
+      }
+      const savedTimeSlots = localStorage.getItem("seednote_time_slots");
+      if (savedTimeSlots) {
+        setTimeSlots(JSON.parse(savedTimeSlots));
       }
     } catch (e) {
       console.error("データの読み込みに失敗しました", e);
@@ -591,6 +611,47 @@ export default function Home() {
     }
   };
 
+  // あるメモが指定された時間帯に該当するか判定する関数（日付をまたぐ深夜帯にも対応）
+  const isNoteInTimeSlot = (
+    noteCreatedAt: string,
+    slotKey: TimeSlotKey,
+    slotsDef: Record<TimeSlotKey, TimeSlotConfig>
+  ) => {
+    const d = new Date(noteCreatedAt);
+    const hour = d.getHours();
+    const slot = slotsDef[slotKey];
+    if (!slot) return false;
+    if (slot.startHour <= slot.endHour) {
+      return hour >= slot.startHour && hour <= slot.endHour;
+    } else {
+      // 日付をまたぐ場合（例: 23時〜4時）
+      return hour >= slot.startHour || hour <= slot.endHour;
+    }
+  };
+
+  // 時間帯設定の更新
+  const handleUpdateTimeSlot = (
+    key: TimeSlotKey,
+    field: "startHour" | "endHour",
+    value: number
+  ) => {
+    const updated = {
+      ...timeSlots,
+      [key]: {
+        ...timeSlots[key],
+        [field]: value,
+      },
+    };
+    setTimeSlots(updated);
+    localStorage.setItem("seednote_time_slots", JSON.stringify(updated));
+  };
+
+  // 時間帯設定をデフォルトにリセット
+  const handleResetTimeSlots = () => {
+    setTimeSlots(DEFAULT_TIME_SLOTS);
+    localStorage.removeItem("seednote_time_slots");
+  };
+
   // 日時を読みやすい形式に変換する関数
   const formatDate = (isoString: string) => {
     const d = new Date(isoString);
@@ -657,7 +718,7 @@ export default function Home() {
   // 通常一覧の対象メモ（ゴミ箱も含めるフラグがONなら全体、OFFなら通常メモのみ）
   const baseNotesForList = includeTrashInSearch ? notes : activeNotes;
 
-  // 検索・絞り込み適用後のメモ一覧（複数AND検索対応）
+  // 検索・絞り込み適用後のメモ一覧（複数AND検索＆キーワード検索対応）
   const displayedNotes = baseNotesForList.filter((note) => {
     if (filterOnlyFavorite && !note.isFavorite) return false;
     if (filterCategories.length > 0) {
@@ -669,10 +730,24 @@ export default function Home() {
       });
       if (!matchesAll) return false;
     }
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      const matchTitle = note.title?.toLowerCase().includes(q) ?? false;
+      const matchContent = note.content.toLowerCase().includes(q);
+      const matchReplies = note.replies?.some((r) => r.content.toLowerCase().includes(q)) ?? false;
+      if (!matchTitle && !matchContent && !matchReplies) return false;
+    }
+    // 時間帯フィルター（選択された時間帯のいずれかに合致：論理和 OR）
+    if (filterTimeSlots.length > 0) {
+      const matchTime = filterTimeSlots.some((slotKey) =>
+        isNoteInTimeSlot(note.createdAt, slotKey, timeSlots)
+      );
+      if (!matchTime) return false;
+    }
     return true;
   });
 
-  // ゴミ箱画面用の検索・絞り込み適用後メモ一覧
+  // ゴミ箱画面用の検索・絞り込み適用後メモ一覧（キーワード検索対応）
   const displayedTrashNotes = trashNotes.filter((note) => {
     if (trashFilterOnlyFavorite && !note.isFavorite) return false;
     if (trashFilterCategories.length > 0) {
@@ -683,6 +758,13 @@ export default function Home() {
         return note.categories && note.categories.includes(cat);
       });
       if (!matchesAll) return false;
+    }
+    if (trashSearchQuery.trim()) {
+      const q = trashSearchQuery.trim().toLowerCase();
+      const matchTitle = note.title?.toLowerCase().includes(q) ?? false;
+      const matchContent = note.content.toLowerCase().includes(q);
+      const matchReplies = note.replies?.some((r) => r.content.toLowerCase().includes(q)) ?? false;
+      if (!matchTitle && !matchContent && !matchReplies) return false;
     }
     return true;
   });
@@ -1077,25 +1159,27 @@ export default function Home() {
                   type="button"
                   onClick={() => setIsSearchPanelOpen(true)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                    filterOnlyFavorite || filterCategories.length > 0 || includeTrashInSearch
+                    filterOnlyFavorite || filterCategories.length > 0 || includeTrashInSearch || searchQuery.trim().length > 0 || filterTimeSlots.length > 0
                       ? "bg-[#d49e35] text-white shadow-xs hover:bg-[#c28e2d]"
                       : "bg-white border border-[#ded5c8] text-[#5c5348] hover:bg-[#faf8f5] shadow-2xs"
                   }`}
                 >
                   <span>🔍</span>
-                  {filterOnlyFavorite || filterCategories.length > 0 || includeTrashInSearch ? (
+                  {filterOnlyFavorite || filterCategories.length > 0 || includeTrashInSearch || searchQuery.trim().length > 0 || filterTimeSlots.length > 0 ? (
                     <span>絞り込み中 ({displayedNotes.length}件)</span>
                   ) : (
                     <span>検索機能</span>
                   )}
                 </button>
-                {(filterOnlyFavorite || filterCategories.length > 0 || includeTrashInSearch) && (
+                {(filterOnlyFavorite || filterCategories.length > 0 || includeTrashInSearch || searchQuery.trim().length > 0 || filterTimeSlots.length > 0) && (
                   <button
                     type="button"
                     onClick={() => {
                       setFilterOnlyFavorite(false);
                       setFilterCategories([]);
                       setIncludeTrashInSearch(false);
+                      setSearchQuery("");
+                      setFilterTimeSlots([]);
                     }}
                     className="text-[11px] text-[#8a7f72] hover:text-[#3d3731] underline font-medium"
                   >
@@ -1119,7 +1203,35 @@ export default function Home() {
                   </button>
                 </div>
 
-                {/* ① お気に入り表示 */}
+                {/* ① キーワード検索入力欄 */}
+                <div>
+                  <span className="block text-[11px] font-bold text-[#8a7f72] mb-1.5">
+                    🔤 キーワードで探す
+                  </span>
+                  <div className="relative flex items-center">
+                    <input
+                      type="text"
+                      placeholder="タイトル、本文、追記から探す..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className={`w-full ${
+                        fontSize === "large" ? "text-sm py-2 px-3 pr-8" : "text-xs py-1.5 px-2.5 pr-7"
+                      } bg-[#faf8f5] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] placeholder-[#b0a598]`}
+                    />
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchQuery("")}
+                        className="absolute right-2 text-xs text-[#9c9184] hover:text-[#3d3731] p-1 font-bold"
+                        title="入力をクリア"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* ② お気に入り表示 */}
                 <div>
                   <span className="block text-[11px] font-bold text-[#8a7f72] mb-1.5">
                     ⭐ お気に入り
@@ -1216,7 +1328,49 @@ export default function Home() {
                   </div>
                 </div>
 
-                {/* ③ ゴミ箱も含める */}
+                {/* ③ 時間帯から探す（複数選択可：論理和 OR） */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[11px] font-bold text-[#8a7f72]">
+                      ⏰ 時間帯から探す（複数選択可）
+                    </span>
+                    {filterTimeSlots.length > 0 && (
+                      <span className="text-[10px] text-[#8a7f72] bg-[#f4f0e8] px-2 py-0.5 rounded-md">
+                        {filterTimeSlots.length}個の時間帯を選択中
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(Object.keys(DEFAULT_TIME_SLOTS) as TimeSlotKey[]).map((key) => {
+                      const slot = timeSlots[key] || DEFAULT_TIME_SLOTS[key];
+                      const isSelected = filterTimeSlots.includes(key);
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() =>
+                            setFilterTimeSlots((prev) =>
+                              isSelected ? prev.filter((k) => k !== key) : [...prev, key]
+                            )
+                          }
+                          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${
+                            isSelected
+                              ? "bg-[#3d3731] text-white shadow-xs font-bold"
+                              : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
+                          }`}
+                        >
+                          <span>{slot.icon}</span>
+                          <span>{slot.label}</span>
+                          <span className="text-[10px] opacity-75 font-mono">
+                            ({slot.startHour}:00〜{slot.endHour}:59)
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* ④ ゴミ箱も含める */}
                 <div>
                   <span className="block text-[11px] font-bold text-[#8a7f72] mb-1.5">
                     🗑️ ゴミ箱の検索
@@ -1238,7 +1392,7 @@ export default function Home() {
                 </div>
 
                 {/* ヒット件数 */}
-                {(filterOnlyFavorite || filterCategories.length > 0 || includeTrashInSearch) && (
+                {(filterOnlyFavorite || filterCategories.length > 0 || includeTrashInSearch || searchQuery.trim().length > 0 || filterTimeSlots.length > 0) && (
                   <div className="text-[11px] text-[#8a7f72] pt-1 border-t border-[#f4f0e8] flex items-center justify-between">
                     <span>該当するメモ: {displayedNotes.length}件</span>
                     <button
@@ -1247,6 +1401,8 @@ export default function Home() {
                         setFilterOnlyFavorite(false);
                         setFilterCategories([]);
                         setIncludeTrashInSearch(false);
+                        setSearchQuery("");
+                        setFilterTimeSlots([]);
                       }}
                       className="text-[11px] text-[#8a7f72] hover:text-[#3d3731] underline"
                     >
@@ -1275,6 +1431,8 @@ export default function Home() {
                       setFilterOnlyFavorite(false);
                       setFilterCategories([]);
                       setIncludeTrashInSearch(false);
+                      setSearchQuery("");
+                      setFilterTimeSlots([]);
                     }}
                     className="mt-2 text-xs text-[#3d3731] font-bold underline hover:text-black"
                   >
@@ -1578,24 +1736,25 @@ export default function Home() {
                     type="button"
                     onClick={() => setIsTrashSearchPanelOpen(true)}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                      trashFilterOnlyFavorite || trashFilterCategories.length > 0
+                      trashFilterOnlyFavorite || trashFilterCategories.length > 0 || trashSearchQuery.trim().length > 0
                         ? "bg-[#d49e35] text-white shadow-xs hover:bg-[#c28e2d]"
                         : "bg-white border border-[#ded5c8] text-[#5c5348] hover:bg-[#faf8f5] shadow-2xs"
                     }`}
                   >
                     <span>🔍</span>
-                    {trashFilterOnlyFavorite || trashFilterCategories.length > 0 ? (
+                    {trashFilterOnlyFavorite || trashFilterCategories.length > 0 || trashSearchQuery.trim().length > 0 ? (
                       <span>絞り込み中 ({displayedTrashNotes.length}件)</span>
                     ) : (
                       <span>検索機能</span>
                     )}
                   </button>
-                  {(trashFilterOnlyFavorite || trashFilterCategories.length > 0) && (
+                  {(trashFilterOnlyFavorite || trashFilterCategories.length > 0 || trashSearchQuery.trim().length > 0) && (
                     <button
                       type="button"
                       onClick={() => {
                         setTrashFilterOnlyFavorite(false);
                         setTrashFilterCategories([]);
+                        setTrashSearchQuery("");
                       }}
                       className="text-[11px] text-[#8a7f72] hover:text-[#3d3731] underline font-medium"
                     >
@@ -1619,7 +1778,35 @@ export default function Home() {
                     </button>
                   </div>
 
-                  {/* ① お気に入り表示 */}
+                  {/* ① キーワード検索入力欄 */}
+                  <div>
+                    <span className="block text-[11px] font-bold text-[#8a7f72] mb-1.5">
+                      🔤 キーワードで探す
+                    </span>
+                    <div className="relative flex items-center">
+                      <input
+                        type="text"
+                        placeholder="タイトル、本文、追記から探す..."
+                        value={trashSearchQuery}
+                        onChange={(e) => setTrashSearchQuery(e.target.value)}
+                        className={`w-full ${
+                          fontSize === "large" ? "text-sm py-2 px-3 pr-8" : "text-xs py-1.5 px-2.5 pr-7"
+                        } bg-[#faf8f5] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] placeholder-[#b0a598]`}
+                      />
+                      {trashSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setTrashSearchQuery("")}
+                          className="absolute right-2 text-xs text-[#9c9184] hover:text-[#3d3731] p-1 font-bold"
+                          title="入力をクリア"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* ② お気に入り表示 */}
                   <div>
                     <span className="block text-[11px] font-bold text-[#8a7f72] mb-1.5">
                       ⭐ お気に入り
@@ -1717,7 +1904,7 @@ export default function Home() {
                   </div>
 
                   {/* ヒット件数 */}
-                  {(trashFilterOnlyFavorite || trashFilterCategories.length > 0) && (
+                  {(trashFilterOnlyFavorite || trashFilterCategories.length > 0 || trashSearchQuery.trim().length > 0) && (
                     <div className="text-[11px] text-[#8a7f72] pt-1 border-t border-[#f4f0e8] flex items-center justify-between">
                       <span>該当するメモ: {displayedTrashNotes.length}件</span>
                       <button
@@ -1725,6 +1912,7 @@ export default function Home() {
                         onClick={() => {
                           setTrashFilterOnlyFavorite(false);
                           setTrashFilterCategories([]);
+                          setTrashSearchQuery("");
                         }}
                         className="text-[11px] text-[#8a7f72] hover:text-[#3d3731] underline"
                       >
@@ -1749,6 +1937,7 @@ export default function Home() {
                     onClick={() => {
                       setTrashFilterOnlyFavorite(false);
                       setTrashFilterCategories([]);
+                      setTrashSearchQuery("");
                     }}
                     className="mt-2 text-xs text-[#3d3731] font-bold underline hover:text-black"
                   >
@@ -2079,7 +2268,7 @@ export default function Home() {
                 />
               </div>
 
-              {/* 編集破棄の確認（フールプルーフ設定） */}
+              {/* 編集破棄の確認 */}
               <div className="flex items-center justify-between p-3.5 bg-white rounded-xl border border-[#e5ded2]">
                 <div>
                   <span className="font-medium text-[#3d3731] block">編集破棄の確認</span>
@@ -2091,6 +2280,75 @@ export default function Home() {
                   onChange={(e) => handleToggleConfirmDiscard(e.target.checked)}
                   className="w-4 h-4 accent-[#3d3731] cursor-pointer"
                 />
+              </div>
+
+              {/* 時間帯の設定 */}
+              <div className="p-4 bg-white rounded-xl border border-[#e5ded2]">
+                <div className="flex items-center justify-between mb-3 pb-2 border-b border-[#f4f0e8]">
+                  <div>
+                    <span className="font-bold text-[#3d3731] block">
+                      ⏰ 時間帯の設定
+                    </span>
+                    <span className="text-xs text-[#8a7f72]">
+                      朝・昼・夕方・夜・深夜の区切りを、生活リズムに合わせて調整できます
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleResetTimeSlots}
+                    className="text-xs text-[#8a7f72] hover:text-[#3d3731] bg-[#f4f0e8] hover:bg-[#eae3d7] px-2.5 py-1 rounded-lg transition-colors font-medium shrink-0"
+                  >
+                    標準に戻す
+                  </button>
+                </div>
+
+                <div className="space-y-2.5">
+                  {(Object.keys(DEFAULT_TIME_SLOTS) as TimeSlotKey[]).map((key) => {
+                    const slot = timeSlots[key] || DEFAULT_TIME_SLOTS[key];
+                    return (
+                      <div
+                        key={key}
+                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 bg-[#faf8f5] rounded-lg border border-[#ede7dd]"
+                      >
+                        <div className="flex items-center gap-2 min-w-[100px]">
+                          <span className="text-base">{slot.icon}</span>
+                          <span className="font-medium text-xs text-[#3d3731]">
+                            {slot.label}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-[#6b6257]">
+                          <select
+                            value={slot.startHour}
+                            onChange={(e) =>
+                              handleUpdateTimeSlot(key, "startHour", Number(e.target.value))
+                            }
+                            className="bg-white border border-[#ded5c8] rounded-md px-2 py-1 text-xs text-[#2d2926] focus:outline-none focus:border-[#968979]"
+                          >
+                            {Array.from({ length: 24 }, (_, i) => (
+                              <option key={i} value={i}>
+                                {i}:00
+                              </option>
+                            ))}
+                          </select>
+                          <span>〜</span>
+                          <select
+                            value={slot.endHour}
+                            onChange={(e) =>
+                              handleUpdateTimeSlot(key, "endHour", Number(e.target.value))
+                            }
+                            className="bg-white border border-[#ded5c8] rounded-md px-2 py-1 text-xs text-[#2d2926] focus:outline-none focus:border-[#968979]"
+                          >
+                            {Array.from({ length: 24 }, (_, i) => (
+                              <option key={i} value={i}>
+                                {i}:59
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* 容量・メモ情報 */}
