@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
 
@@ -83,6 +83,18 @@ const DEFAULT_TIME_SLOTS: Record<TimeSlotKey, TimeSlotConfig> = {
   night: { label: "夜", icon: "🌙", startHour: 20, endHour: 22, color: "#8562a6" },
   lateNight: { label: "深夜", icon: "🌌", startHour: 23, endHour: 4, color: "#4a7bb0" },
 };
+
+// Supabase DB用ユーザー設定・カテゴリ同期レコード定義
+interface DbUserSettingsRow {
+  user_id: string;
+  categories: string[] | null;
+  time_slots: Record<TimeSlotKey, TimeSlotConfig> | null;
+  font_size: FontSize | null;
+  button_size: ButtonSize | null;
+  enable_toast: boolean | null;
+  confirm_discard: boolean | null;
+  updated_at?: string;
+}
 
 // ガイド・ヘルプの全項目データ
 const HELP_ITEMS = [
@@ -409,6 +421,73 @@ export default function Home() {
     }
   }, []);
 
+  // 設定の最新値を保持するRef（非同期・クロージャの古い値を参照しないため）
+  const latestSettingsRef = useRef({
+    categoriesList,
+    timeSlots,
+    fontSize,
+    buttonSize,
+    enableToast,
+    confirmDiscardOnEdit,
+  });
+
+  useEffect(() => {
+    latestSettingsRef.current = {
+      categoriesList,
+      timeSlots,
+      fontSize,
+      buttonSize,
+      enableToast,
+      confirmDiscardOnEdit,
+    };
+  }, [categoriesList, timeSlots, fontSize, buttonSize, enableToast, confirmDiscardOnEdit]);
+
+  // 設定のクラウド保存用デバウンスタイマー
+  const cloudSettingsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // ユーザー設定・カテゴリの変更をクラウドへ保存（デバウンス対応）
+  const saveCloudSettings = (
+    partial: Partial<{
+      categories: string[];
+      time_slots: Record<TimeSlotKey, TimeSlotConfig>;
+      font_size: FontSize;
+      button_size: ButtonSize;
+      enable_toast: boolean;
+      confirm_discard: boolean;
+    }>,
+    immediate: boolean = false
+  ) => {
+    if (!currentUser) return;
+
+    const doSave = async () => {
+      try {
+        const cur = latestSettingsRef.current;
+        await supabase.from("user_settings").upsert({
+          user_id: currentUser.id,
+          categories: partial.categories ?? cur.categoriesList,
+          time_slots: partial.time_slots ?? cur.timeSlots,
+          font_size: partial.font_size ?? cur.fontSize,
+          button_size: partial.button_size ?? cur.buttonSize,
+          enable_toast: partial.enable_toast ?? cur.enableToast,
+          confirm_discard: partial.confirm_discard ?? cur.confirmDiscardOnEdit,
+          updated_at: new Date().toISOString(),
+        });
+      } catch (e) {
+        console.error("設定のクラウド保存エラー", e);
+      }
+    };
+
+    if (cloudSettingsTimeoutRef.current) {
+      clearTimeout(cloudSettingsTimeoutRef.current);
+    }
+
+    if (immediate) {
+      doSave();
+    } else {
+      cloudSettingsTimeoutRef.current = setTimeout(doSave, 600);
+    }
+  };
+
   // クラウド（Supabase）からメモを取得＆ローカルメモの自動引き継ぎ
   const fetchCloudNotes = async (userId: string, currentLocalNotes?: Note[]) => {
     setIsSyncing(true);
@@ -432,27 +511,141 @@ export default function Home() {
           (loc) => !cloudNotes.some((c) => c.id === loc.id)
         );
 
+        let finalNotes = cloudNotes;
+
         if (localOnlyNotes.length > 0) {
           const rowsToInsert = localOnlyNotes.map((n) => mapNoteToDbRow(n, userId));
           const { error: insertErr } = await supabase.from("notes").insert(rowsToInsert);
           if (!insertErr) {
-            const merged = [...cloudNotes, ...localOnlyNotes].sort(
+            finalNotes = [...cloudNotes, ...localOnlyNotes].sort(
               (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
             );
-            setNotes(merged);
-            localStorage.setItem("seednote_items", JSON.stringify(merged));
-            return;
           }
         }
 
         // クラウドのメモで更新
-        setNotes(cloudNotes);
-        localStorage.setItem("seednote_items", JSON.stringify(cloudNotes));
+        setNotes(finalNotes);
+        localStorage.setItem("seednote_items", JSON.stringify(finalNotes));
+
+        // メモに付与されている全カテゴリタグを抽出して設定同期に連携
+        const noteCats = Array.from(
+          new Set(finalNotes.flatMap((n) => n.categories || []))
+        );
+        fetchUserSettings(userId, noteCats);
       }
     } catch (e) {
       console.error("同期処理中にエラーが発生しました", e);
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  // クラウド（Supabase）からユーザー設定・カテゴリを取得＆ローカルと同期
+  const fetchUserSettings = async (userId: string, extraCategories?: string[]) => {
+    try {
+      const { data, error } = await supabase
+        .from("user_settings")
+        .select("*")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (error) {
+        console.error("クラウド設定の取得に失敗しました", error);
+        return;
+      }
+
+      // ローカル保存されている最新のカテゴリ一覧を取得
+      let localCats: string[] = [];
+      try {
+        const savedCats = localStorage.getItem("seednote_categories");
+        if (savedCats) localCats = JSON.parse(savedCats);
+      } catch {
+        localCats = latestSettingsRef.current.categoriesList;
+      }
+
+      if (data) {
+        const row = data as DbUserSettingsRow;
+        const cloudCats: string[] = Array.isArray(row.categories) ? row.categories : [];
+
+        // クラウドカテゴリ + ローカルカテゴリ + メモに付与されているカテゴリを重複なく統合
+        const mergedCats = Array.from(
+          new Set([...cloudCats, ...localCats, ...(extraCategories || [])])
+        );
+        setCategoriesList(mergedCats);
+        localStorage.setItem("seednote_categories", JSON.stringify(mergedCats));
+
+        // 時間帯設定の同期
+        if (row.time_slots) {
+          const cloudSlots = row.time_slots;
+          const mergedSlots: Record<TimeSlotKey, TimeSlotConfig> = { ...DEFAULT_TIME_SLOTS };
+          (Object.keys(DEFAULT_TIME_SLOTS) as TimeSlotKey[]).forEach((key) => {
+            if (cloudSlots[key]) {
+              mergedSlots[key] = {
+                ...DEFAULT_TIME_SLOTS[key],
+                ...cloudSlots[key],
+                color: cloudSlots[key].color || DEFAULT_TIME_SLOTS[key].color,
+              };
+            }
+          });
+          setTimeSlots(mergedSlots);
+          localStorage.setItem("seednote_time_slots", JSON.stringify(mergedSlots));
+        }
+
+        // 文字サイズ
+        if (row.font_size === "normal" || row.font_size === "large") {
+          setFontSize(row.font_size);
+          localStorage.setItem("seednote_font_size", row.font_size);
+        }
+
+        // ボタンサイズ
+        if (row.button_size === "normal" || row.button_size === "large") {
+          setButtonSize(row.button_size);
+          localStorage.setItem("seednote_button_size", row.button_size);
+        }
+
+        // 保存通知
+        if (typeof row.enable_toast === "boolean") {
+          setEnableToast(row.enable_toast);
+          localStorage.setItem("seednote_enable_toast", String(row.enable_toast));
+        }
+
+        // 編集破棄確認
+        if (typeof row.confirm_discard === "boolean") {
+          setConfirmDiscardOnEdit(row.confirm_discard);
+          localStorage.setItem("seednote_confirm_discard", String(row.confirm_discard));
+        }
+
+        // もしローカルやメモから新しいカテゴリが見つかった場合、クラウド側も最新化
+        if (mergedCats.length > cloudCats.length) {
+          const cur = latestSettingsRef.current;
+          await supabase.from("user_settings").upsert({
+            user_id: userId,
+            categories: mergedCats,
+            time_slots: row.time_slots || cur.timeSlots,
+            font_size: row.font_size || cur.fontSize,
+            button_size: row.button_size || cur.buttonSize,
+            enable_toast: row.enable_toast ?? cur.enableToast,
+            confirm_discard: row.confirm_discard ?? cur.confirmDiscardOnEdit,
+            updated_at: new Date().toISOString(),
+          });
+        }
+      } else {
+        // クラウドにまだ設定がない場合：現在のローカル設定をクラウドに初回保存
+        const cur = latestSettingsRef.current;
+        const initialCats = Array.from(new Set([...localCats, ...(extraCategories || [])]));
+        await supabase.from("user_settings").upsert({
+          user_id: userId,
+          categories: initialCats,
+          time_slots: cur.timeSlots,
+          font_size: cur.fontSize,
+          button_size: cur.buttonSize,
+          enable_toast: cur.enableToast,
+          confirm_discard: cur.confirmDiscardOnEdit,
+          updated_at: new Date().toISOString(),
+        });
+      }
+    } catch (e) {
+      console.error("設定同期中にエラーが発生しました", e);
     }
   };
 
@@ -465,6 +658,7 @@ export default function Home() {
         const name = (u.user_metadata?.username as string) || u.email?.split("@")[0] || "";
         setCurrentUsername(name);
         fetchCloudNotes(u.id);
+        fetchUserSettings(u.id);
       }
     });
 
@@ -477,6 +671,7 @@ export default function Home() {
         const name = (u.user_metadata?.username as string) || u.email?.split("@")[0] || "";
         setCurrentUsername(name);
         fetchCloudNotes(u.id);
+        fetchUserSettings(u.id);
       } else {
         setCurrentUsername("");
       }
@@ -540,6 +735,7 @@ export default function Home() {
           setCurrentUsername(username);
           setAuthSuccessMsg("ログインしました！同期を開始します...");
           await fetchCloudNotes(data.user.id, notes);
+          await fetchUserSettings(data.user.id);
           setTimeout(() => {
             setIsAuthModalOpen(false);
             setAuthUsernameInput("");
@@ -574,6 +770,7 @@ export default function Home() {
           setCurrentUsername(username);
           setAuthSuccessMsg("アカウントを作成しました！クラウド同期を有効化しました。");
           await fetchCloudNotes(data.user.id, notes);
+          await fetchUserSettings(data.user.id);
           setTimeout(() => {
             setIsAuthModalOpen(false);
             setAuthUsernameInput("");
@@ -633,6 +830,7 @@ export default function Home() {
     } catch (e) {
       console.error("カテゴリの保存に失敗しました", e);
     }
+    saveCloudSettings({ categories: updated }, true);
   };
 
   // メモ入力中のインライン新規カテゴリ追加
@@ -665,21 +863,34 @@ export default function Home() {
     const updatedCategories = categoriesList.filter((c) => c !== categoryToDelete);
     setCategoriesList(updatedCategories);
     localStorage.setItem("seednote_categories", JSON.stringify(updatedCategories));
+    saveCloudSettings({ categories: updatedCategories }, true);
 
     // 選択中カテゴリからも除外
     setSelectedCategories((prev) => prev.filter((c) => c !== categoryToDelete));
 
     // 既存メモから該当カテゴリのみを除外
+    const notesToUpdateInCloud: Note[] = [];
     const updatedNotes = notes.map((note) => {
       if (!note.categories) return note;
-      const filtered = note.categories.filter((c) => c !== categoryToDelete);
-      return {
-        ...note,
-        categories: filtered.length > 0 ? filtered : undefined,
-      };
+      if (note.categories.includes(categoryToDelete)) {
+        const filtered = note.categories.filter((c) => c !== categoryToDelete);
+        const updated = {
+          ...note,
+          categories: filtered.length > 0 ? filtered : undefined,
+        };
+        notesToUpdateInCloud.push(updated);
+        return updated;
+      }
+      return note;
     });
     setNotes(updatedNotes);
     localStorage.setItem("seednote_items", JSON.stringify(updatedNotes));
+
+    if (currentUser && notesToUpdateInCloud.length > 0) {
+      notesToUpdateInCloud.forEach((n) => {
+        supabase.from("notes").update({ categories: n.categories || [] }).eq("id", n.id).then();
+      });
+    }
 
     // モーダルを閉じる
     setCategoryToDelete(null);
@@ -867,24 +1078,28 @@ export default function Home() {
   const handleToggleToast = (checked: boolean) => {
     setEnableToast(checked);
     localStorage.setItem("seednote_enable_toast", String(checked));
+    saveCloudSettings({ enable_toast: checked }, true);
   };
 
   // 編集破棄時の確認設定の切り替え（フールプルーフ）
   const handleToggleConfirmDiscard = (checked: boolean) => {
     setConfirmDiscardOnEdit(checked);
     localStorage.setItem("seednote_confirm_discard", String(checked));
+    saveCloudSettings({ confirm_discard: checked }, true);
   };
 
   // 文字サイズの切り替え
   const handleFontSizeChange = (size: FontSize) => {
     setFontSize(size);
     localStorage.setItem("seednote_font_size", size);
+    saveCloudSettings({ font_size: size }, true);
   };
 
   // ボタンの大きさの切り替え
   const handleButtonSizeChange = (size: ButtonSize) => {
     setButtonSize(size);
     localStorage.setItem("seednote_button_size", size);
+    saveCloudSettings({ button_size: size }, true);
   };
 
   // Ctrl + Enter (または Cmd + Enter) で素早く保存
@@ -928,12 +1143,14 @@ export default function Home() {
     };
     setTimeSlots(updated);
     localStorage.setItem("seednote_time_slots", JSON.stringify(updated));
+    saveCloudSettings({ time_slots: updated }, false);
   };
 
   // 時間帯設定をデフォルトにリセット
   const handleResetTimeSlots = () => {
     setTimeSlots(DEFAULT_TIME_SLOTS);
     localStorage.removeItem("seednote_time_slots");
+    saveCloudSettings({ time_slots: DEFAULT_TIME_SLOTS }, true);
   };
 
   // ある時間が指定された時間帯に含まれるか判定（0〜23）
