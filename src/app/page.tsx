@@ -347,7 +347,6 @@ export default function Home() {
   // 検索パネル内の折りたたみアコーディオンState
   const [isSearchCategoryOpen, setIsSearchCategoryOpen] = useState(true);
   const [isSearchTimeSlotOpen, setIsSearchTimeSlotOpen] = useState(false);
-  const [isSearchTrashAccordionOpen, setIsSearchTrashAccordionOpen] = useState(false);
 
   // ゴミ箱検索パネル内の折りたたみアコーディオンState
   const [isTrashSearchCategoryOpen, setIsTrashSearchCategoryOpen] = useState(true);
@@ -1759,8 +1758,8 @@ export default function Home() {
                     🏷️ カテゴリ:
                   </span>
 
-                  {/* 登録済みカテゴリチップ */}
-                  {categoriesList.map((cat) => {
+                  {/* 登録済みカテゴリチップ（並び順設定を反映） */}
+                  {sortedCategories.map((cat) => {
                     const isSelected = selectedCategories.includes(cat);
                     return (
                       <button
@@ -1941,23 +1940,38 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* ② お気に入り表示 */}
+                  {/* ② 絞り込みオプション（お気に入り & ゴミ箱） */}
                   <div>
                     <span className="block text-[11px] font-bold text-[#8a7f72] mb-1.5">
-                      ⭐ お気に入り
+                      📌 絞り込みオプション
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => setFilterOnlyFavorite(!filterOnlyFavorite)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
-                        filterOnlyFavorite
-                          ? "bg-[#d49e35] text-white shadow-xs font-bold"
-                          : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
-                      }`}
-                    >
-                      <span>{filterOnlyFavorite ? "★" : "☆"}</span>
-                      {filterOnlyFavorite ? "お気に入りのみ表示中" : "お気に入りのみ表示"}
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setFilterOnlyFavorite(!filterOnlyFavorite)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+                          filterOnlyFavorite
+                            ? "bg-[#d49e35] text-white shadow-xs font-bold"
+                            : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
+                        }`}
+                      >
+                        <span>{filterOnlyFavorite ? "★" : "☆"}</span>
+                        {filterOnlyFavorite ? "お気に入りのみ表示中" : "お気に入りのみ"}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setIncludeTrashInSearch(!includeTrashInSearch)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+                          includeTrashInSearch
+                            ? "bg-[#3d3731] text-white shadow-xs font-bold"
+                            : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
+                        }`}
+                      >
+                        <span>🗑️</span>
+                        {includeTrashInSearch ? "ゴミ箱も含めて表示中" : "ゴミ箱も含める"}
+                      </button>
+                    </div>
                   </div>
 
                   {/* ② カテゴリからさがす（アコーディオン） */}
@@ -2115,48 +2129,7 @@ export default function Home() {
                     )}
                   </div>
 
-                  {/* ④ ゴミ箱も含める（アコーディオン） */}
-                  <div className="border-t border-[#f0eae1] pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setIsSearchTrashAccordionOpen(!isSearchTrashAccordionOpen)}
-                      className="flex items-center justify-between w-full text-left py-0.5 group cursor-pointer"
-                    >
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[11px] font-bold text-[#8a7f72] group-hover:text-[#3d3731] transition-colors flex items-center gap-1">
-                          <span className="text-[9px] font-mono">{isSearchTrashAccordionOpen ? "▼" : "▶"}</span>
-                          <span>🗑️ ゴミ箱の検索</span>
-                        </span>
-                        {includeTrashInSearch && (
-                          <span className="text-[10px] text-[#a6483b] bg-[#eedcd8] px-2 py-0.5 rounded-md font-medium">
-                            ゴミ箱含む
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[10px] text-[#9c9184] group-hover:text-[#5c5348] font-mono">
-                        {isSearchTrashAccordionOpen ? "たたむ" : "広げる"}
-                      </span>
-                    </button>
 
-                    {isSearchTrashAccordionOpen && (
-                      <div className="mt-2">
-                        <button
-                          type="button"
-                          onClick={() => setIncludeTrashInSearch(!includeTrashInSearch)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
-                            includeTrashInSearch
-                              ? "bg-[#3d3731] text-white shadow-xs font-bold"
-                              : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
-                          }`}
-                        >
-                          <span>🗑️</span>
-                          {includeTrashInSearch
-                            ? "ゴミ箱のメモも含めて検索中"
-                            : "ゴミ箱のメモも含めて探す"}
-                        </button>
-                      </div>
-                    )}
-                  </div>
 
                   {/* ヒット件数 */}
                   {(filterOnlyFavorite || filterCategories.length > 0 || includeTrashInSearch || searchQuery.trim().length > 0 || filterTimeSlots.length > 0) && (
@@ -3626,7 +3599,7 @@ export default function Home() {
                   カテゴリ
                 </label>
                 <div className="flex flex-wrap items-center gap-1.5 p-2.5 bg-white/70 rounded-xl border border-[#ded5c8]">
-                  {categoriesList.map((cat) => {
+                  {sortedCategories.map((cat) => {
                     const isSelected = editCategories.includes(cat);
                     return (
                       <button
