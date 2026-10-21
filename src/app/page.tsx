@@ -85,6 +85,18 @@ const DEFAULT_TIME_SLOTS: Record<TimeSlotKey, TimeSlotConfig> = {
   lateNight: { label: "深夜", icon: "🌌", startHour: 23, endHour: 4, color: "#4a7bb0" },
 };
 
+// 読み間違いしやすい 0, 1, I, O を除外した英数字による復旧キー生成
+const generateRecoveryKey = (): string => {
+  const chars = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+  let part1 = "";
+  let part2 = "";
+  for (let i = 0; i < 4; i++) {
+    part1 += chars.charAt(Math.floor(Math.random() * chars.length));
+    part2 += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return `SEED-${part1}-${part2}`;
+};
+
 // Supabase DB用ユーザー設定・カテゴリ同期レコード定義
 interface DbUserSettingsRow {
   user_id: string;
@@ -94,6 +106,7 @@ interface DbUserSettingsRow {
   button_size: ButtonSize | null;
   enable_toast: boolean | null;
   confirm_discard: boolean | null;
+  recovery_key?: string | null;
   updated_at?: string;
 }
 
@@ -371,10 +384,15 @@ export default function Home() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentUsername, setCurrentUsername] = useState<string>("");
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const [authMode, setAuthMode] = useState<"login" | "signup" | "reset">("login");
   const [authUsernameInput, setAuthUsernameInput] = useState("");
   const [authPasswordInput, setAuthPasswordInput] = useState("");
   const [authPasswordConfirmInput, setAuthPasswordConfirmInput] = useState("");
+  const [resetRecoveryKeyInput, setResetRecoveryKeyInput] = useState("");
+  const [recoveryKey, setRecoveryKey] = useState<string>("");
+  const [showRecoveryKeyInSettings, setShowRecoveryKeyInSettings] = useState(false);
+  const [newlyRegisteredKey, setNewlyRegisteredKey] = useState<string | null>(null);
+  const [copiedKeyToast, setCopiedKeyToast] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -429,6 +447,10 @@ export default function Home() {
       const savedSortOrder = localStorage.getItem("seednote_category_sort_order");
       if (savedSortOrder === "usage" || savedSortOrder === "alphabetical" || savedSortOrder === "created") {
         setCategorySortOrder(savedSortOrder as CategorySortOrder);
+      }
+      const savedRecoveryKey = localStorage.getItem("seednote_recovery_key");
+      if (savedRecoveryKey) {
+        setRecoveryKey(savedRecoveryKey);
       }
     } catch (e) {
       console.error("データの読み込みに失敗しました", e);
@@ -662,6 +684,17 @@ export default function Home() {
           localStorage.setItem("seednote_confirm_discard", String(row.confirm_discard));
         }
 
+        // 復旧キーの同期・既存アカウントへの自動発行
+        if (row.recovery_key) {
+          setRecoveryKey(row.recovery_key);
+          localStorage.setItem("seednote_recovery_key", row.recovery_key);
+        } else {
+          const generated = generateRecoveryKey();
+          setRecoveryKey(generated);
+          localStorage.setItem("seednote_recovery_key", generated);
+          supabase.from("user_settings").update({ recovery_key: generated }).eq("user_id", userId).then();
+        }
+
         // もしローカルやメモから新しいカテゴリが見つかった場合、クラウド側も最新化
         if (mergedCats.length > cloudCats.length) {
           const cur = latestSettingsRef.current;
@@ -680,6 +713,9 @@ export default function Home() {
         // クラウドにまだ設定がない場合：現在のローカル設定をクラウドに初回保存
         const cur = latestSettingsRef.current;
         const initialCats = Array.from(new Set([...localCats, ...(extraCategories || [])]));
+        const generated = generateRecoveryKey();
+        setRecoveryKey(generated);
+        localStorage.setItem("seednote_recovery_key", generated);
         await supabase.from("user_settings").upsert({
           user_id: userId,
           categories: initialCats,
@@ -688,6 +724,7 @@ export default function Home() {
           button_size: cur.buttonSize,
           enable_toast: cur.enableToast,
           confirm_discard: cur.confirmDiscardOnEdit,
+          recovery_key: generated,
           updated_at: new Date().toISOString(),
         });
       }
@@ -827,22 +864,138 @@ export default function Home() {
           return;
         }
         if (data.user) {
+          const generatedKey = generateRecoveryKey();
+          setRecoveryKey(generatedKey);
+          localStorage.setItem("seednote_recovery_key", generatedKey);
+
+          // user_settingsに復旧キーを保存
+          const cur = latestSettingsRef.current;
+          await supabase.from("user_settings").upsert({
+            user_id: data.user.id,
+            recovery_key: generatedKey,
+            categories: cur.categoriesList,
+            time_slots: cur.timeSlots,
+            font_size: cur.fontSize,
+            button_size: cur.buttonSize,
+            enable_toast: cur.enableToast,
+            confirm_discard: cur.confirmDiscardOnEdit,
+            updated_at: new Date().toISOString(),
+          });
+
           setCurrentUser(data.user);
           setCurrentUsername(username);
-          setAuthSuccessMsg("アカウントを作成しました！クラウド同期を有効化しました。");
           await fetchCloudNotes(data.user.id, notes);
-          await fetchUserSettings(data.user.id);
-          setTimeout(() => {
-            setIsAuthModalOpen(false);
-            setAuthUsernameInput("");
-            setAuthPasswordInput("");
-            setAuthPasswordConfirmInput("");
-            setShowPassword(false);
-            setShowPasswordConfirm(false);
-            setAuthSuccessMsg(null);
-          }, 800);
+
+          // 認証モーダルを閉じて、復旧キーの案内モーダルを開く
+          setIsAuthModalOpen(false);
+          setAuthUsernameInput("");
+          setAuthPasswordInput("");
+          setAuthPasswordConfirmInput("");
+          setShowPassword(false);
+          setShowPasswordConfirm(false);
+          setAuthSuccessMsg(null);
+          setNewlyRegisteredKey(generatedKey);
         }
       }
+    } catch {
+      setAuthError("通信エラーが発生しました。接続を確認してください。");
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
+
+  // パスワード再設定の送信処理（復旧キー使用）
+  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    setAuthSuccessMsg(null);
+
+    const username = authUsernameInput.trim();
+    const recoveryKeyInput = resetRecoveryKeyInput.trim();
+    const password = authPasswordInput.trim();
+    const confirmPass = authPasswordConfirmInput.trim();
+
+    if (!username) {
+      setAuthError("ユーザー名を入力してください");
+      return;
+    }
+    if (!recoveryKeyInput) {
+      setAuthError("復旧キーを入力してください");
+      return;
+    }
+    if (!password) {
+      setAuthError("新しいパスワードを入力してください");
+      return;
+    }
+    if (password.length < 6) {
+      setAuthError("パスワードは6文字以上で設定してください");
+      return;
+    }
+    if (!confirmPass) {
+      setAuthError("確認用パスワードを入力してください");
+      return;
+    }
+    if (password !== confirmPass) {
+      setAuthError("パスワードと確認用パスワードが一致しません");
+      return;
+    }
+
+    setIsAuthLoading(true);
+
+    try {
+      const { data, error } = await supabase.rpc("reset_password_with_recovery_key", {
+        p_username: username,
+        p_recovery_key: recoveryKeyInput,
+        p_new_password: password,
+      });
+
+      if (error) {
+        setAuthError(`再設定エラー: ${error.message}`);
+        return;
+      }
+
+      if (data && typeof data === "object" && !(data as { success: boolean }).success) {
+        setAuthError((data as { error?: string }).error || "ユーザー名または復旧キーが正しくありません");
+        return;
+      }
+
+      setAuthSuccessMsg("パスワードを再設定しました！ログインしています...");
+
+      // 自動でログイン
+      const internalEmail = getInternalEmail(username);
+      const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
+        email: internalEmail,
+        password: password,
+      });
+
+      if (signInErr || !signInData.user) {
+        setAuthSuccessMsg("パスワードの再設定が完了しました。新しいパスワードでログインしてください。");
+        setTimeout(() => {
+          setAuthMode("login");
+          setAuthPasswordInput("");
+          setAuthPasswordConfirmInput("");
+          setResetRecoveryKeyInput("");
+          setAuthSuccessMsg(null);
+        }, 1500);
+        return;
+      }
+
+      setCurrentUser(signInData.user);
+      setCurrentUsername(username);
+      await fetchCloudNotes(signInData.user.id, notes);
+      await fetchUserSettings(signInData.user.id);
+
+      setTimeout(() => {
+        setIsAuthModalOpen(false);
+        setAuthUsernameInput("");
+        setAuthPasswordInput("");
+        setAuthPasswordConfirmInput("");
+        setResetRecoveryKeyInput("");
+        setShowPassword(false);
+        setShowPasswordConfirm(false);
+        setAuthSuccessMsg(null);
+        setAuthMode("login");
+      }, 1000);
     } catch {
       setAuthError("通信エラーが発生しました。接続を確認してください。");
     } finally {
@@ -3439,6 +3592,90 @@ export default function Home() {
                   <div>総データ数：{notes.length} 件</div>
                 </div>
               </div>
+
+              {/* アカウント・クラウド同期・復旧キー */}
+              <div className="p-3.5 bg-white rounded-xl border border-[#e5ded2] flex flex-col gap-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-[#3d3731] flex items-center gap-1.5">
+                    <span>🔐</span> クラウド同期・アカウント
+                  </span>
+                  {currentUser ? (
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="px-2.5 py-1 text-xs text-[#b85448] hover:text-[#9e3a2f] border border-[#e5ded2] rounded-lg transition-colors font-medium"
+                    >
+                      ログアウト
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuthMode("login");
+                        setAuthError(null);
+                        setAuthSuccessMsg(null);
+                        setIsAuthModalOpen(true);
+                      }}
+                      className="px-3 py-1 text-xs font-bold bg-[#3d3731] text-[#faf8f5] hover:bg-[#292420] rounded-lg transition-all shadow-2xs"
+                    >
+                      ログイン / 新規登録
+                    </button>
+                  )}
+                </div>
+
+                {currentUser ? (
+                  <div className="flex flex-col gap-2.5 pt-1 border-t border-[#f0eae1]">
+                    <div className="text-xs text-[#8a7f72] flex items-center justify-between">
+                      <span>ログイン中のユーザー名:</span>
+                      <strong className="text-[#3d3731] font-mono text-sm">{currentUsername}</strong>
+                    </div>
+
+                    {/* 復旧キー枠 */}
+                    <div className="p-3 rounded-xl bg-[#faf8f5] border border-[#ded5c8] flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-[#6b6257]">
+                          🔑 パスワード復旧キー
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setShowRecoveryKeyInSettings(!showRecoveryKeyInSettings)}
+                          className="text-[11px] text-[#7d7367] hover:text-[#2d2926] underline font-medium"
+                        >
+                          {showRecoveryKeyInSettings ? "キーを隠す" : "キーを表示する"}
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 px-3 py-1.5 bg-white rounded-lg border border-[#ded5c8] text-xs font-mono font-bold tracking-wider text-[#3d3731] select-all">
+                          {showRecoveryKeyInSettings ? (recoveryKey || "未設定") : "••••-••••-••••"}
+                        </code>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (recoveryKey) {
+                              navigator.clipboard.writeText(recoveryKey);
+                              setCopiedKeyToast(true);
+                              setTimeout(() => setCopiedKeyToast(false), 2000);
+                            }
+                          }}
+                          className="px-3 py-1.5 bg-[#3d3731] text-white rounded-lg text-xs font-medium hover:bg-[#292420] transition-colors shrink-0 flex items-center gap-1 shadow-2xs cursor-pointer"
+                        >
+                          <span>📋</span> {copiedKeyToast ? "コピー完了!" : "コピー"}
+                        </button>
+                      </div>
+
+                      <div className="text-[10px] text-[#8a7f72] leading-relaxed pt-1 border-t border-[#f0eae1] flex flex-col gap-0.5">
+                        <span>⚠️ <strong>誰にも教えてはいけません</strong>（パスワード再設定用の重要キーです）</span>
+                        <span>⚠️ <strong>SeedNote内にはメモせず</strong>、スクショや別メモ等に保存してください</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-[#8a7f72] leading-relaxed">
+                    アカウントを作成すると、スマホやPC間でメモが自動同期されます。メールアドレス不要で登録できます。
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -3739,7 +3976,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* ⑦ ユーザー名＋パスワードによるクラウドログイン／新規登録モーダル */}
+      {/* ⑦ ユーザー名＋パスワードによるクラウドログイン／新規登録／再設定モーダル */}
       {isAuthModalOpen && (
         <div
           className="fixed inset-0 bg-black/40 backdrop-blur-xs z-60 flex items-center justify-center p-4"
@@ -3748,8 +3985,10 @@ export default function Home() {
             setAuthError(null);
             setAuthSuccessMsg(null);
             setAuthPasswordConfirmInput("");
+            setResetRecoveryKeyInput("");
             setShowPassword(false);
             setShowPasswordConfirm(false);
+            setAuthMode("login");
           }}
         >
           <div
@@ -3759,7 +3998,8 @@ export default function Home() {
             {/* ヘッダー */}
             <div className="flex items-center justify-between mb-4 pb-2 border-b border-[#ded6c9]">
               <h2 className="text-base font-bold text-[#3d3731] flex items-center gap-1.5">
-                <span>🔐</span> クラウド同期
+                <span>{authMode === "reset" ? "🔑" : "🔐"}</span>{" "}
+                {authMode === "reset" ? "パスワードの再設定" : "クラウド同期"}
               </h2>
               <button
                 type="button"
@@ -3768,8 +4008,10 @@ export default function Home() {
                   setAuthError(null);
                   setAuthSuccessMsg(null);
                   setAuthPasswordConfirmInput("");
+                  setResetRecoveryKeyInput("");
                   setShowPassword(false);
                   setShowPasswordConfirm(false);
+                  setAuthMode("login");
                 }}
                 className="text-[#8a7f72] hover:text-[#3d3731] text-xs px-2 py-1"
               >
@@ -3777,100 +4019,139 @@ export default function Home() {
               </button>
             </div>
 
-            {/* モード切り替えタブ（ログイン / 新規登録） */}
-            <div className="flex bg-[#e8e0d3] p-1 rounded-xl mb-4 border border-[#ded6c9]">
-              <button
-                type="button"
-                onClick={() => {
-                  setAuthMode("login");
-                  setAuthError(null);
-                  setAuthSuccessMsg(null);
-                  setAuthPasswordConfirmInput("");
-                  setShowPassword(false);
-                  setShowPasswordConfirm(false);
-                }}
-                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                  authMode === "login"
-                    ? "bg-[#3d3731] text-[#faf8f5] shadow-xs"
-                    : "text-[#6b6257] hover:text-[#2d2926]"
-                }`}
-              >
-                ログイン
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setAuthMode("signup");
-                  setAuthError(null);
-                  setAuthSuccessMsg(null);
-                  setAuthPasswordConfirmInput("");
-                  setShowPassword(false);
-                  setShowPasswordConfirm(false);
-                }}
-                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                  authMode === "signup"
-                    ? "bg-[#3d3731] text-[#faf8f5] shadow-xs"
-                    : "text-[#6b6257] hover:text-[#2d2926]"
-                }`}
-              >
-                新規登録
-              </button>
-            </div>
-
-            <form onSubmit={handleAuthSubmit} className="space-y-3.5">
-              {/* ユーザー名入力 */}
-              <div>
-                <label className="block text-xs font-bold text-[#3d3731] mb-1">
-                  ユーザー名（ID）
-                </label>
-                <input
-                  type="text"
-                  placeholder="例: nickname"
-                  value={authUsernameInput}
-                  onChange={(e) => setAuthUsernameInput(e.target.value)}
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  required
-                  className="w-full px-3 py-2 text-sm bg-[#faf8f5] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] placeholder-[#b0a598]"
-                />
+            {/* モード切り替えタブ（ログイン / 新規登録 / 再設定時の戻るリンク） */}
+            {authMode !== "reset" ? (
+              <div className="flex bg-[#e8e0d3] p-1 rounded-xl mb-4 border border-[#ded6c9]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode("login");
+                    setAuthError(null);
+                    setAuthSuccessMsg(null);
+                    setAuthPasswordConfirmInput("");
+                    setShowPassword(false);
+                    setShowPasswordConfirm(false);
+                  }}
+                  className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                    authMode === "login"
+                      ? "bg-[#3d3731] text-[#faf8f5] shadow-xs"
+                      : "text-[#6b6257] hover:text-[#2d2926]"
+                  }`}
+                >
+                  ログイン
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode("signup");
+                    setAuthError(null);
+                    setAuthSuccessMsg(null);
+                    setAuthPasswordConfirmInput("");
+                    setShowPassword(false);
+                    setShowPasswordConfirm(false);
+                  }}
+                  className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                    authMode === "signup"
+                      ? "bg-[#3d3731] text-[#faf8f5] shadow-xs"
+                      : "text-[#6b6257] hover:text-[#2d2926]"
+                  }`}
+                >
+                  新規登録
+                </button>
               </div>
-
-              {/* パスワード入力 */}
-              <div>
-                <label className="block text-xs font-bold text-[#3d3731] mb-1">
-                  パスワード（6文字以上）
-                </label>
-                <div className="relative flex items-center">
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    placeholder="パスワードを入力"
-                    value={authPasswordInput}
-                    onChange={(e) => setAuthPasswordInput(e.target.value)}
-                    required
-                    className="w-full px-3 py-2 pr-10 text-sm bg-[#faf8f5] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] placeholder-[#b0a598]"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-2.5 text-[#8a7f72] hover:text-[#3d3731] text-sm p-1 transition-colors"
-                    title={showPassword ? "パスワードを隠す" : "パスワードを表示する"}
-                    aria-label={showPassword ? "パスワードを隠す" : "パスワードを表示する"}
-                  >
-                    {showPassword ? "🙈" : "👁️"}
-                  </button>
-                </div>
+            ) : (
+              <div className="mb-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode("login");
+                    setAuthError(null);
+                    setAuthSuccessMsg(null);
+                    setResetRecoveryKeyInput("");
+                    setAuthPasswordInput("");
+                    setAuthPasswordConfirmInput("");
+                  }}
+                  className="text-xs text-[#7d7367] hover:text-[#3d3731] flex items-center gap-1 font-medium cursor-pointer"
+                >
+                  <span>←</span> ログイン画面に戻る
+                </button>
               </div>
+            )}
 
-              {/* 新規登録時のみ：パスワード確認用入力 */}
-              {authMode === "signup" && (
+            {authMode === "reset" ? (
+              <form onSubmit={handleResetPasswordSubmit} className="space-y-3.5">
+                <p className="text-xs text-[#786f66] leading-relaxed bg-[#eae4d9] p-2.5 rounded-xl border border-[#ded6c9]">
+                  登録時に保存した【復旧キー】を入力して、新しいパスワードを設定します。
+                </p>
+
+                {/* ユーザー名入力 */}
                 <div>
                   <label className="block text-xs font-bold text-[#3d3731] mb-1">
-                    パスワード（確認用）
+                    ユーザー名（ID）
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="登録時のユーザー名"
+                    value={authUsernameInput}
+                    onChange={(e) => setAuthUsernameInput(e.target.value)}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    required
+                    className="w-full px-3 py-2 text-sm bg-[#faf8f5] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] placeholder-[#b0a598]"
+                  />
+                </div>
+
+                {/* 復旧キー入力 */}
+                <div>
+                  <label className="block text-xs font-bold text-[#3d3731] mb-1">
+                    復旧キー
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="例: SEED-7K9A-3M2P"
+                    value={resetRecoveryKeyInput}
+                    onChange={(e) => setResetRecoveryKeyInput(e.target.value)}
+                    autoCapitalize="characters"
+                    autoCorrect="off"
+                    required
+                    className="w-full px-3 py-2 text-sm font-mono bg-[#faf8f5] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] placeholder-[#b0a598]"
+                  />
+                </div>
+
+                {/* 新しいパスワード入力 */}
+                <div>
+                  <label className="block text-xs font-bold text-[#3d3731] mb-1">
+                    新しいパスワード（6文字以上）
+                  </label>
+                  <div className="relative flex items-center">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="新しいパスワードを入力"
+                      value={authPasswordInput}
+                      onChange={(e) => setAuthPasswordInput(e.target.value)}
+                      required
+                      className="w-full px-3 py-2 pr-10 text-sm bg-[#faf8f5] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] placeholder-[#b0a598]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-2.5 text-[#8a7f72] hover:text-[#3d3731] text-sm p-1 transition-colors"
+                      title={showPassword ? "パスワードを隠す" : "パスワードを表示する"}
+                    >
+                      {showPassword ? "🙈" : "👁️"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* 新しいパスワード確認用入力 */}
+                <div>
+                  <label className="block text-xs font-bold text-[#3d3731] mb-1">
+                    新しいパスワード（確認用）
                   </label>
                   <div className="relative flex items-center">
                     <input
                       type={showPasswordConfirm ? "text" : "password"}
-                      placeholder="もう一度パスワードを入力"
+                      placeholder="もう一度入力"
                       value={authPasswordConfirmInput}
                       onChange={(e) => setAuthPasswordConfirmInput(e.target.value)}
                       required
@@ -3881,48 +4162,237 @@ export default function Home() {
                       onClick={() => setShowPasswordConfirm(!showPasswordConfirm)}
                       className="absolute right-2.5 text-[#8a7f72] hover:text-[#3d3731] text-sm p-1 transition-colors"
                       title={showPasswordConfirm ? "パスワードを隠す" : "パスワードを表示する"}
-                      aria-label={showPasswordConfirm ? "パスワードを隠す" : "パスワードを表示する"}
                     >
                       {showPasswordConfirm ? "🙈" : "👁️"}
                     </button>
                   </div>
                 </div>
-              )}
 
-              {/* プライバシー安心注釈 */}
-              <div className="p-2.5 rounded-lg bg-[#eae4d9] border border-[#ded6c9] text-[11px] text-[#6b6257] leading-relaxed">
-                🛡️ <strong>メールアドレスは不要です</strong>。個人情報は一切収集せず、IDとパスワードのみで安全に端末間同期を行います。
-              </div>
+                {/* エラーメッセージ */}
+                {authError && (
+                  <div className="p-2 rounded-lg bg-[#fdeeed] border border-[#f5c6cb] text-xs text-[#b85448]">
+                    {authError}
+                  </div>
+                )}
 
-              {/* エラーメッセージ */}
-              {authError && (
-                <div className="p-2 rounded-lg bg-[#fdeeed] border border-[#f5c6cb] text-xs text-[#b85448]">
-                  {authError}
+                {/* 成功メッセージ */}
+                {authSuccessMsg && (
+                  <div className="p-2 rounded-lg bg-[#eef6f0] border border-[#c3e6cb] text-xs text-[#529961] font-bold">
+                    {authSuccessMsg}
+                  </div>
+                )}
+
+                {/* 送信ボタン */}
+                <div className="pt-2">
+                  <button
+                    type="submit"
+                    disabled={isAuthLoading}
+                    className="w-full py-2.5 rounded-xl bg-[#3d3731] text-[#faf8f5] text-sm font-bold hover:bg-[#292420] active:scale-[0.99] transition-all disabled:opacity-50 shadow-xs cursor-pointer"
+                  >
+                    {isAuthLoading ? "再設定中..." : "パスワードを再設定してログイン"}
+                  </button>
                 </div>
-              )}
-
-              {/* 成功メッセージ */}
-              {authSuccessMsg && (
-                <div className="p-2 rounded-lg bg-[#eef6f0] border border-[#c3e6cb] text-xs text-[#529961] font-bold">
-                  {authSuccessMsg}
+              </form>
+            ) : (
+              <form onSubmit={handleAuthSubmit} className="space-y-3.5">
+                {/* ユーザー名入力 */}
+                <div>
+                  <label className="block text-xs font-bold text-[#3d3731] mb-1">
+                    ユーザー名（ID）
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="例: nickname"
+                    value={authUsernameInput}
+                    onChange={(e) => setAuthUsernameInput(e.target.value)}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    required
+                    className="w-full px-3 py-2 text-sm bg-[#faf8f5] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] placeholder-[#b0a598]"
+                  />
                 </div>
-              )}
 
-              {/* 送信ボタン */}
-              <div className="pt-2">
-                <button
-                  type="submit"
-                  disabled={isAuthLoading}
-                  className="w-full py-2.5 rounded-xl bg-[#3d3731] text-[#faf8f5] text-sm font-bold hover:bg-[#292420] active:scale-[0.99] transition-all disabled:opacity-50 shadow-xs cursor-pointer"
-                >
-                  {isAuthLoading
-                    ? "通信中..."
-                    : authMode === "login"
-                    ? "ログインする"
-                    : "アカウントを作成する"}
-                </button>
-              </div>
-            </form>
+                {/* パスワード入力 */}
+                <div>
+                  <label className="block text-xs font-bold text-[#3d3731] mb-1">
+                    パスワード（6文字以上）
+                  </label>
+                  <div className="relative flex items-center">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="パスワードを入力"
+                      value={authPasswordInput}
+                      onChange={(e) => setAuthPasswordInput(e.target.value)}
+                      required
+                      className="w-full px-3 py-2 pr-10 text-sm bg-[#faf8f5] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] placeholder-[#b0a598]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-2.5 text-[#8a7f72] hover:text-[#3d3731] text-sm p-1 transition-colors"
+                      title={showPassword ? "パスワードを隠す" : "パスワードを表示する"}
+                      aria-label={showPassword ? "パスワードを隠す" : "パスワードを表示する"}
+                    >
+                      {showPassword ? "🙈" : "👁️"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* 新規登録時のみ：パスワード確認用入力 */}
+                {authMode === "signup" && (
+                  <div>
+                    <label className="block text-xs font-bold text-[#3d3731] mb-1">
+                      パスワード（確認用）
+                    </label>
+                    <div className="relative flex items-center">
+                      <input
+                        type={showPasswordConfirm ? "text" : "password"}
+                        placeholder="もう一度パスワードを入力"
+                        value={authPasswordConfirmInput}
+                        onChange={(e) => setAuthPasswordConfirmInput(e.target.value)}
+                        required
+                        className="w-full px-3 py-2 pr-10 text-sm bg-[#faf8f5] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] placeholder-[#b0a598]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPasswordConfirm(!showPasswordConfirm)}
+                        className="absolute right-2.5 text-[#8a7f72] hover:text-[#3d3731] text-sm p-1 transition-colors"
+                        title={showPasswordConfirm ? "パスワードを隠す" : "パスワードを表示する"}
+                        aria-label={showPasswordConfirm ? "パスワードを隠す" : "パスワードを表示する"}
+                      >
+                        {showPasswordConfirm ? "🙈" : "👁️"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* プライバシー安心注釈 */}
+                <div className="p-2.5 rounded-lg bg-[#eae4d9] border border-[#ded6c9] text-[11px] text-[#6b6257] leading-relaxed">
+                  🛡️ <strong>メールアドレスは不要です</strong>。個人情報は一切収集せず、IDとパスワードのみで安全に端末間同期を行います。
+                </div>
+
+                {/* エラーメッセージ */}
+                {authError && (
+                  <div className="p-2 rounded-lg bg-[#fdeeed] border border-[#f5c6cb] text-xs text-[#b85448]">
+                    {authError}
+                  </div>
+                )}
+
+                {/* 成功メッセージ */}
+                {authSuccessMsg && (
+                  <div className="p-2 rounded-lg bg-[#eef6f0] border border-[#c3e6cb] text-xs text-[#529961] font-bold">
+                    {authSuccessMsg}
+                  </div>
+                )}
+
+                {/* 送信ボタン */}
+                <div className="pt-2">
+                  <button
+                    type="submit"
+                    disabled={isAuthLoading}
+                    className="w-full py-2.5 rounded-xl bg-[#3d3731] text-[#faf8f5] text-sm font-bold hover:bg-[#292420] active:scale-[0.99] transition-all disabled:opacity-50 shadow-xs cursor-pointer"
+                  >
+                    {isAuthLoading
+                      ? "通信中..."
+                      : authMode === "login"
+                      ? "ログインする"
+                      : "アカウントを作成する"}
+                  </button>
+                </div>
+
+                {/* ログイン時のみ：パスワード忘れリンク */}
+                {authMode === "login" && (
+                  <div className="text-center pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuthMode("reset");
+                        setAuthError(null);
+                        setAuthSuccessMsg(null);
+                        setResetRecoveryKeyInput("");
+                        setAuthPasswordInput("");
+                        setAuthPasswordConfirmInput("");
+                        setShowPassword(false);
+                        setShowPasswordConfirm(false);
+                      }}
+                      className="text-xs text-[#7d7367] hover:text-[#3d3731] underline font-medium cursor-pointer"
+                    >
+                      パスワードをお忘れの方はこちら →
+                    </button>
+                  </div>
+                )}
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ⑧ アカウント新規作成完了＆復旧キー案内モーダル */}
+      {newlyRegisteredKey && (
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-xs z-70 flex items-center justify-center p-4 animate-fadeIn"
+          onClick={() => {
+            // 背景クリックでは閉じない（確実にボタンを押してもらう）
+          }}
+        >
+          <div
+            className="bg-[#f7f4ed] rounded-2xl p-6 sm:p-7 max-w-sm w-full border border-[#ded6c9] shadow-2xl transition-all flex flex-col gap-4 text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-col items-center gap-1">
+              <span className="text-3xl">🌱</span>
+              <h2 className="text-base font-bold text-[#3d3731]">
+                アカウントを作成しました！
+              </h2>
+              <span className="text-xs text-[#8a7f72]">
+                万が一パスワードを忘れたときの【復旧キー】です
+              </span>
+            </div>
+
+            {/* 復旧キー枠 */}
+            <div className="p-3.5 bg-white rounded-xl border-2 border-[#d49e35] shadow-xs flex flex-col items-center gap-2">
+              <span className="text-[11px] font-bold text-[#8a7f72]">
+                あなたの復旧キー
+              </span>
+              <code className="text-lg font-mono font-bold tracking-widest text-[#2d2926] select-all bg-[#faf8f5] px-3 py-1 rounded-lg border border-[#e5ded2]">
+                {newlyRegisteredKey}
+              </code>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(newlyRegisteredKey);
+                  setCopiedKeyToast(true);
+                  setTimeout(() => setCopiedKeyToast(false), 2000);
+                }}
+                className="px-3.5 py-1 text-xs font-bold rounded-lg bg-[#f4f0e8] hover:bg-[#eae3d7] text-[#5c5348] border border-[#ded5c8] transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+              >
+                <span>📋</span> {copiedKeyToast ? "コピーしました！" : "キーをコピー"}
+              </button>
+            </div>
+
+            {/* 3大注意点 */}
+            <div className="bg-[#fff9ed] border border-[#f0dcaf] rounded-xl p-3 text-left flex flex-col gap-1.5 text-xs text-[#7d5e1b] leading-relaxed">
+              <span className="font-bold text-[11px] flex items-center gap-1">
+                <span>⚠️</span> 大切なお願い（必ずお読みください）:
+              </span>
+              <ol className="list-decimal pl-4 space-y-1 text-[11px]">
+                <li><strong>誰にも教えないでください</strong>（パスワードと同じ機密情報です）。</li>
+                <li><strong>SeedNoteの中にメモしないでください</strong>（ログインできないと見られなくなります）。</li>
+                <li><strong>スクリーンショットを撮る</strong>か、別の安全な場所に大切に保管してください。</li>
+              </ol>
+            </div>
+
+            {/* 完了ボタン */}
+            <button
+              type="button"
+              onClick={() => {
+                setNewlyRegisteredKey(null);
+                setCopiedKeyToast(false);
+              }}
+              className="w-full py-2.5 rounded-xl bg-[#3d3731] text-[#faf8f5] text-sm font-bold hover:bg-[#292420] active:scale-[0.99] transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <span>📸</span> スクショを保存したので始める
+            </button>
           </div>
         </div>
       )}
