@@ -631,18 +631,45 @@ export default function Home() {
         const cloudNotes: Note[] = (data as DbNoteRow[]).map(mapDbRowToNote);
         const baseLocalNotes = currentLocalNotes ?? notes;
 
+        // クラウドノート側で、もしローカルに訂正履歴があってクラウド側が空または古い場合はローカル履歴を保護
+        const protectedCloudNotes = cloudNotes.map((cn) => {
+          const loc = baseLocalNotes.find((l) => l.id === cn.id);
+          if (loc?.editHistory && loc.editHistory.length > 0) {
+            const cloudCount = cn.editHistory?.length || 0;
+            if (cloudCount < loc.editHistory.length) {
+              return { ...cn, editHistory: loc.editHistory };
+            }
+          }
+          return cn;
+        });
+
+        // ローカルの履歴がクラウドに未反映だった場合はバックグラウンドでクラウド側も更新（自己修復）
+        protectedCloudNotes.forEach((cn) => {
+          const loc = baseLocalNotes.find((l) => l.id === cn.id);
+          if (loc?.editHistory && loc.editHistory.length > 0) {
+            const rawCloudCount = (cloudNotes.find((c) => c.id === cn.id)?.editHistory || []).length;
+            if (rawCloudCount < loc.editHistory.length) {
+              supabase
+                .from("notes")
+                .update({ edit_history: loc.editHistory })
+                .eq("id", cn.id)
+                .then();
+            }
+          }
+        });
+
         // ローカルにしか存在しないメモがあれば、クラウドにアップロード（引き継ぎ）
         const localOnlyNotes = baseLocalNotes.filter(
           (loc) => !cloudNotes.some((c) => c.id === loc.id)
         );
 
-        let finalNotes = cloudNotes;
+        let finalNotes = protectedCloudNotes;
 
         if (localOnlyNotes.length > 0) {
           const rowsToInsert = localOnlyNotes.map((n) => mapNoteToDbRow(n, userId));
           const { error: insertErr } = await supabase.from("notes").insert(rowsToInsert);
           if (!insertErr) {
-            finalNotes = [...cloudNotes, ...localOnlyNotes].sort(
+            finalNotes = [...protectedCloudNotes, ...localOnlyNotes].sort(
               (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
             );
           }
