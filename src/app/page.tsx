@@ -378,6 +378,8 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterTimeSlots, setFilterTimeSlots] = useState<TimeSlotKey[]>([]);
   const [filterDate, setFilterDate] = useState<string>(""); // カレンダー日付検索 (YYYY-MM-DD)
+  const [calendarYear, setCalendarYear] = useState<number>(() => new Date().getFullYear());
+  const [calendarMonth, setCalendarMonth] = useState<number>(() => new Date().getMonth() + 1);
   const [categorySortOrder, setCategorySortOrder] = useState<CategorySortOrder>("usage");
 
   // 検索パネル内の折りたたみアコーディオンState
@@ -513,6 +515,36 @@ export default function Home() {
       return list;
     }
   }, [categoriesList, notes, categorySortOrder]);
+
+  // メモが存在する日付と件数を集計（カレンダーでメモがある日を濃く表示するため）
+  const noteDatesMap = useMemo(() => {
+    const counts = new Map<string, number>();
+    const targetNotes = includeTrashInSearch ? notes : notes.filter((n) => !n.isTrash);
+    targetNotes.forEach((n) => {
+      const d = new Date(n.createdAt).toLocaleDateString("sv-SE");
+      counts.set(d, (counts.get(d) || 0) + 1);
+    });
+    return counts;
+  }, [notes, includeTrashInSearch]);
+
+  // カレンダーの前月・次月移動
+  const handlePrevCalendarMonth = () => {
+    if (calendarMonth === 1) {
+      setCalendarYear((prev) => prev - 1);
+      setCalendarMonth(12);
+    } else {
+      setCalendarMonth((prev) => prev - 1);
+    }
+  };
+
+  const handleNextCalendarMonth = () => {
+    if (calendarMonth === 12) {
+      setCalendarYear((prev) => prev + 1);
+      setCalendarMonth(1);
+    } else {
+      setCalendarMonth((prev) => prev + 1);
+    }
+  };
 
   // 設定の最新値を保持するRef（非同期・クロージャの古い値を参照しないため）
   const latestSettingsRef = useRef({
@@ -2416,7 +2448,7 @@ export default function Home() {
                     )}
                   </div>
 
-                  {/* ④ 日付・カレンダーから探す（アコーディオン） */}
+                  {/* ④ 日付・カレンダーから探す（オリジナル・ミニカレンダー） */}
                   <div className="border-t border-[#f0eae1] pt-2">
                     <button
                       type="button"
@@ -2429,8 +2461,9 @@ export default function Home() {
                           <span>📅 日付・カレンダーから探す</span>
                         </span>
                         {filterDate && (
-                          <span className="text-[10px] text-[#3d3731] bg-[#e8e0d3] px-2 py-0.5 rounded-md font-mono font-medium">
-                            {filterDate}
+                          <span className="text-[10px] text-[#3d3731] bg-[#e8e0d3] px-2 py-0.5 rounded-md font-mono font-bold flex items-center gap-1">
+                            <span>{filterDate}</span>
+                            <span>({noteDatesMap.get(filterDate) || 0}件)</span>
                           </span>
                         )}
                       </div>
@@ -2440,52 +2473,149 @@ export default function Home() {
                     </button>
 
                     {isSearchDateOpen && (
-                      <div className="mt-2 flex flex-col gap-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <input
-                            type="date"
-                            value={filterDate}
-                            onChange={(e) => setFilterDate(e.target.value)}
-                            className="px-2.5 py-1 text-xs bg-[#faf8f5] rounded-lg border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] font-mono shadow-2xs"
-                          />
+                      <div className="mt-2.5 p-3 bg-[#faf8f5] rounded-xl border border-[#ded5c8] shadow-2xs flex flex-col gap-2.5">
+                        {/* カレンダーの年月ヘッダー（1行で絶対に改行しない横並びレイアウト） */}
+                        <div className="flex items-center justify-between px-1 pb-1.5 border-b border-[#eee7dc]">
+                          <button
+                            type="button"
+                            onClick={handlePrevCalendarMonth}
+                            className="px-2 py-1 rounded-lg text-xs font-bold text-[#6b6257] hover:bg-[#e8e0d3] active:bg-[#ded5c8] transition-colors flex items-center gap-1"
+                            title="前月へ"
+                          >
+                            <span>◀</span>
+                            <span className="text-[11px]">前月</span>
+                          </button>
+                          <div className="font-bold text-xs sm:text-sm text-[#3d3731] font-mono tracking-wider flex items-center gap-1.5">
+                            <span>📅</span>
+                            <span>{calendarYear}年 {calendarMonth}月</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleNextCalendarMonth}
+                            className="px-2 py-1 rounded-lg text-xs font-bold text-[#6b6257] hover:bg-[#e8e0d3] active:bg-[#ded5c8] transition-colors flex items-center gap-1"
+                            title="次月へ"
+                          >
+                            <span className="text-[11px]">次月</span>
+                            <span>▶</span>
+                          </button>
+                        </div>
+
+                        {/* 曜日ヘッダー（日〜土） */}
+                        <div className="grid grid-cols-7 gap-1 text-center font-bold text-[11px]">
+                          <span className="text-[#c25e4e]">日</span>
+                          <span className="text-[#7d7367]">月</span>
+                          <span className="text-[#7d7367]">火</span>
+                          <span className="text-[#7d7367]">水</span>
+                          <span className="text-[#7d7367]">木</span>
+                          <span className="text-[#7d7367]">金</span>
+                          <span className="text-[#4a7bb0]">土</span>
+                        </div>
+
+                        {/* カレンダーグリッド（日付セル） */}
+                        {(() => {
+                          const firstDayOfWeek = new Date(calendarYear, calendarMonth - 1, 1).getDay();
+                          const daysInMonth = new Date(calendarYear, calendarMonth, 0).getDate();
+                          const todayStr = new Date().toLocaleDateString("sv-SE");
+
+                          const cells = [];
+                          // 月初までの空セル
+                          for (let i = 0; i < firstDayOfWeek; i++) {
+                            cells.push(<div key={`empty-${i}`} className="h-8" />);
+                          }
+
+                          // 1日〜末日
+                          for (let day = 1; day <= daysInMonth; day++) {
+                            const dateStr = `${calendarYear}-${String(calendarMonth).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+                            const isSelected = filterDate === dateStr;
+                            const isToday = todayStr === dateStr;
+                            const noteCount = noteDatesMap.get(dateStr) || 0;
+                            const hasNotes = noteCount > 0;
+
+                            cells.push(
+                              <button
+                                key={dateStr}
+                                type="button"
+                                onClick={() => setFilterDate(isSelected ? "" : dateStr)}
+                                className={`relative h-8 flex flex-col items-center justify-center rounded-lg text-xs font-mono transition-all ${
+                                  isSelected
+                                    ? "bg-[#3d3731] text-[#faf8f5] font-bold shadow-xs scale-105"
+                                    : isToday
+                                    ? "border-2 border-[#3d3731] font-bold"
+                                    : ""
+                                } ${
+                                  !isSelected && hasNotes
+                                    ? "text-[#2d2926] font-bold bg-[#eae3d7] hover:bg-[#ded5c8]"
+                                    : !isSelected
+                                    ? "text-[#a09485] hover:bg-[#f2ede4]"
+                                    : ""
+                                }`}
+                                title={`${dateStr}${hasNotes ? ` (${noteCount}件のメモ)` : " (メモなし)"}`}
+                              >
+                                <span className={!isSelected && !hasNotes ? "opacity-60" : ""}>{day}</span>
+                                {hasNotes && !isSelected && (
+                                  <span className="w-1.5 h-1.5 rounded-full bg-[#529961] -mt-0.5 shadow-2xs" />
+                                )}
+                              </button>
+                            );
+                          }
+
+                          return <div className="grid grid-cols-7 gap-1">{cells}</div>;
+                        })()}
+
+                        {/* カレンダー下部：説明とクイックボタン */}
+                        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-[#eee7dc] text-xs">
+                          {/* 凡例（メモがある日の説明） */}
+                          <div className="flex items-center gap-1.5 text-[10px] text-[#7d7367]">
+                            <span className="inline-block w-2 h-2 rounded-full bg-[#529961]" />
+                            <span>濃い色＋緑点＝メモがある日</span>
+                          </div>
+
                           {/* クイック選択ボタン */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const today = new Date().toLocaleDateString("sv-SE");
-                              setFilterDate(filterDate === today ? "" : today);
-                            }}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                              filterDate === new Date().toLocaleDateString("sv-SE")
-                                ? "bg-[#3d3731] text-white shadow-xs font-bold"
-                                : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
-                            }`}
-                          >
-                            今日
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const yesterday = new Date(Date.now() - 86400000).toLocaleDateString("sv-SE");
-                              setFilterDate(filterDate === yesterday ? "" : yesterday);
-                            }}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                              filterDate === new Date(Date.now() - 86400000).toLocaleDateString("sv-SE")
-                                ? "bg-[#3d3731] text-white shadow-xs font-bold"
-                                : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
-                            }`}
-                          >
-                            昨日
-                          </button>
-                          {filterDate && (
+                          <div className="flex items-center gap-1.5">
                             <button
                               type="button"
-                              onClick={() => setFilterDate("")}
-                              className="text-[11px] text-[#8a7f72] hover:text-[#3d3731] underline font-medium"
+                              onClick={() => {
+                                const now = new Date();
+                                setCalendarYear(now.getFullYear());
+                                setCalendarMonth(now.getMonth() + 1);
+                                const today = now.toLocaleDateString("sv-SE");
+                                setFilterDate(filterDate === today ? "" : today);
+                              }}
+                              className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition-all ${
+                                filterDate === new Date().toLocaleDateString("sv-SE")
+                                  ? "bg-[#3d3731] text-white shadow-xs font-bold"
+                                  : "bg-[#f0eade] text-[#5c5348] hover:bg-[#e5ded2]"
+                              }`}
                             >
-                              クリア
+                              今日
                             </button>
-                          )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const yest = new Date(Date.now() - 86400000);
+                                setCalendarYear(yest.getFullYear());
+                                setCalendarMonth(yest.getMonth() + 1);
+                                const yesterday = yest.toLocaleDateString("sv-SE");
+                                setFilterDate(filterDate === yesterday ? "" : yesterday);
+                              }}
+                              className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition-all ${
+                                filterDate === new Date(Date.now() - 86400000).toLocaleDateString("sv-SE")
+                                  ? "bg-[#3d3731] text-white shadow-xs font-bold"
+                                  : "bg-[#f0eade] text-[#5c5348] hover:bg-[#e5ded2]"
+                              }`}
+                            >
+                              昨日
+                            </button>
+                            {filterDate && (
+                              <button
+                                type="button"
+                                onClick={() => setFilterDate("")}
+                                className="text-[11px] text-[#8a7f72] hover:text-[#3d3731] underline font-medium ml-1"
+                              >
+                                解除
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     )}
