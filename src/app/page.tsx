@@ -11,6 +11,13 @@ interface NoteReply {
   createdAt: string;
 }
 
+// メモの訂正履歴のデータ型定義（思考の不可逆性を保つため過去の文章を記録）
+interface NoteEditHistory {
+  id: string;
+  previousContent: string;
+  editedAt: string;
+}
+
 // メモのデータ型定義
 interface Note {
   id: string;
@@ -21,6 +28,7 @@ interface Note {
   categories?: string[]; // カテゴリタグ一覧
   isFavorite?: boolean; // お気に入りフラグ
   replies?: NoteReply[]; // 追記リスト（大元のメモにぶら下がる1階層の時系列ログ）
+  editHistory?: NoteEditHistory[]; // 訂正履歴リスト（過去の文章をいつでも振り返れる）
 }
 
 // Supabase DB用レコード定義
@@ -34,6 +42,7 @@ interface DbNoteRow {
   is_favorite: boolean;
   categories: string[] | null;
   replies: NoteReply[] | null;
+  edit_history?: NoteEditHistory[] | null;
 }
 
 // DB行からNoteオブジェクトへのマッピング
@@ -46,20 +55,27 @@ const mapDbRowToNote = (row: DbNoteRow): Note => ({
   isFavorite: Boolean(row.is_favorite),
   categories: row.categories && row.categories.length > 0 ? row.categories : undefined,
   replies: Array.isArray(row.replies) && row.replies.length > 0 ? row.replies : undefined,
+  editHistory: Array.isArray(row.edit_history) && row.edit_history.length > 0 ? row.edit_history : undefined,
 });
 
 // NoteオブジェクトからDB行へのマッピング
-const mapNoteToDbRow = (note: Note, userId: string): DbNoteRow => ({
-  id: note.id,
-  user_id: userId,
-  title: note.title || null,
-  content: note.content,
-  created_at: note.createdAt,
-  is_trash: Boolean(note.isTrash),
-  is_favorite: Boolean(note.isFavorite),
-  categories: note.categories || [],
-  replies: note.replies || [],
-});
+const mapNoteToDbRow = (note: Note, userId: string): DbNoteRow => {
+  const row: DbNoteRow = {
+    id: note.id,
+    user_id: userId,
+    title: note.title || null,
+    content: note.content,
+    created_at: note.createdAt,
+    is_trash: Boolean(note.isTrash),
+    is_favorite: Boolean(note.isFavorite),
+    categories: note.categories || [],
+    replies: note.replies || [],
+  };
+  if (note.editHistory && note.editHistory.length > 0) {
+    row.edit_history = note.editHistory;
+  }
+  return row;
+};
 
 type TabType = "home" | "list" | "categories" | "trash" | "settings";
 type FontSize = "normal" | "large";
@@ -327,6 +343,7 @@ export default function Home() {
   const [openHelpSection, setOpenHelpSection] = useState<string | null>(null);
   const [activeMenuNoteId, setActiveMenuNoteId] = useState<string | null>(null);
   const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState("🌱 保存しました");
   const [enableToast, setEnableToast] = useState(true);
   const [fontSize, setFontSize] = useState<FontSize>("normal");
   const [buttonSize, setButtonSize] = useState<ButtonSize>("normal");
@@ -348,6 +365,11 @@ export default function Home() {
   const [showDiscardConfirmModal, setShowDiscardConfirmModal] = useState(false);
   const [confirmDiscardOnEdit, setConfirmDiscardOnEdit] = useState(true);
 
+  // メモの本文訂正モーダル関連のState（思考の不可逆性を保ちつつ本文を訂正）
+  const [editingContentNote, setEditingContentNote] = useState<Note | null>(null);
+  const [editContentInput, setEditContentInput] = useState("");
+  const [expandedHistoryNoteIds, setExpandedHistoryNoteIds] = useState<string[]>([]);
+
   // 検索・絞り込みパネルとお気に入りのState
   const [isSearchPanelOpen, setIsSearchPanelOpen] = useState(false);
   const [filterOnlyFavorite, setFilterOnlyFavorite] = useState(false);
@@ -355,11 +377,13 @@ export default function Home() {
   const [includeTrashInSearch, setIncludeTrashInSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterTimeSlots, setFilterTimeSlots] = useState<TimeSlotKey[]>([]);
+  const [filterDate, setFilterDate] = useState<string>(""); // カレンダー日付検索 (YYYY-MM-DD)
   const [categorySortOrder, setCategorySortOrder] = useState<CategorySortOrder>("usage");
 
   // 検索パネル内の折りたたみアコーディオンState
   const [isSearchCategoryOpen, setIsSearchCategoryOpen] = useState(true);
   const [isSearchTimeSlotOpen, setIsSearchTimeSlotOpen] = useState(false);
+  const [isSearchDateOpen, setIsSearchDateOpen] = useState(false);
 
   // ゴミ箱検索パネル内の折りたたみアコーディオンState
   const [isTrashSearchCategoryOpen, setIsTrashSearchCategoryOpen] = useState(true);
@@ -1257,6 +1281,7 @@ export default function Home() {
 
     // 保存通知を表示（設定がONの場合）
     if (enableToast) {
+      setToastMessage("🌱 保存しました");
       setShowToast(true);
       setTimeout(() => {
         setShowToast(false);
@@ -1498,6 +1523,7 @@ export default function Home() {
       prev.includes(parentNoteId) ? prev : [...prev, parentNoteId]
     );
     if (enableToast) {
+      setToastMessage("💬 追記を保存しました");
       setShowToast(true);
       setTimeout(() => setShowToast(false), 2000);
     }
@@ -1512,6 +1538,108 @@ export default function Home() {
     );
   };
 
+  // メモのワンタッチコピー（タイトル＋本文をクリップボードにコピー）
+  const handleCopyNote = async (note: Note) => {
+    try {
+      const textToCopy = note.title ? `【${note.title}】\n${note.content}` : note.content;
+      if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(textToCopy);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = textToCopy;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      }
+      setToastMessage("📋 クリップボードにコピーしました");
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 2000);
+    } catch (err) {
+      console.error("コピーに失敗しました", err);
+      setToastMessage("コピーに失敗しました");
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 2000);
+    }
+  };
+
+  // 訂正履歴アコーディオンの展開・折りたたみ切り替え
+  const handleToggleEditHistory = (noteId: string) => {
+    setExpandedHistoryNoteIds((prev) =>
+      prev.includes(noteId) ? prev.filter((id) => id !== noteId) : [...prev, noteId]
+    );
+  };
+
+  // 本文訂正モーダルを開く
+  const handleOpenContentEditModal = (note: Note) => {
+    setEditingContentNote(note);
+    setEditContentInput(note.content);
+    setActiveMenuNoteId(null);
+  };
+
+  // 本文訂正を保存（思考の不可逆性を保つため過去の文章を履歴として保持）
+  const handleSaveContentEdit = async () => {
+    if (!editingContentNote) return;
+    const trimmed = editContentInput.trim();
+    if (!trimmed) return;
+
+    // 変更がない場合はそのまま閉じる
+    if (trimmed === editingContentNote.content.trim()) {
+      setEditingContentNote(null);
+      return;
+    }
+
+    const historyItem: NoteEditHistory = {
+      id: "eh_" + Date.now().toString(36) + "_" + Math.random().toString(36).substring(2, 7),
+      previousContent: editingContentNote.content,
+      editedAt: new Date().toISOString(),
+    };
+
+    const updatedHistory = [historyItem, ...(editingContentNote.editHistory || [])];
+    const updatedNote: Note = {
+      ...editingContentNote,
+      content: trimmed,
+      editHistory: updatedHistory,
+    };
+
+    const newNotes = notes.map((n) => (n.id === updatedNote.id ? updatedNote : n));
+    setNotes(newNotes);
+    localStorage.setItem("seednote_items", JSON.stringify(newNotes));
+    setEditingContentNote(null);
+
+    setToastMessage("✏️ 本文を訂正しました（過去の文章も保存されています）");
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 2500);
+
+    // クラウド（Supabase）に反映
+    if (currentUser) {
+      try {
+        const { error } = await supabase
+          .from("notes")
+          .update({
+            content: updatedNote.content,
+            edit_history: updatedHistory,
+          })
+          .eq("id", updatedNote.id);
+
+        if (error) {
+          // edit_history カラムが未追加のDB環境でも本文の更新は確実に成功させるフォールバック
+          console.warn("Supabase edit_history 更新フォールバック:", error.message);
+          await supabase
+            .from("notes")
+            .update({
+              content: updatedNote.content,
+            })
+            .eq("id", updatedNote.id);
+        }
+      } catch (err) {
+        console.error("クラウド同期エラー:", err);
+      }
+    }
+  };
+
   const hasContent = content.trim().length > 0;
   const activeNotes = notes.filter((n) => !n.isTrash);
   const trashNotes = notes.filter((n) => n.isTrash);
@@ -1519,7 +1647,7 @@ export default function Home() {
   // 通常一覧の対象メモ（ゴミ箱も含めるフラグがONなら全体、OFFなら通常メモのみ）
   const baseNotesForList = includeTrashInSearch ? notes : activeNotes;
 
-  // 検索・絞り込み適用後のメモ一覧（複数AND検索＆キーワード検索対応）
+  // 検索・絞り込み適用後のメモ一覧（複数AND検索＆キーワード検索＆日付検索対応）
   const displayedNotes = baseNotesForList.filter((note) => {
     if (filterOnlyFavorite && !note.isFavorite) return false;
     if (filterCategories.length > 0) {
@@ -1544,6 +1672,11 @@ export default function Home() {
         isNoteInTimeSlot(note.createdAt, slotKey, timeSlots)
       );
       if (!matchTime) return false;
+    }
+    // 日付フィルター（指定された日付 YYYY-MM-DD と作成日の年月日一致）
+    if (filterDate) {
+      const noteDate = new Date(note.createdAt).toLocaleDateString("sv-SE");
+      if (noteDate !== filterDate) return false;
     }
     return true;
   });
@@ -1580,14 +1713,14 @@ export default function Home() {
         />
       )}
 
-      {/* 保存通知トースト（画面下部の中央に表示し、ヘッダーのボタンと重ならないようにする） */}
+      {/* 通知トースト（画面下部の中央に表示し、ヘッダーのボタンと重ならないようにする） */}
       <div
         className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 pointer-events-none ${
           showToast ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3"
         }`}
       >
         <div className="bg-[#3d3731] text-[#faf8f5] px-4 py-2 rounded-full text-xs font-medium shadow-lg flex items-center gap-1.5">
-          <span>🌱</span> 保存しました
+          {toastMessage}
         </div>
       </div>
 
@@ -2021,19 +2154,19 @@ export default function Home() {
                     type="button"
                     onClick={() => setIsSearchPanelOpen(true)}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                      filterOnlyFavorite || filterCategories.length > 0 || includeTrashInSearch || searchQuery.trim().length > 0 || filterTimeSlots.length > 0
+                      filterOnlyFavorite || filterCategories.length > 0 || includeTrashInSearch || searchQuery.trim().length > 0 || filterTimeSlots.length > 0 || Boolean(filterDate)
                         ? "bg-[#d49e35] text-white shadow-xs hover:bg-[#c28e2d]"
                         : "bg-white border border-[#ded5c8] text-[#5c5348] hover:bg-[#faf8f5] shadow-2xs"
                     }`}
                   >
                     <span>🔍</span>
-                    {filterOnlyFavorite || filterCategories.length > 0 || includeTrashInSearch || searchQuery.trim().length > 0 || filterTimeSlots.length > 0 ? (
+                    {filterOnlyFavorite || filterCategories.length > 0 || includeTrashInSearch || searchQuery.trim().length > 0 || filterTimeSlots.length > 0 || Boolean(filterDate) ? (
                       <span>絞り込み中 ({displayedNotes.length}件)</span>
                     ) : (
                       <span>検索機能</span>
                     )}
                   </button>
-                  {(filterOnlyFavorite || filterCategories.length > 0 || includeTrashInSearch || searchQuery.trim().length > 0 || filterTimeSlots.length > 0) && (
+                  {(filterOnlyFavorite || filterCategories.length > 0 || includeTrashInSearch || searchQuery.trim().length > 0 || filterTimeSlots.length > 0 || Boolean(filterDate)) && (
                     <button
                       type="button"
                       onClick={() => {
@@ -2042,6 +2175,7 @@ export default function Home() {
                         setIncludeTrashInSearch(false);
                         setSearchQuery("");
                         setFilterTimeSlots([]);
+                        setFilterDate("");
                       }}
                       className="text-[11px] text-[#8a7f72] hover:text-[#3d3731] underline font-medium"
                     >
@@ -2282,10 +2416,83 @@ export default function Home() {
                     )}
                   </div>
 
+                  {/* ④ 日付・カレンダーから探す（アコーディオン） */}
+                  <div className="border-t border-[#f0eae1] pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsSearchDateOpen(!isSearchDateOpen)}
+                      className="flex items-center justify-between w-full text-left py-0.5 group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[11px] font-bold text-[#8a7f72] group-hover:text-[#3d3731] transition-colors flex items-center gap-1">
+                          <span className="text-[9px] font-mono">{isSearchDateOpen ? "▼" : "▶"}</span>
+                          <span>📅 日付・カレンダーから探す</span>
+                        </span>
+                        {filterDate && (
+                          <span className="text-[10px] text-[#3d3731] bg-[#e8e0d3] px-2 py-0.5 rounded-md font-mono font-medium">
+                            {filterDate}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-[#9c9184] group-hover:text-[#5c5348] font-mono">
+                        {isSearchDateOpen ? "たたむ" : "広げる"}
+                      </span>
+                    </button>
 
+                    {isSearchDateOpen && (
+                      <div className="mt-2 flex flex-col gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <input
+                            type="date"
+                            value={filterDate}
+                            onChange={(e) => setFilterDate(e.target.value)}
+                            className="px-2.5 py-1 text-xs bg-[#faf8f5] rounded-lg border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] font-mono shadow-2xs"
+                          />
+                          {/* クイック選択ボタン */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const today = new Date().toLocaleDateString("sv-SE");
+                              setFilterDate(filterDate === today ? "" : today);
+                            }}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                              filterDate === new Date().toLocaleDateString("sv-SE")
+                                ? "bg-[#3d3731] text-white shadow-xs font-bold"
+                                : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
+                            }`}
+                          >
+                            今日
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const yesterday = new Date(Date.now() - 86400000).toLocaleDateString("sv-SE");
+                              setFilterDate(filterDate === yesterday ? "" : yesterday);
+                            }}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                              filterDate === new Date(Date.now() - 86400000).toLocaleDateString("sv-SE")
+                                ? "bg-[#3d3731] text-white shadow-xs font-bold"
+                                : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
+                            }`}
+                          >
+                            昨日
+                          </button>
+                          {filterDate && (
+                            <button
+                              type="button"
+                              onClick={() => setFilterDate("")}
+                              className="text-[11px] text-[#8a7f72] hover:text-[#3d3731] underline font-medium"
+                            >
+                              クリア
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
 
                   {/* ヒット件数 */}
-                  {(filterOnlyFavorite || filterCategories.length > 0 || includeTrashInSearch || searchQuery.trim().length > 0 || filterTimeSlots.length > 0) && (
+                  {(filterOnlyFavorite || filterCategories.length > 0 || includeTrashInSearch || searchQuery.trim().length > 0 || filterTimeSlots.length > 0 || Boolean(filterDate)) && (
                     <div className="text-[11px] text-[#8a7f72] pt-1 border-t border-[#f4f0e8] flex items-center justify-between">
                       <span>該当するメモ: {displayedNotes.length}件</span>
                       <button
@@ -2296,6 +2503,7 @@ export default function Home() {
                           setIncludeTrashInSearch(false);
                           setSearchQuery("");
                           setFilterTimeSlots([]);
+                          setFilterDate("");
                         }}
                         className="text-[11px] text-[#8a7f72] hover:text-[#3d3731] underline font-medium"
                       >
@@ -2327,6 +2535,7 @@ export default function Home() {
                       setIncludeTrashInSearch(false);
                       setSearchQuery("");
                       setFilterTimeSlots([]);
+                      setFilterDate("");
                     }}
                     className="mt-2 text-xs text-[#3d3731] font-bold underline hover:text-black"
                   >
@@ -2362,8 +2571,19 @@ export default function Home() {
                           )}
                         </div>
 
-                        {/* 右上：お気に入りボタン ＆ 控えめな「…」メニューまたは「元に戻す」ボタン */}
+                        {/* 右上：ワンタッチコピー、お気に入りボタン ＆ 控えめな「…」メニューまたは「元に戻す」ボタン */}
                         <div className="relative shrink-0 flex items-center gap-1.5">
+                          {/* ワンタッチコピーボタン */}
+                          <button
+                            type="button"
+                            onClick={() => handleCopyNote(note)}
+                            className="w-7 h-7 flex items-center justify-center rounded-lg text-xs leading-none transition-colors hover:bg-[#f4f0e8] text-[#8a7f72] hover:text-[#3d3731]"
+                            aria-label="メモをクリップボードにコピー"
+                            title="メモをコピー"
+                          >
+                            <span>📋</span>
+                          </button>
+
                           {/* お気に入りボタン */}
                           <button
                             type="button"
@@ -2422,6 +2642,31 @@ export default function Home() {
                           {/* タップした時だけ開くポップアップメニュー */}
                           {isMenuThisNoteOpen && (
                             <div className="absolute right-0 top-7 w-48 bg-white rounded-xl shadow-lg border border-[#e5ded2] p-1 z-30 transition-all flex flex-col gap-0.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  handleCopyNote(note);
+                                  setActiveMenuNoteId(null);
+                                }}
+                                className={`w-full text-left ${
+                                  buttonSize === "large"
+                                    ? "px-3 py-2 text-sm"
+                                    : "px-2.5 py-1.5 text-xs"
+                                } text-[#3d3731] hover:bg-[#f4f0e8] rounded-lg flex items-center gap-1.5 font-medium transition-colors`}
+                              >
+                                <span>📋</span> 本文をコピー
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenContentEditModal(note)}
+                                className={`w-full text-left ${
+                                  buttonSize === "large"
+                                    ? "px-3 py-2 text-sm"
+                                    : "px-2.5 py-1.5 text-xs"
+                                } text-[#3d3731] hover:bg-[#f4f0e8] rounded-lg flex items-center gap-1.5 font-medium transition-colors`}
+                              >
+                                <span>✏️</span> 本文を訂正する
+                              </button>
                               <button
                                 type="button"
                                 onClick={() => handleOpenEditModal(note)}
@@ -2489,6 +2734,47 @@ export default function Home() {
                       >
                         {note.content}
                       </p>
+
+                      {/* 訂正履歴表示（過去の文章をいつでも確認・振り返り可能） */}
+                      {note.editHistory && note.editHistory.length > 0 && (
+                        <div className="mt-2 pt-1.5 border-t border-dashed border-[#e5dfd5]">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleEditHistory(note.id)}
+                            className="text-[11px] text-[#8a7f72] hover:text-[#3d3731] flex items-center gap-1 font-medium transition-colors cursor-pointer group"
+                          >
+                            <span className="font-mono text-[9px] text-[#9c9184] group-hover:text-[#3d3731]">
+                              {expandedHistoryNoteIds.includes(note.id) ? "▼" : "▶"}
+                            </span>
+                            <span className="bg-[#f0eae1] text-[#6b6257] px-1.5 py-0.5 rounded text-[10px] font-bold">
+                              ✏️ 訂正済み ({note.editHistory.length}回)
+                            </span>
+                            <span className="text-[10px] text-[#9c9184] group-hover:text-[#5c5348]">
+                              {expandedHistoryNoteIds.includes(note.id) ? "過去の文章を隠す" : "過去の文章を見る"}
+                            </span>
+                          </button>
+
+                          {expandedHistoryNoteIds.includes(note.id) && (
+                            <div className="mt-2 p-2.5 bg-[#f5f1eb] rounded-xl border border-[#ded5c8] text-xs flex flex-col gap-2">
+                              <div className="text-[10px] font-bold text-[#8a7f72] pb-1 border-b border-[#e5dfd5] flex items-center justify-between">
+                                <span>📜 訂正前の思考ログ（不可逆アーカイブ）</span>
+                                <span className="text-[9px] text-[#a09485]">※過去の思考も消えずに残ります</span>
+                              </div>
+                              {note.editHistory.map((history, idx) => (
+                                <div key={history.id} className="text-[#5c5348] text-[11px] bg-white/60 p-2 rounded-lg border border-[#e8e0d3]">
+                                  <div className="flex items-center justify-between text-[10px] text-[#8a7f72] mb-1 font-mono">
+                                    <span className="font-bold">第{note.editHistory!.length - idx}版</span>
+                                    <time>{formatDate(history.editedAt)}</time>
+                                  </div>
+                                  <p className="line-through text-[#786f66] opacity-80 whitespace-pre-wrap leading-relaxed">
+                                    {history.previousContent}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {/* 追記スレッド表示（デフォルトは折りたたみ） */}
                       {note.replies && note.replies.length > 0 && (
@@ -3934,6 +4220,82 @@ export default function Home() {
                 className="px-5 py-2 rounded-xl text-xs font-medium bg-[#3d3731] text-[#faf8f5] hover:bg-[#292420] transition-all shadow-xs"
               >
                 保存する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ⑤-2 メモの本文訂正モーダル（思考の不可逆性を保つため過去の文章を記録） */}
+      {editingContentNote && (
+        <div
+          className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4"
+          onClick={() => setEditingContentNote(null)}
+        >
+          <div
+            className="bg-[#f4f0e8] rounded-2xl p-6 sm:p-7 max-w-md w-full border border-[#ded6c9] shadow-2xl transition-all max-h-[90vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* モーダルのヘッダー */}
+            <div className="shrink-0 pb-3 mb-4 border-b border-[#ded6c9]">
+              <h2 className="text-base font-bold text-[#3d3731] flex items-center gap-1.5">
+                <span>✏️</span> 本文の訂正
+              </h2>
+              <span className="text-[11px] text-[#8a7f72]">
+                誤字や表現を訂正できます。過去の文章は履歴として安全に保存されます。
+              </span>
+            </div>
+
+            {/* スクロール可能な編集エリア */}
+            <div className="flex-1 min-h-0 overflow-y-auto pr-1 flex flex-col gap-4">
+              {/* 訂正前の文章（参照用） */}
+              <div>
+                <label className="block text-xs font-bold text-[#8a7f72] mb-1">
+                  訂正前の文章（第{(editingContentNote.editHistory?.length || 0) + 1}版として保存されます）
+                </label>
+                <div className="p-3 rounded-xl bg-white/60 border border-[#e5ded2] text-xs text-[#6b6257] whitespace-pre-wrap leading-relaxed max-h-28 overflow-y-auto select-text font-mono">
+                  {editingContentNote.content}
+                </div>
+              </div>
+
+              {/* 新しい本文入力欄 */}
+              <div>
+                <label className="block text-xs font-bold text-[#3d3731] mb-1.5">
+                  訂正後の新しい本文
+                </label>
+                <textarea
+                  rows={6}
+                  value={editContentInput}
+                  onChange={(e) => setEditContentInput(e.target.value)}
+                  placeholder="新しい本文を入力してください..."
+                  autoFocus
+                  className={`w-full ${
+                    fontSize === "large" ? "p-3.5 text-base" : "p-3 text-sm"
+                  } bg-[#faf8f5] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] leading-relaxed resize-none`}
+                />
+              </div>
+            </div>
+
+            {/* モーダルのフッターボタン */}
+            <div className="shrink-0 flex justify-end gap-2.5 pt-4 mt-3 border-t border-[#ded6c9]">
+              <button
+                type="button"
+                onClick={() => setEditingContentNote(null)}
+                className="px-4 py-2 rounded-xl text-xs font-medium text-[#6b6257] hover:bg-[#e8e0d3] transition-colors"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveContentEdit}
+                disabled={!editContentInput.trim()}
+                className={`px-5 py-2 rounded-xl text-xs font-medium transition-all shadow-xs ${
+                  editContentInput.trim()
+                    ? "bg-[#3d3731] text-[#faf8f5] hover:bg-[#292420]"
+                    : "bg-[#d0c6b8] text-[#8a7f72] cursor-not-allowed"
+                }`}
+              >
+                訂正を保存
               </button>
             </div>
           </div>
