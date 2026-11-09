@@ -169,7 +169,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "あずきパステル",
           dotColor: "#f5d0cd",
-          bgApp: "#f5e4e2",
+          bgApp: "#e8e2d5",
           bgCard: "#faf1f0",
           bgCardHover: "#f2e4e2",
           bgSub: "#ebd8d6",
@@ -184,7 +184,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "サクラパステル",
           dotColor: "#f7d2e2",
-          bgApp: "#f7e5eb",
+          bgApp: "#e8e2d5",
           bgCard: "#fcf2f6",
           bgCardHover: "#f5e4ec",
           bgSub: "#edd7e1",
@@ -199,7 +199,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "アプリコットパステル",
           dotColor: "#f7d9c6",
-          bgApp: "#f7e8dc",
+          bgApp: "#e8e2d5",
           bgCard: "#fcf5ee",
           bgCardHover: "#f5e7db",
           bgSub: "#ecdcce",
@@ -214,7 +214,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "ミモザパステル",
           dotColor: "#f7e8be",
-          bgApp: "#f7edd6",
+          bgApp: "#e8e2d5",
           bgCard: "#fbf7ec",
           bgCardHover: "#f5ebd2",
           bgSub: "#ebe0c3",
@@ -229,7 +229,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "若草パステル",
           dotColor: "#e8efce",
-          bgApp: "#eef2dc",
+          bgApp: "#e8e2d5",
           bgCard: "#f6f8ec",
           bgCardHover: "#edf2d7",
           bgSub: "#e3eac7",
@@ -244,7 +244,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "抹茶パステル",
           dotColor: "#d5ebd8",
-          bgApp: "#e2eee4",
+          bgApp: "#e8e2d5",
           bgCard: "#f0f7f1",
           bgCardHover: "#e0ede2",
           bgSub: "#d4e6d7",
@@ -259,7 +259,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "ミントパステル",
           dotColor: "#d0ebf0",
-          bgApp: "#dff0f2",
+          bgApp: "#e8e2d5",
           bgCard: "#eef7f8",
           bgCardHover: "#dceef1",
           bgSub: "#cfe7eb",
@@ -274,7 +274,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "空色パステル",
           dotColor: "#d2e4f7",
-          bgApp: "#dfeaf7",
+          bgApp: "#e8e2d5",
           bgCard: "#eef4fc",
           bgCardHover: "#dce8f7",
           bgSub: "#cfe0f2",
@@ -289,7 +289,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "ラベンダーパステル",
           dotColor: "#e5d7f7",
-          bgApp: "#ede4f7",
+          bgApp: "#e8e2d5",
           bgCard: "#f5f0fb",
           bgCardHover: "#eae0f7",
           bgSub: "#ded1f0",
@@ -304,7 +304,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "ラテパステル",
           dotColor: "#e8dacb",
-          bgApp: "#eee3d8",
+          bgApp: "#e8e2d5",
           bgCard: "#f7f1eb",
           bgCardHover: "#ebe0d4",
           bgSub: "#dfd2c4",
@@ -323,7 +323,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "ダークワイン",
           dotColor: "#4a201f",
-          bgApp: "#241818",
+          bgApp: "#e8e2d5",
           bgCard: "#2f1f1f",
           bgCardHover: "#3b2626",
           bgSub: "#402828",
@@ -338,7 +338,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "ダークプラム",
           dotColor: "#4a1e34",
-          bgApp: "#261820",
+          bgApp: "#e8e2d5",
           bgCard: "#311e29",
           bgCardHover: "#3d2533",
           bgSub: "#422837",
@@ -353,7 +353,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "ダークアンバー",
           dotColor: "#4a2615",
-          bgApp: "#261b14",
+          bgApp: "#e8e2d5",
           bgCard: "#31231a",
           bgCardHover: "#3d2a1f",
           bgSub: "#422e22",
@@ -368,7 +368,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "ダークゴールド",
           dotColor: "#403413",
-          bgApp: "#241f12",
+          bgApp: "#e8e2d5",
           bgCard: "#2e2717",
           bgCardHover: "#3b311d",
           bgSub: "#3d341e",
@@ -383,7 +383,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "ダークモス",
           dotColor: "#2d3b13",
-          bgApp: "#1c2411",
+          bgApp: "#e8e2d5",
           bgCard: "#242e16",
           bgCardHover: "#2e3b1c",
           bgSub: "#313d1d",
@@ -398,7 +398,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "ディープフォレスト",
           dotColor: "#163b20",
-          bgApp: "#142419",
+          bgApp: "#e8e2d5",
           bgCard: "#192e20",
           bgCardHover: "#203b29",
           bgSub: "#223d2b",
@@ -413,7 +413,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "ダークティール",
           dotColor: "#14393d",
-          bgApp: "#122426",
+          bgApp: "#e8e2d5",
           bgCard: "#172e30",
           bgCardHover: "#1d3a3d",
           bgSub: "#203f42",
@@ -428,7 +428,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "ディープミッドナイト",
           dotColor: "#162c47",
-          bgApp: "#141f2b",
+          bgApp: "#e8e2d5",
           bgCard: "#192736",
           bgCardHover: "#203245",
           bgSub: "#22354a",
@@ -443,7 +443,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "ダークアメジスト",
           dotColor: "#2e1947",
-          bgApp: "#1f142b",
+          bgApp: "#e8e2d5",
           bgCard: "#271936",
           bgCardHover: "#322045",
           bgSub: "#36224a",
@@ -458,7 +458,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "ダークエスプレッソ",
           dotColor: "#382319",
-          bgApp: "#211813",
+          bgApp: "#e8e2d5",
           bgCard: "#2b1f19",
           bgCardHover: "#36271f",
           bgSub: "#3a2a22",
@@ -758,6 +758,7 @@ export default function Home() {
   // テーマ関連のState（標準クリーム、黒、10色×パステル／ダーク）
   const [selectedHue, setSelectedHue] = useState<ColorHue>("cream");
   const [themeBrightness, setThemeBrightness] = useState<ThemeBrightness>("pastel");
+  const [isThemeAccordionOpen, setIsThemeAccordionOpen] = useState(false);
 
   // 利用規約・プライバシーモーダルのState
   const [isTermsOpen, setIsTermsOpen] = useState(false);
@@ -2347,7 +2348,10 @@ export default function Home() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 min-w-0">
                     <span className="w-2 h-2 rounded-full bg-[#529961] shrink-0" />
-                    <span className="text-xs font-bold text-[#3d3731] truncate">
+                    <span
+                      className="text-xs font-bold truncate"
+                      style={{ color: activeTheme.textPrimary }}
+                    >
                       {currentUsername || "ログイン中"}
                     </span>
                   </div>
@@ -2355,14 +2359,19 @@ export default function Home() {
                     同期中
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5 pt-1 border-t border-[#ede7dd]">
+                <div className="flex items-center gap-1.5 pt-1 border-t" style={{ borderColor: activeTheme.border }}>
                   <button
                     type="button"
                     onClick={() => {
                       if (currentUser) fetchCloudNotes(currentUser.id);
                     }}
                     disabled={isSyncing}
-                    className="flex-1 py-1 px-2 rounded-lg bg-[#f4f0e8] hover:bg-[#eae3d7] text-[11px] font-medium text-[#5c5348] transition-colors flex items-center justify-center gap-1"
+                    className="flex-1 py-1 px-2 rounded-lg border text-[11px] font-medium transition-colors flex items-center justify-center gap-1 hover:opacity-85"
+                    style={{
+                      backgroundColor: activeTheme.bgCard,
+                      borderColor: activeTheme.border,
+                      color: activeTheme.textPrimary,
+                    }}
                   >
                     <span>🔄</span> {isSyncing ? "同期中..." : "今すぐ同期"}
                   </button>
@@ -2385,14 +2394,14 @@ export default function Home() {
                 className="w-full text-left group"
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-[#3d3731] flex items-center gap-1.5">
+                  <span className="text-xs font-bold flex items-center gap-1.5" style={{ color: activeTheme.textPrimary }}>
                     <span>🔐</span> クラウド同期
                   </span>
-                  <span className="text-[10px] text-[#8a7f72] group-hover:text-[#3d3731]">
+                  <span className="text-[10px]" style={{ color: activeTheme.textSecondary }}>
                     ログイン ›
                   </span>
                 </div>
-                <p className="text-[11px] text-[#8a7f72] mt-0.5 leading-snug">
+                <p className="text-[11px] mt-0.5 leading-snug" style={{ color: activeTheme.textSecondary }}>
                   PCとスマホでメモを同期（※IDとパスワードのみ）
                 </p>
               </button>
@@ -4269,135 +4278,178 @@ export default function Home() {
             </div>
 
             <div className="flex flex-col gap-4 text-sm">
-              {/* テーマカラー設定（全22パターン：標準クリーム・黒・10色×パステル／ダーク） */}
+              {/* テーマカラー設定（アコーディオン形式：タップで広げる方式） */}
               <div
-                style={{ backgroundColor: activeTheme.bgCard, borderColor: activeTheme.border }}
-                className="p-4 rounded-xl border flex flex-col gap-3 shadow-xs"
+                style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border }}
+                className="rounded-xl border shadow-xs overflow-hidden transition-colors"
               >
-                <div className="flex items-center justify-between pb-2 border-b" style={{ borderColor: activeTheme.border }}>
+                <button
+                  type="button"
+                  onClick={() => setIsThemeAccordionOpen(!isThemeAccordionOpen)}
+                  className="w-full p-4 flex items-center justify-between text-left hover:opacity-90 transition-opacity cursor-pointer"
+                >
                   <div>
                     <span className="font-bold block" style={{ color: activeTheme.textPrimary }}>
                       🎨 テーマカラー設定
                     </span>
                     <span className="text-xs" style={{ color: activeTheme.textSecondary }}>
-                      目に優しい配色（パステル調・ダーク調・全22色）
+                      {isThemeAccordionOpen
+                        ? "目に優しい全22色から選択（タップして折りたたむ）"
+                        : "目に優しい全22色（タップして設定を展開）"}
                     </span>
                   </div>
-                  <span
-                    className="text-xs font-mono font-bold px-2 py-0.5 rounded-md border"
-                    style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border, color: activeTheme.textPrimary }}
-                  >
-                    {activeTheme.name}
-                  </span>
-                </div>
-
-                {/* 明るさトーン選択（パステル調／ダーク調） */}
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold" style={{ color: activeTheme.textSecondary }}>
-                    トーン:
-                  </span>
-                  <div className="flex gap-1 p-1 rounded-lg border" style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border }}>
-                    <button
-                      type="button"
-                      onClick={() => handleChangeTheme(selectedHue === "black" ? "cream" : selectedHue, "pastel")}
-                      className={`px-3 py-1 text-xs rounded-md font-bold transition-all ${
-                        themeBrightness === "pastel" && selectedHue !== "black"
-                          ? "bg-[#3d3731] text-white shadow-xs"
-                          : "text-[#6b6257] hover:text-[#2d2926]"
-                      }`}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span
+                      className="text-xs font-mono font-bold px-2.5 py-1 rounded-md border shadow-2xs"
+                      style={{
+                        backgroundColor: activeTheme.bgCard,
+                        borderColor: activeTheme.border,
+                        color: activeTheme.textPrimary,
+                      }}
                     >
-                      ☀️ パステル調（淡色）
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleChangeTheme(selectedHue === "cream" ? "black" : selectedHue, "dark")}
-                      className={`px-3 py-1 text-xs rounded-md font-bold transition-all ${
-                        themeBrightness === "dark" || selectedHue === "black"
-                          ? "bg-[#3d3731] text-white shadow-xs"
-                          : "text-[#6b6257] hover:text-[#2d2926]"
+                      {activeTheme.name}
+                    </span>
+                    <span
+                      className={`text-xs transition-transform duration-200 ${
+                        isThemeAccordionOpen ? "rotate-90" : ""
                       }`}
+                      style={{ color: activeTheme.textSecondary }}
                     >
-                      🌙 ダーク調（深色）
-                    </button>
+                      ▶
+                    </span>
                   </div>
-                </div>
+                </button>
 
-                {/* 基本カラー（標準クリーム ＆ 黒） */}
-                <div className="flex items-center gap-2 pt-1">
-                  <span className="text-xs font-bold shrink-0" style={{ color: activeTheme.textSecondary }}>
-                    基本色:
-                  </span>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleChangeTheme("cream")}
-                      className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium border transition-all ${
-                        selectedHue === "cream"
-                          ? "ring-2 ring-[#3d3731] font-bold shadow-xs scale-102"
-                          : "hover:opacity-85"
-                      }`}
-                      style={{ backgroundColor: "#e8e2d5", color: "#2d2926", borderColor: "#c7bcac" }}
-                    >
-                      <span className="w-3.5 h-3.5 rounded-full border border-black/20" style={{ backgroundColor: "#f2efe9" }} />
-                      <span>標準クリーム</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleChangeTheme("black")}
-                      className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium border transition-all ${
-                        selectedHue === "black"
-                          ? "ring-2 ring-white font-bold shadow-xs scale-102"
-                          : "hover:opacity-85"
-                      }`}
-                      style={{ backgroundColor: "#1a1918", color: "#eae5dc", borderColor: "#3d3935" }}
-                    >
-                      <span className="w-3.5 h-3.5 rounded-full border border-white/20" style={{ backgroundColor: "#262422" }} />
-                      <span>黒（ダークモード）</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* 10色のカラーパレット */}
-                <div className="pt-2 border-t" style={{ borderColor: activeTheme.border }}>
-                  <span className="text-xs font-bold block mb-2" style={{ color: activeTheme.textSecondary }}>
-                    10色のカラーパレット ({themeBrightness === "pastel" ? "パステル調" : "ダーク調"}):
-                  </span>
-                  <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5">
-                    {HUE_OPTIONS.map((opt) => {
-                      const isSelected = selectedHue === opt.id;
-                      const dot = themeBrightness === "pastel" ? opt.pastelDot : opt.darkDot;
-                      return (
+                {isThemeAccordionOpen && (
+                  <div className="p-4 pt-1 border-t flex flex-col gap-3" style={{ borderColor: activeTheme.border }}>
+                    {/* 明るさトーン選択（パステル調／ダーク調） */}
+                    <div className="flex items-center gap-2 pt-1">
+                      <span className="text-xs font-bold" style={{ color: activeTheme.textSecondary }}>
+                        トーン:
+                      </span>
+                      <div
+                        className="flex gap-1 p-1 rounded-lg border transition-colors"
+                        style={{ backgroundColor: activeTheme.bgCard, borderColor: activeTheme.border }}
+                      >
                         <button
-                          key={opt.id}
                           type="button"
-                          onClick={() => handleChangeTheme(opt.id)}
-                          className={`flex flex-col items-center gap-1 p-2 rounded-xl border transition-all cursor-pointer ${
-                            isSelected
-                              ? "ring-2 ring-[#3d3731] scale-105 font-bold shadow-xs"
-                              : "hover:scale-102 hover:opacity-90"
-                          }`}
+                          onClick={() => handleChangeTheme(selectedHue === "black" ? "cream" : selectedHue, "pastel")}
+                          className="px-3 py-1 text-xs rounded-md font-bold transition-all"
                           style={{
-                            backgroundColor: dot,
-                            borderColor: isSelected ? activeTheme.accent : "rgba(0,0,0,0.15)",
+                            backgroundColor:
+                              themeBrightness === "pastel" && selectedHue !== "black" ? "#e8e2d5" : "transparent",
+                            color:
+                              themeBrightness === "pastel" && selectedHue !== "black"
+                                ? "#2d2926"
+                                : activeTheme.textSecondary,
+                            boxShadow:
+                              themeBrightness === "pastel" && selectedHue !== "black"
+                                ? "0 1px 2px rgba(0,0,0,0.15)"
+                                : "none",
                           }}
-                          title={`${opt.label}（${themeBrightness === "pastel" ? "パステル" : "ダーク"}）`}
                         >
-                          <span
-                            className="w-4 h-4 rounded-full border shadow-2xs"
-                            style={{ backgroundColor: dot, borderColor: "rgba(0,0,0,0.2)" }}
-                          />
-                          <span
-                            className="text-[10px] leading-tight"
-                            style={{ color: themeBrightness === "pastel" ? "#2d2926" : "#f0edf7" }}
-                          >
-                            {opt.label}
-                          </span>
+                          ☀️ パステル調（淡色）
                         </button>
-                      );
-                    })}
+                        <button
+                          type="button"
+                          onClick={() => handleChangeTheme(selectedHue === "cream" ? "black" : selectedHue, "dark")}
+                          className="px-3 py-1 text-xs rounded-md font-bold transition-all"
+                          style={{
+                            backgroundColor:
+                              themeBrightness === "dark" || selectedHue === "black" ? "#e8e2d5" : "transparent",
+                            color:
+                              themeBrightness === "dark" || selectedHue === "black"
+                                ? "#2d2926"
+                                : activeTheme.textSecondary,
+                            boxShadow:
+                              themeBrightness === "dark" || selectedHue === "black"
+                                ? "0 1px 2px rgba(0,0,0,0.15)"
+                                : "none",
+                          }}
+                        >
+                          🌙 ダーク調（深色）
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 基本カラー（標準クリーム ＆ 黒） */}
+                    <div className="flex items-center gap-2 pt-1">
+                      <span className="text-xs font-bold shrink-0" style={{ color: activeTheme.textSecondary }}>
+                        基本色:
+                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleChangeTheme("cream")}
+                          className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium border transition-all ${
+                            selectedHue === "cream"
+                              ? "ring-2 ring-[#3d3731] font-bold shadow-xs scale-102"
+                              : "hover:opacity-85"
+                          }`}
+                          style={{ backgroundColor: "#e8e2d5", color: "#2d2926", borderColor: "#c7bcac" }}
+                        >
+                          <span className="w-3.5 h-3.5 rounded-full border border-black/20" style={{ backgroundColor: "#f2efe9" }} />
+                          <span>標準クリーム</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleChangeTheme("black")}
+                          className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium border transition-all ${
+                            selectedHue === "black"
+                              ? "ring-2 ring-white font-bold shadow-xs scale-102"
+                              : "hover:opacity-85"
+                          }`}
+                          style={{ backgroundColor: "#1a1918", color: "#eae5dc", borderColor: "#3d3935" }}
+                        >
+                          <span className="w-3.5 h-3.5 rounded-full border border-white/20" style={{ backgroundColor: "#262422" }} />
+                          <span>黒（ダークモード）</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 10色のカラーパレット */}
+                    <div className="pt-2 border-t" style={{ borderColor: activeTheme.border }}>
+                      <span className="text-xs font-bold block mb-2" style={{ color: activeTheme.textSecondary }}>
+                        10色のカラーパレット ({themeBrightness === "pastel" ? "パステル調" : "ダーク調"}):
+                      </span>
+                      <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5">
+                        {HUE_OPTIONS.map((opt) => {
+                          const isSelected = selectedHue === opt.id;
+                          const dot = themeBrightness === "pastel" ? opt.pastelDot : opt.darkDot;
+                          return (
+                            <button
+                              key={opt.id}
+                              type="button"
+                              onClick={() => handleChangeTheme(opt.id)}
+                              className={`flex flex-col items-center gap-1 p-2 rounded-xl border transition-all cursor-pointer ${
+                                isSelected
+                                  ? "ring-2 ring-[#3d3731] scale-105 font-bold shadow-xs"
+                                  : "hover:scale-102 hover:opacity-90"
+                              }`}
+                              style={{
+                                backgroundColor: dot,
+                                borderColor: isSelected ? activeTheme.accent : "rgba(0,0,0,0.15)",
+                              }}
+                              title={`${opt.label}（${themeBrightness === "pastel" ? "パステル" : "ダーク"}）`}
+                            >
+                              <span
+                                className="w-4 h-4 rounded-full border shadow-2xs"
+                                style={{ backgroundColor: dot, borderColor: "rgba(0,0,0,0.2)" }}
+                              />
+                              <span
+                                className="text-[10px] leading-tight"
+                                style={{ color: themeBrightness === "pastel" ? "#2d2926" : "#f0edf7" }}
+                              >
+                                {opt.label}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
 
               {/* 文字の大きさ */}
