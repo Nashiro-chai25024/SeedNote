@@ -77,6 +77,52 @@ const mapNoteToDbRow = (note: Note, userId: string): DbNoteRow => {
   return row;
 };
 
+// すっきりしたシンプルな線画SVGアイコン（絵文字の重複や怖さを解消）
+const CopyIcon = ({ className = "w-3.5 h-3.5" }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+  </svg>
+);
+
+const EyeIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+
+const EyeOffIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+    <line x1="1" y1="1" x2="23" y2="23" />
+  </svg>
+);
+
 type TabType = "home" | "list" | "categories" | "trash" | "settings";
 type FontSize = "normal" | "large";
 type ButtonSize = "normal" | "large";
@@ -530,6 +576,8 @@ interface DbUserSettingsRow {
   enable_toast: boolean | null;
   confirm_discard: boolean | null;
   recovery_key?: string | null;
+  theme_hue?: ColorHue | null;
+  theme_brightness?: ThemeBrightness | null;
   updated_at?: string;
 }
 
@@ -914,17 +962,6 @@ export default function Home() {
     }
   }, []);
 
-  // テーマの切り替え処理
-  const handleChangeTheme = (hue: ColorHue, brightness?: ThemeBrightness) => {
-    setSelectedHue(hue);
-    localStorage.setItem("seednote_theme_hue", hue);
-    const nextBrightness = brightness ?? themeBrightness;
-    if (brightness) {
-      setThemeBrightness(brightness);
-      localStorage.setItem("seednote_theme_brightness", brightness);
-    }
-  };
-
   // カテゴリの並び順変更
   const handleCategorySortOrderChange = (order: CategorySortOrder) => {
     setCategorySortOrder(order);
@@ -994,6 +1031,8 @@ export default function Home() {
     buttonSize,
     enableToast,
     confirmDiscardOnEdit,
+    selectedHue,
+    themeBrightness,
   });
 
   useEffect(() => {
@@ -1004,8 +1043,19 @@ export default function Home() {
       buttonSize,
       enableToast,
       confirmDiscardOnEdit,
+      selectedHue,
+      themeBrightness,
     };
-  }, [categoriesList, timeSlots, fontSize, buttonSize, enableToast, confirmDiscardOnEdit]);
+  }, [
+    categoriesList,
+    timeSlots,
+    fontSize,
+    buttonSize,
+    enableToast,
+    confirmDiscardOnEdit,
+    selectedHue,
+    themeBrightness,
+  ]);
 
   // 設定のクラウド保存用デバウンスタイマー
   const cloudSettingsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -1019,6 +1069,8 @@ export default function Home() {
       button_size: ButtonSize;
       enable_toast: boolean;
       confirm_discard: boolean;
+      theme_hue: ColorHue;
+      theme_brightness: ThemeBrightness;
     }>,
     immediate: boolean = false
   ) => {
@@ -1035,6 +1087,8 @@ export default function Home() {
           button_size: partial.button_size ?? cur.buttonSize,
           enable_toast: partial.enable_toast ?? cur.enableToast,
           confirm_discard: partial.confirm_discard ?? cur.confirmDiscardOnEdit,
+          theme_hue: partial.theme_hue ?? cur.selectedHue,
+          theme_brightness: partial.theme_brightness ?? cur.themeBrightness,
           updated_at: new Date().toISOString(),
         });
       } catch (e) {
@@ -1051,6 +1105,22 @@ export default function Home() {
     } else {
       cloudSettingsTimeoutRef.current = setTimeout(doSave, 600);
     }
+  };
+
+  // テーマの切り替え処理（ローカルおよびクラウドへの自動同期）
+  const handleChangeTheme = (hue: ColorHue, brightness?: ThemeBrightness) => {
+    setSelectedHue(hue);
+    localStorage.setItem("seednote_theme_hue", hue);
+    const nextBrightness = brightness ?? themeBrightness;
+    if (brightness) {
+      setThemeBrightness(brightness);
+      localStorage.setItem("seednote_theme_brightness", brightness);
+    }
+    // クラウド（Supabase）へ自動保存
+    saveCloudSettings({
+      theme_hue: hue,
+      theme_brightness: nextBrightness,
+    });
   };
 
   // クラウド（Supabase）からメモを取得＆ローカルメモの自動引き継ぎ
@@ -1218,6 +1288,25 @@ export default function Home() {
           supabase.from("user_settings").update({ recovery_key: generated }).eq("user_id", userId).then();
         }
 
+        // テーマカラーの同期（クラウドに保存があれば復元、未設定ならローカル値を同期）
+        if (row.theme_hue) {
+          setSelectedHue(row.theme_hue);
+          localStorage.setItem("seednote_theme_hue", row.theme_hue);
+        } else if (latestSettingsRef.current.selectedHue) {
+          supabase
+            .from("user_settings")
+            .update({
+              theme_hue: latestSettingsRef.current.selectedHue,
+              theme_brightness: latestSettingsRef.current.themeBrightness,
+            })
+            .eq("user_id", userId)
+            .then();
+        }
+        if (row.theme_brightness === "pastel" || row.theme_brightness === "dark") {
+          setThemeBrightness(row.theme_brightness);
+          localStorage.setItem("seednote_theme_brightness", row.theme_brightness);
+        }
+
         // もしローカルやメモから新しいカテゴリが見つかった場合、クラウド側も最新化
         if (mergedCats.length > cloudCats.length) {
           const cur = latestSettingsRef.current;
@@ -1229,6 +1318,8 @@ export default function Home() {
             button_size: row.button_size || cur.buttonSize,
             enable_toast: row.enable_toast ?? cur.enableToast,
             confirm_discard: row.confirm_discard ?? cur.confirmDiscardOnEdit,
+            theme_hue: row.theme_hue || cur.selectedHue,
+            theme_brightness: row.theme_brightness || cur.themeBrightness,
             updated_at: new Date().toISOString(),
           });
         }
@@ -1248,6 +1339,8 @@ export default function Home() {
           enable_toast: cur.enableToast,
           confirm_discard: cur.confirmDiscardOnEdit,
           recovery_key: generated,
+          theme_hue: cur.selectedHue,
+          theme_brightness: cur.themeBrightness,
           updated_at: new Date().toISOString(),
         });
       }
@@ -2313,7 +2406,7 @@ export default function Home() {
           isMenuOpen ? "translate-x-0" : "-translate-x-full"
         }`}
         style={{
-          backgroundColor: activeTheme.bgCard,
+          backgroundColor: activeTheme.bgApp,
           borderColor: activeTheme.border,
           color: activeTheme.textPrimary,
         }}
@@ -2536,6 +2629,23 @@ export default function Home() {
               }}
             >
               <span>⚙️</span> 設定
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsHelpOpen(true);
+                setIsMenuOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 ${
+                buttonSize === "large" ? "px-4 py-3 text-base" : "px-3.5 py-2.5 text-sm"
+              } rounded-xl font-medium transition-colors text-left hover:opacity-80`}
+              style={{
+                backgroundColor: "transparent",
+                color: activeTheme.textSecondary,
+              }}
+            >
+              <span>❓</span> ガイド・ヘルプ
             </button>
 
             <button
@@ -3312,7 +3422,7 @@ export default function Home() {
                             aria-label="メモをクリップボードにコピー"
                             title="メモをコピー"
                           >
-                            <span>📋</span>
+                            <CopyIcon className="w-3.5 h-3.5" />
                           </button>
 
                           {/* お気に入りボタン */}
@@ -3396,7 +3506,7 @@ export default function Home() {
                                 } rounded-lg flex items-center gap-1.5 font-medium transition-colors hover:opacity-80`}
                                 style={{ color: activeTheme.textPrimary }}
                               >
-                                <span>📋</span> 本文をコピー
+                                <CopyIcon className="w-3.5 h-3.5 shrink-0" /> 本文をコピー
                               </button>
                               <button
                                 type="button"
@@ -4289,13 +4399,8 @@ export default function Home() {
                   className="w-full p-4 flex items-center justify-between text-left hover:opacity-90 transition-opacity cursor-pointer"
                 >
                   <div>
-                    <span className="font-bold block" style={{ color: activeTheme.textPrimary }}>
+                    <span className="font-bold block text-sm" style={{ color: activeTheme.textPrimary }}>
                       🎨 テーマカラー設定
-                    </span>
-                    <span className="text-xs" style={{ color: activeTheme.textSecondary }}>
-                      {isThemeAccordionOpen
-                        ? "目に優しい全22色から選択（タップして折りたたむ）"
-                        : "目に優しい全22色（タップして設定を展開）"}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
@@ -4422,24 +4527,30 @@ export default function Home() {
                               key={opt.id}
                               type="button"
                               onClick={() => handleChangeTheme(opt.id)}
-                              className={`flex flex-col items-center gap-1 p-2 rounded-xl border transition-all cursor-pointer ${
+                              className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border transition-all cursor-pointer ${
                                 isSelected
-                                  ? "ring-2 ring-[#3d3731] scale-105 font-bold shadow-xs"
-                                  : "hover:scale-102 hover:opacity-90"
+                                  ? "shadow-sm scale-105"
+                                  : "hover:scale-102 hover:opacity-85"
                               }`}
                               style={{
-                                backgroundColor: dot,
-                                borderColor: isSelected ? activeTheme.accent : "rgba(0,0,0,0.15)",
+                                backgroundColor: activeTheme.bgCard,
+                                borderColor: isSelected ? activeTheme.accent : activeTheme.border,
                               }}
                               title={`${opt.label}（${themeBrightness === "pastel" ? "パステル" : "ダーク"}）`}
                             >
                               <span
-                                className="w-4 h-4 rounded-full border shadow-2xs"
-                                style={{ backgroundColor: dot, borderColor: "rgba(0,0,0,0.2)" }}
+                                className={`w-5 h-5 rounded-full transition-all ${
+                                  isSelected
+                                    ? "ring-2 ring-white ring-offset-2 ring-offset-[#3d3731] scale-110 shadow-sm"
+                                    : "border border-black/15 shadow-2xs"
+                                }`}
+                                style={{ backgroundColor: dot }}
                               />
                               <span
-                                className="text-[10px] leading-tight"
-                                style={{ color: themeBrightness === "pastel" ? "#2d2926" : "#f0edf7" }}
+                                className={`text-[10px] leading-tight ${
+                                  isSelected ? "font-bold" : "font-normal"
+                                }`}
+                                style={{ color: activeTheme.textPrimary }}
                               >
                                 {opt.label}
                               </span>
@@ -5029,7 +5140,7 @@ export default function Home() {
                           className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 flex items-center gap-1 shadow-2xs cursor-pointer hover:opacity-90"
                           style={{ backgroundColor: activeTheme.accent, color: activeTheme.accentText }}
                         >
-                          <span>📋</span> {copiedKeyToast ? "コピー完了!" : "コピー"}
+                          <CopyIcon className="w-3.5 h-3.5" /> {copiedKeyToast ? "コピー完了!" : "コピー"}
                         </button>
                       </div>
 
@@ -5585,8 +5696,9 @@ export default function Home() {
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-2.5 text-[#8a7f72] hover:text-[#3d3731] text-sm p-1 transition-colors"
                       title={showPassword ? "パスワードを隠す" : "パスワードを表示する"}
+                      aria-label={showPassword ? "パスワードを隠す" : "パスワードを表示する"}
                     >
-                      {showPassword ? "🙈" : "👁️"}
+                      {showPassword ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
@@ -5610,8 +5722,9 @@ export default function Home() {
                       onClick={() => setShowPasswordConfirm(!showPasswordConfirm)}
                       className="absolute right-2.5 text-[#8a7f72] hover:text-[#3d3731] text-sm p-1 transition-colors"
                       title={showPasswordConfirm ? "パスワードを隠す" : "パスワードを表示する"}
+                      aria-label={showPasswordConfirm ? "パスワードを隠す" : "パスワードを表示する"}
                     >
-                      {showPasswordConfirm ? "🙈" : "👁️"}
+                      {showPasswordConfirm ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
@@ -5658,6 +5771,16 @@ export default function Home() {
                     required
                     className="w-full px-3 py-2 text-sm bg-[#faf8f5] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] placeholder-[#b0a598]"
                   />
+                  {authMode === "signup" && (
+                    <span className="text-[10px] text-[#8a7f72] block mt-1">
+                      ※半角英数字（a-z, 0-9）のみ使用できます
+                    </span>
+                  )}
+                  {authMode === "signup" && authUsernameInput && !/^[a-zA-Z0-9_-]+$/.test(authUsernameInput) && (
+                    <span className="text-[10px] text-[#b85448] font-bold block mt-0.5">
+                      ⚠️ ユーザー名は半角英数字（a-z, 0-9）とハイフン・アンダースコアのみ使用できます
+                    </span>
+                  )}
                 </div>
 
                 {/* パスワード入力 */}
@@ -5681,7 +5804,7 @@ export default function Home() {
                       title={showPassword ? "パスワードを隠す" : "パスワードを表示する"}
                       aria-label={showPassword ? "パスワードを隠す" : "パスワードを表示する"}
                     >
-                      {showPassword ? "🙈" : "👁️"}
+                      {showPassword ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
@@ -5708,7 +5831,7 @@ export default function Home() {
                         title={showPasswordConfirm ? "パスワードを隠す" : "パスワードを表示する"}
                         aria-label={showPasswordConfirm ? "パスワードを隠す" : "パスワードを表示する"}
                       >
-                        {showPasswordConfirm ? "🙈" : "👁️"}
+                        {showPasswordConfirm ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
                       </button>
                     </div>
                   </div>
