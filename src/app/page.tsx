@@ -169,7 +169,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "あずきパステル",
           dotColor: "#f5d0cd",
-          bgApp: "#e8e2d5",
+          bgApp: "#eae9e6",
           bgCard: "#faf1f0",
           bgCardHover: "#f2e4e2",
           bgSub: "#ebd8d6",
@@ -184,7 +184,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "サクラパステル",
           dotColor: "#f7d2e2",
-          bgApp: "#e8e2d5",
+          bgApp: "#eae9e6",
           bgCard: "#fcf2f6",
           bgCardHover: "#f5e4ec",
           bgSub: "#edd7e1",
@@ -199,7 +199,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "アプリコットパステル",
           dotColor: "#f7d9c6",
-          bgApp: "#e8e2d5",
+          bgApp: "#eae9e6",
           bgCard: "#fcf5ee",
           bgCardHover: "#f5e7db",
           bgSub: "#ecdcce",
@@ -214,7 +214,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "ミモザパステル",
           dotColor: "#f7e8be",
-          bgApp: "#e8e2d5",
+          bgApp: "#eae9e6",
           bgCard: "#fbf7ec",
           bgCardHover: "#f5ebd2",
           bgSub: "#ebe0c3",
@@ -229,7 +229,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "若草パステル",
           dotColor: "#e8efce",
-          bgApp: "#e8e2d5",
+          bgApp: "#eae9e6",
           bgCard: "#f6f8ec",
           bgCardHover: "#edf2d7",
           bgSub: "#e3eac7",
@@ -244,7 +244,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "抹茶パステル",
           dotColor: "#d5ebd8",
-          bgApp: "#e8e2d5",
+          bgApp: "#eae9e6",
           bgCard: "#f0f7f1",
           bgCardHover: "#e0ede2",
           bgSub: "#d4e6d7",
@@ -259,7 +259,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "ミントパステル",
           dotColor: "#d0ebf0",
-          bgApp: "#e8e2d5",
+          bgApp: "#eae9e6",
           bgCard: "#eef7f8",
           bgCardHover: "#dceef1",
           bgSub: "#cfe7eb",
@@ -274,7 +274,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "空色パステル",
           dotColor: "#d2e4f7",
-          bgApp: "#e8e2d5",
+          bgApp: "#eae9e6",
           bgCard: "#eef4fc",
           bgCardHover: "#dce8f7",
           bgSub: "#cfe0f2",
@@ -289,7 +289,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "ラベンダーパステル",
           dotColor: "#e5d7f7",
-          bgApp: "#e8e2d5",
+          bgApp: "#eae9e6",
           bgCard: "#f5f0fb",
           bgCardHover: "#eae0f7",
           bgSub: "#ded1f0",
@@ -304,7 +304,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "ラテパステル",
           dotColor: "#e8dacb",
-          bgApp: "#e8e2d5",
+          bgApp: "#eae9e6",
           bgCard: "#f7f1eb",
           bgCardHover: "#ebe0d4",
           bgSub: "#dfd2c4",
@@ -323,7 +323,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "ダークワイン",
           dotColor: "#4a201f",
-          bgApp: "#e8e2d5",
+          bgApp: "#1a1918",
           bgCard: "#2f1f1f",
           bgCardHover: "#3b2626",
           bgSub: "#402828",
@@ -338,7 +338,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "ダークプラム",
           dotColor: "#4a1e34",
-          bgApp: "#e8e2d5",
+          bgApp: "#1a1918",
           bgCard: "#311e29",
           bgCardHover: "#3d2533",
           bgSub: "#422837",
@@ -353,7 +353,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "ダークアンバー",
           dotColor: "#4a2615",
-          bgApp: "#e8e2d5",
+          bgApp: "#1a1918",
           bgCard: "#31231a",
           bgCardHover: "#3d2a1f",
           bgSub: "#422e22",
@@ -368,7 +368,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "ダークゴールド",
           dotColor: "#403413",
-          bgApp: "#e8e2d5",
+          bgApp: "#1a1918",
           bgCard: "#2e2717",
           bgCardHover: "#3b311d",
           bgSub: "#3d341e",
@@ -383,7 +383,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "ダークモス",
           dotColor: "#2d3b13",
-          bgApp: "#e8e2d5",
+          bgApp: "#1a1918",
           bgCard: "#242e16",
           bgCardHover: "#2e3b1c",
           bgSub: "#313d1d",
@@ -398,7 +398,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "ディープフォレスト",
           dotColor: "#163b20",
-          bgApp: "#e8e2d5",
+          bgApp: "#1a1918",
           bgCard: "#192e20",
           bgCardHover: "#203b29",
           bgSub: "#223d2b",
@@ -413,7 +413,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "ダークティール",
           dotColor: "#14393d",
-          bgApp: "#e8e2d5",
+          bgApp: "#1a1918",
           bgCard: "#172e30",
           bgCardHover: "#1d3a3d",
           bgSub: "#203f42",
@@ -428,7 +428,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "ディープミッドナイト",
           dotColor: "#162c47",
-          bgApp: "#e8e2d5",
+          bgApp: "#1a1918",
           bgCard: "#192736",
           bgCardHover: "#203245",
           bgSub: "#22354a",
@@ -443,7 +443,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "ダークアメジスト",
           dotColor: "#2e1947",
-          bgApp: "#e8e2d5",
+          bgApp: "#1a1918",
           bgCard: "#271936",
           bgCardHover: "#322045",
           bgSub: "#36224a",
@@ -458,7 +458,7 @@ export const getThemePalette = (hue: ColorHue, brightness: ThemeBrightness): The
         return {
           name: "ダークエスプレッソ",
           dotColor: "#382319",
-          bgApp: "#e8e2d5",
+          bgApp: "#1a1918",
           bgCard: "#2b1f19",
           bgCardHover: "#36271f",
           bgSub: "#3a2a22",
