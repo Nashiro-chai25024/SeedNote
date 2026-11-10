@@ -852,6 +852,23 @@ export default function Home() {
     [selectedHue, themeBrightness]
   );
 
+  // テーマ変更時にPWAのステータスバー・ナビバー色（meta theme-color）とbody背景色をリアルタイム連動
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const colorToSet = activeTheme.bgApp;
+    const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+    if (metaThemeColor) {
+      metaThemeColor.setAttribute("content", colorToSet);
+    } else {
+      const meta = document.createElement("meta");
+      meta.name = "theme-color";
+      meta.content = colorToSet;
+      document.head.appendChild(meta);
+    }
+    document.documentElement.style.backgroundColor = colorToSet;
+    document.body.style.backgroundColor = colorToSet;
+  }, [activeTheme.bgApp]);
+
   // カテゴリ関連のState
   const [categoriesList, setCategoriesList] = useState<string[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -4210,6 +4227,78 @@ export default function Home() {
                       {note.content}
                     </p>
 
+                    {/* 訂正履歴表示（過去の文章をいつでも確認・振り返り可能） */}
+                    {note.editHistory && note.editHistory.length > 0 && (
+                      <div className="mt-2 pt-1.5 border-t border-dashed" style={{ borderColor: activeTheme.border }}>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleEditHistory(note.id)}
+                          className="text-[11px] flex items-center gap-1 font-medium transition-colors cursor-pointer group hover:opacity-80"
+                          style={{ color: activeTheme.textSecondary }}
+                        >
+                          <span className="font-mono text-[9px]">
+                            {expandedHistoryNoteIds.includes(note.id) ? "▼" : "▶"}
+                          </span>
+                          <span
+                            className="px-1.5 py-0.5 rounded text-[10px] font-bold border"
+                            style={{
+                              backgroundColor: activeTheme.bgSub,
+                              borderColor: activeTheme.border,
+                              color: activeTheme.textPrimary,
+                            }}
+                          >
+                            ✏️ 訂正済み ({note.editHistory.length}回)
+                          </span>
+                          <span className="text-[10px]" style={{ color: activeTheme.textSecondary }}>
+                            {expandedHistoryNoteIds.includes(note.id) ? "過去の文章を隠す" : "過去の文章を見る"}
+                          </span>
+                        </button>
+
+                        {expandedHistoryNoteIds.includes(note.id) && (
+                          <div
+                            className="mt-2 p-2.5 rounded-xl border text-xs flex flex-col gap-2"
+                            style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border }}
+                          >
+                            <div
+                              className="text-[10px] font-bold pb-1 border-b flex items-center justify-between"
+                              style={{ borderColor: activeTheme.border, color: activeTheme.textSecondary }}
+                            >
+                              <span>📜 訂正前の思考ログ（不可逆アーカイブ）</span>
+                              <span className="text-[9px]">※過去の思考も消えずに残ります</span>
+                            </div>
+                            {note.editHistory.map((history, idx) => (
+                              <div
+                                key={history.id}
+                                className="text-[11px] p-2 rounded-lg border"
+                                style={{
+                                  backgroundColor: activeTheme.bgCard,
+                                  borderColor: activeTheme.border,
+                                  color: activeTheme.textPrimary,
+                                }}
+                              >
+                                <div
+                                  className="flex items-center justify-between text-[10px] mb-1 font-mono"
+                                  style={{ color: activeTheme.textSecondary }}
+                                >
+                                  <span className="font-bold">第{note.editHistory!.length - idx}版</span>
+                                  <time>{formatDate(history.editedAt)}</time>
+                                </div>
+                                <p
+                                  className="line-through opacity-80 whitespace-pre-wrap leading-relaxed"
+                                  style={{
+                                    color: activeTheme.textSecondary,
+                                    fontFamily: getNoteFontFamilyStyle(noteFont),
+                                  }}
+                                >
+                                  {history.previousContent}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {/* 追記スレッド表示（デフォルトは折りたたみ） */}
                     {note.replies && note.replies.length > 0 && (
                       <div className="mt-2 mb-3 pt-2 border-t flex flex-col gap-2" style={{ borderColor: activeTheme.border }}>
@@ -5557,23 +5646,38 @@ export default function Home() {
           onClick={() => setCategoryToDelete(null)}
         >
           <div
-            className="bg-[#f4f0e8] rounded-2xl p-6 sm:p-7 max-w-sm w-full border border-[#ded6c9] shadow-2xl transition-all"
+            className="rounded-2xl p-6 sm:p-7 max-w-sm w-full border shadow-2xl transition-all"
+            style={{ backgroundColor: activeTheme.bgCard, borderColor: activeTheme.border }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-base font-bold text-[#3d3731] mb-1">
+            <h3
+              className="text-base font-bold mb-1"
+              style={{ color: activeTheme.textPrimary }}
+            >
               「{categoryToDelete}」
             </h3>
-            <p className="text-sm font-bold text-[#2d2926] mb-3">
+            <p
+              className="text-sm font-bold mb-3"
+              style={{ color: activeTheme.textPrimary }}
+            >
               本当にこのカテゴリを消去しますか？
             </p>
-            <p className="text-xs text-[#786f66] leading-relaxed mb-6 bg-[#eae4d9] p-3 rounded-xl border border-[#ded6c9]">
+            <p
+              className="text-xs leading-relaxed mb-6 p-3 rounded-xl border"
+              style={{
+                backgroundColor: activeTheme.bgSub,
+                borderColor: activeTheme.border,
+                color: activeTheme.textSecondary,
+              }}
+            >
               （※このカテゴリに分類されているメモは未分類、または他のカテゴリがついている場合は消去するカテゴリのみなくなります）
             </p>
             <div className="flex justify-end gap-2.5">
               <button
                 type="button"
                 onClick={() => setCategoryToDelete(null)}
-                className="px-4 py-2 rounded-xl text-xs font-medium text-[#6b6257] hover:bg-[#e8e0d3] transition-colors"
+                className="px-4 py-2 rounded-xl text-xs font-medium transition-colors hover:opacity-80"
+                style={{ color: activeTheme.textSecondary }}
               >
                 キャンセル
               </button>
@@ -5595,15 +5699,19 @@ export default function Home() {
           onClick={handleRequestCloseEditModal}
         >
           <div
-            className="bg-[#f4f0e8] rounded-2xl p-6 sm:p-7 max-w-md w-full border border-[#ded6c9] shadow-2xl transition-all max-h-[90vh] flex flex-col"
+            className="rounded-2xl p-6 sm:p-7 max-w-md w-full border shadow-2xl transition-all max-h-[90vh] flex flex-col"
+            style={{ backgroundColor: activeTheme.bgCard, borderColor: activeTheme.border }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* モーダルのヘッダー */}
-            <div className="shrink-0 pb-3 mb-4 border-b border-[#ded6c9]">
-              <h2 className="text-base font-bold text-[#3d3731] flex items-center gap-1.5">
+            <div className="shrink-0 pb-3 mb-4 border-b" style={{ borderColor: activeTheme.border }}>
+              <h2
+                className="text-base font-bold flex items-center gap-1.5"
+                style={{ color: activeTheme.textPrimary }}
+              >
                 <span>🏷️</span> タイトル・カテゴリの変更
               </h2>
-              <span className="text-[11px] text-[#8a7f72]">
+              <span className="text-[11px]" style={{ color: activeTheme.textSecondary }}>
                 見出しやジャンルを整理できます（※本文は保護されます）
               </span>
             </div>
@@ -5612,7 +5720,10 @@ export default function Home() {
             <div className="flex-1 min-h-0 overflow-y-auto pr-1 flex flex-col gap-4">
               {/* タイトル入力 */}
               <div>
-                <label className="block text-xs font-bold text-[#3d3731] mb-1.5">
+                <label
+                  className="block text-xs font-bold mb-1.5"
+                  style={{ color: activeTheme.textPrimary }}
+                >
                   タイトル
                 </label>
                 <input
@@ -5622,16 +5733,30 @@ export default function Home() {
                   onChange={(e) => setEditTitleInput(e.target.value)}
                   className={`w-full ${
                     fontSize === "large" ? "px-4 py-2.5 text-base" : "px-3.5 py-2 text-sm"
-                  } bg-[#faf8f5] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] placeholder-[#b0a598]`}
+                  } rounded-xl border focus:outline-none transition-colors`}
+                  style={{
+                    backgroundColor: activeTheme.bgSub,
+                    borderColor: activeTheme.border,
+                    color: activeTheme.textPrimary,
+                  }}
                 />
               </div>
 
               {/* カテゴリ選択エリア */}
               <div>
-                <label className="block text-xs font-bold text-[#3d3731] mb-1.5">
+                <label
+                  className="block text-xs font-bold mb-1.5"
+                  style={{ color: activeTheme.textPrimary }}
+                >
                   カテゴリ
                 </label>
-                <div className="flex flex-wrap items-center gap-1.5 p-2.5 bg-white/70 rounded-xl border border-[#ded5c8]">
+                <div
+                  className="flex flex-wrap items-center gap-1.5 p-2.5 rounded-xl border"
+                  style={{
+                    backgroundColor: activeTheme.bgSub,
+                    borderColor: activeTheme.border,
+                  }}
+                >
                   {sortedCategories.map((cat) => {
                     const isSelected = editCategories.includes(cat);
                     return (
@@ -5639,11 +5764,14 @@ export default function Home() {
                         key={cat}
                         type="button"
                         onClick={() => handleToggleEditCategory(cat)}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                          isSelected
-                            ? "bg-[#3d3731] text-[#faf8f5] shadow-xs"
-                            : "bg-[#e8e0d3] text-[#5c5348] hover:bg-[#ded6c9]"
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all border ${
+                          isSelected ? "shadow-xs font-bold" : "hover:opacity-85"
                         }`}
+                        style={{
+                          backgroundColor: isSelected ? activeTheme.accent : activeTheme.bgCard,
+                          borderColor: isSelected ? activeTheme.accent : activeTheme.border,
+                          color: isSelected ? activeTheme.accentText : activeTheme.textSecondary,
+                        }}
                       >
                         {cat}
                       </button>
@@ -5652,7 +5780,13 @@ export default function Home() {
 
                   {/* モーダル内インライン新規作成 */}
                   {isAddingCategoryInEdit ? (
-                    <div className="flex items-center gap-1 bg-white p-0.5 rounded-lg border border-[#ded5c8]">
+                    <div
+                      className="flex items-center gap-1 p-0.5 rounded-lg border"
+                      style={{
+                        backgroundColor: activeTheme.bgCard,
+                        borderColor: activeTheme.border,
+                      }}
+                    >
                       <input
                         type="text"
                         placeholder="新しいカテゴリ"
@@ -5665,12 +5799,17 @@ export default function Home() {
                           }
                         }}
                         autoFocus
-                        className="px-2 py-0.5 text-xs text-[#2d2926] bg-transparent focus:outline-none w-24"
+                        className="px-2 py-0.5 text-xs bg-transparent focus:outline-none w-24"
+                        style={{ color: activeTheme.textPrimary }}
                       />
                       <button
                         type="button"
                         onClick={handleSaveCategoryInEdit}
-                        className="px-2 py-0.5 rounded-md bg-[#3d3731] text-[#faf8f5] text-[11px] font-medium hover:bg-[#292420]"
+                        className="px-2 py-0.5 rounded-md text-[11px] font-medium hover:opacity-85"
+                        style={{
+                          backgroundColor: activeTheme.accent,
+                          color: activeTheme.accentText,
+                        }}
                       >
                         追加
                       </button>
@@ -5680,7 +5819,8 @@ export default function Home() {
                           setIsAddingCategoryInEdit(false);
                           setInlineNewCategoryInEdit("");
                         }}
-                        className="px-1 text-[11px] text-[#8a7f72] hover:text-[#3d3731]"
+                        className="px-1 text-[11px] hover:opacity-80"
+                        style={{ color: activeTheme.textSecondary }}
                       >
                         ✕
                       </button>
@@ -5689,14 +5829,21 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={() => setIsAddingCategoryInEdit(true)}
-                      className="px-2.5 py-1 rounded-lg border border-dashed border-[#b8aea2] text-[#7d7367] hover:border-[#3d3731] hover:text-[#3d3731] transition-colors text-xs font-medium"
+                      className="px-2.5 py-1 rounded-lg border border-dashed text-xs font-medium transition-colors hover:opacity-85"
+                      style={{
+                        borderColor: activeTheme.border,
+                        color: activeTheme.textSecondary,
+                      }}
                     >
                       ＋ 新規
                     </button>
                   )}
 
                   {editCategories.length === 0 && !isAddingCategoryInEdit && (
-                    <span className="text-[11px] text-[#a09485] select-none ml-1">
+                    <span
+                      className="text-[11px] select-none ml-1"
+                      style={{ color: activeTheme.textSecondary }}
+                    >
                       （未選択＝未分類）
                     </span>
                   )}
@@ -5705,29 +5852,45 @@ export default function Home() {
 
               {/* 本文の確認プレビュー（編集不可・思考の不可逆性を保護） */}
               <div>
-                <label className="block text-xs font-bold text-[#8a7f72] mb-1.5 flex items-center justify-between">
+                <label
+                  className="block text-xs font-bold mb-1.5 flex items-center justify-between"
+                  style={{ color: activeTheme.textSecondary }}
+                >
                   <span>本文（プレビュー）</span>
-                  <span className="text-[10px] text-[#a09485] font-normal">※本文の編集はできません</span>
+                  <span className="text-[10px] font-normal">※本文の編集はできません</span>
                 </label>
-                <div className="p-3.5 rounded-xl bg-white/50 border border-[#e5ded2] text-xs sm:text-sm text-[#5c5348] whitespace-pre-wrap leading-relaxed max-h-36 overflow-y-auto select-text">
+                <div
+                  className="p-3.5 rounded-xl border text-xs sm:text-sm whitespace-pre-wrap leading-relaxed max-h-36 overflow-y-auto select-text"
+                  style={{
+                    backgroundColor: activeTheme.bgSub,
+                    borderColor: activeTheme.border,
+                    color: activeTheme.textPrimary,
+                    fontFamily: getNoteFontFamilyStyle(noteFont),
+                  }}
+                >
                   {editingNote.content}
                 </div>
               </div>
             </div>
 
             {/* モーダルのフッターボタン */}
-            <div className="shrink-0 flex justify-end gap-2.5 pt-4 mt-3 border-t border-[#ded6c9]">
+            <div className="shrink-0 flex justify-end gap-2.5 pt-4 mt-3 border-t" style={{ borderColor: activeTheme.border }}>
               <button
                 type="button"
                 onClick={handleRequestCloseEditModal}
-                className="px-4 py-2 rounded-xl text-xs font-medium text-[#6b6257] hover:bg-[#e8e0d3] transition-colors"
+                className="px-4 py-2 rounded-xl text-xs font-medium transition-colors hover:opacity-80"
+                style={{ color: activeTheme.textSecondary }}
               >
                 キャンセル
               </button>
               <button
                 type="button"
                 onClick={handleSaveNoteEdit}
-                className="px-5 py-2 rounded-xl text-xs font-medium bg-[#3d3731] text-[#faf8f5] hover:bg-[#292420] transition-all shadow-xs"
+                className="px-5 py-2 rounded-xl text-xs font-medium transition-all shadow-xs hover:opacity-85"
+                style={{
+                  backgroundColor: activeTheme.accent,
+                  color: activeTheme.accentText,
+                }}
               >
                 保存する
               </button>
@@ -5743,15 +5906,19 @@ export default function Home() {
           onClick={() => setEditingContentNote(null)}
         >
           <div
-            className="bg-[#f4f0e8] rounded-2xl p-6 sm:p-7 max-w-md w-full border border-[#ded6c9] shadow-2xl transition-all max-h-[90vh] flex flex-col"
+            className="rounded-2xl p-6 sm:p-7 max-w-md w-full border shadow-2xl transition-all max-h-[90vh] flex flex-col"
+            style={{ backgroundColor: activeTheme.bgCard, borderColor: activeTheme.border }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* モーダルのヘッダー */}
-            <div className="shrink-0 pb-3 mb-4 border-b border-[#ded6c9]">
-              <h2 className="text-base font-bold text-[#3d3731] flex items-center gap-1.5">
+            <div className="shrink-0 pb-3 mb-4 border-b" style={{ borderColor: activeTheme.border }}>
+              <h2
+                className="text-base font-bold flex items-center gap-1.5"
+                style={{ color: activeTheme.textPrimary }}
+              >
                 <span>✏️</span> 本文の訂正
               </h2>
-              <span className="text-[11px] text-[#8a7f72]">
+              <span className="text-[11px]" style={{ color: activeTheme.textSecondary }}>
                 誤字や表現を訂正できます。過去の文章は履歴として安全に保存されます。
               </span>
             </div>
@@ -5760,12 +5927,20 @@ export default function Home() {
             <div className="flex-1 min-h-0 overflow-y-auto pr-1 flex flex-col gap-4">
               {/* 訂正前の文章（参照用） */}
               <div>
-                <label className="block text-xs font-bold text-[#8a7f72] mb-1">
+                <label
+                  className="block text-xs font-bold mb-1"
+                  style={{ color: activeTheme.textSecondary }}
+                >
                   訂正前の文章（第{(editingContentNote.editHistory?.length || 0) + 1}版として保存されます）
                 </label>
                 <div
-                  className="p-3 rounded-xl bg-white/60 border border-[#e5ded2] text-xs text-[#6b6257] whitespace-pre-wrap leading-relaxed max-h-28 overflow-y-auto select-text"
-                  style={{ fontFamily: getNoteFontFamilyStyle(noteFont) }}
+                  className="p-3 rounded-xl border text-xs whitespace-pre-wrap leading-relaxed max-h-28 overflow-y-auto select-text"
+                  style={{
+                    backgroundColor: activeTheme.bgSub,
+                    borderColor: activeTheme.border,
+                    color: activeTheme.textSecondary,
+                    fontFamily: getNoteFontFamilyStyle(noteFont),
+                  }}
                 >
                   {editingContentNote.content}
                 </div>
@@ -5773,7 +5948,10 @@ export default function Home() {
 
               {/* 新しい本文入力欄 */}
               <div>
-                <label className="block text-xs font-bold text-[#3d3731] mb-1.5">
+                <label
+                  className="block text-xs font-bold mb-1.5"
+                  style={{ color: activeTheme.textPrimary }}
+                >
                   訂正後の新しい本文
                 </label>
                 <textarea
@@ -5784,18 +5962,24 @@ export default function Home() {
                   autoFocus
                   className={`w-full ${
                     fontSize === "large" ? "p-3.5 text-base" : "p-3 text-sm"
-                  } bg-[#faf8f5] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] leading-relaxed resize-none`}
-                  style={{ fontFamily: getNoteFontFamilyStyle(noteFont) }}
+                  } rounded-xl border focus:outline-none leading-relaxed resize-none transition-colors`}
+                  style={{
+                    backgroundColor: activeTheme.bgSub,
+                    borderColor: activeTheme.border,
+                    color: activeTheme.textPrimary,
+                    fontFamily: getNoteFontFamilyStyle(noteFont),
+                  }}
                 />
               </div>
             </div>
 
             {/* モーダルのフッターボタン */}
-            <div className="shrink-0 flex justify-end gap-2.5 pt-4 mt-3 border-t border-[#ded6c9]">
+            <div className="shrink-0 flex justify-end gap-2.5 pt-4 mt-3 border-t" style={{ borderColor: activeTheme.border }}>
               <button
                 type="button"
                 onClick={() => setEditingContentNote(null)}
-                className="px-4 py-2 rounded-xl text-xs font-medium text-[#6b6257] hover:bg-[#e8e0d3] transition-colors"
+                className="px-4 py-2 rounded-xl text-xs font-medium transition-colors hover:opacity-80"
+                style={{ color: activeTheme.textSecondary }}
               >
                 キャンセル
               </button>
@@ -5803,11 +5987,14 @@ export default function Home() {
                 type="button"
                 onClick={handleSaveContentEdit}
                 disabled={!editContentInput.trim()}
-                className={`px-5 py-2 rounded-xl text-xs font-medium transition-all shadow-xs ${
-                  editContentInput.trim()
-                    ? "bg-[#3d3731] text-[#faf8f5] hover:bg-[#292420]"
-                    : "bg-[#d0c6b8] text-[#8a7f72] cursor-not-allowed"
-                }`}
+                className="px-5 py-2 rounded-xl text-xs font-medium transition-all shadow-xs"
+                style={{
+                  backgroundColor: editContentInput.trim() ? activeTheme.accent : activeTheme.bgSub,
+                  color: editContentInput.trim() ? activeTheme.accentText : activeTheme.textSecondary,
+                  cursor: editContentInput.trim() ? "pointer" : "not-allowed",
+                  borderColor: activeTheme.border,
+                  borderWidth: editContentInput.trim() ? "0px" : "1px",
+                }}
               >
                 訂正を保存
               </button>
@@ -5823,20 +6010,32 @@ export default function Home() {
           onClick={() => setShowDiscardConfirmModal(false)}
         >
           <div
-            className="bg-[#f4f0e8] rounded-2xl p-6 sm:p-7 max-w-sm w-full border border-[#ded6c9] shadow-2xl transition-all"
+            className="rounded-2xl p-6 sm:p-7 max-w-sm w-full border shadow-2xl transition-all"
+            style={{ backgroundColor: activeTheme.bgCard, borderColor: activeTheme.border }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-base font-bold text-[#3d3731] mb-2">
+            <h3
+              className="text-base font-bold mb-2"
+              style={{ color: activeTheme.textPrimary }}
+            >
               変更内容を破棄しますか？
             </h3>
-            <p className="text-xs text-[#786f66] leading-relaxed mb-6 bg-[#eae4d9] p-3 rounded-xl border border-[#ded6c9]">
+            <p
+              className="text-xs leading-relaxed mb-6 p-3 rounded-xl border"
+              style={{
+                backgroundColor: activeTheme.bgSub,
+                borderColor: activeTheme.border,
+                color: activeTheme.textSecondary,
+              }}
+            >
               保存されていないタイトルやカテゴリの変更は失われます。
             </p>
             <div className="flex justify-end gap-2.5">
               <button
                 type="button"
                 onClick={() => setShowDiscardConfirmModal(false)}
-                className="px-4 py-2 rounded-xl text-xs font-medium text-[#6b6257] hover:bg-[#e8e0d3] transition-colors"
+                className="px-4 py-2 rounded-xl text-xs font-medium transition-colors hover:opacity-80"
+                style={{ color: activeTheme.textSecondary }}
               >
                 編集を続ける
               </button>
@@ -5868,12 +6067,16 @@ export default function Home() {
           }}
         >
           <div
-            className="bg-[#f4f0e8] rounded-2xl p-6 sm:p-7 max-w-sm w-full border border-[#ded6c9] shadow-2xl transition-all"
+            className="rounded-2xl p-6 sm:p-7 max-w-sm w-full border shadow-2xl transition-all"
+            style={{ backgroundColor: activeTheme.bgCard, borderColor: activeTheme.border }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* ヘッダー */}
-            <div className="flex items-center justify-between mb-4 pb-2 border-b border-[#ded6c9]">
-              <h2 className="text-base font-bold text-[#3d3731] flex items-center gap-1.5">
+            <div className="flex items-center justify-between mb-4 pb-2 border-b" style={{ borderColor: activeTheme.border }}>
+              <h2
+                className="text-base font-bold flex items-center gap-1.5"
+                style={{ color: activeTheme.textPrimary }}
+              >
                 <span>{authMode === "reset" ? "🔑" : "🔐"}</span>{" "}
                 {authMode === "reset" ? "パスワードの再設定" : "クラウド同期"}
               </h2>
@@ -5889,7 +6092,8 @@ export default function Home() {
                   setShowPasswordConfirm(false);
                   setAuthMode("login");
                 }}
-                className="text-[#8a7f72] hover:text-[#3d3731] text-xs px-2 py-1"
+                className="text-xs px-2 py-1 transition-opacity hover:opacity-75"
+                style={{ color: activeTheme.textSecondary }}
               >
                 ✕
               </button>
@@ -5897,7 +6101,10 @@ export default function Home() {
 
             {/* モード切り替えタブ（ログイン / 新規登録 / 再設定時の戻るリンク） */}
             {authMode !== "reset" ? (
-              <div className="flex bg-[#e8e0d3] p-1 rounded-xl mb-4 border border-[#ded6c9]">
+              <div
+                className="flex p-1 rounded-xl mb-4 border"
+                style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border }}
+              >
                 <button
                   type="button"
                   onClick={() => {
@@ -5908,11 +6115,11 @@ export default function Home() {
                     setShowPassword(false);
                     setShowPasswordConfirm(false);
                   }}
-                  className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                    authMode === "login"
-                      ? "bg-[#3d3731] text-[#faf8f5] shadow-xs"
-                      : "text-[#6b6257] hover:text-[#2d2926]"
-                  }`}
+                  className="flex-1 py-1.5 text-xs font-bold rounded-lg transition-all"
+                  style={{
+                    backgroundColor: authMode === "login" ? activeTheme.accent : "transparent",
+                    color: authMode === "login" ? activeTheme.accentText : activeTheme.textSecondary,
+                  }}
                 >
                   ログイン
                 </button>
@@ -5926,11 +6133,11 @@ export default function Home() {
                     setShowPassword(false);
                     setShowPasswordConfirm(false);
                   }}
-                  className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                    authMode === "signup"
-                      ? "bg-[#3d3731] text-[#faf8f5] shadow-xs"
-                      : "text-[#6b6257] hover:text-[#2d2926]"
-                  }`}
+                  className="flex-1 py-1.5 text-xs font-bold rounded-lg transition-all"
+                  style={{
+                    backgroundColor: authMode === "signup" ? activeTheme.accent : "transparent",
+                    color: authMode === "signup" ? activeTheme.accentText : activeTheme.textSecondary,
+                  }}
                 >
                   新規登録
                 </button>
@@ -5947,7 +6154,8 @@ export default function Home() {
                     setAuthPasswordInput("");
                     setAuthPasswordConfirmInput("");
                   }}
-                  className="text-xs text-[#7d7367] hover:text-[#3d3731] flex items-center gap-1 font-medium cursor-pointer"
+                  className="text-xs flex items-center gap-1 font-medium cursor-pointer transition-opacity hover:opacity-80"
+                  style={{ color: activeTheme.textSecondary }}
                 >
                   <span>←</span> ログイン画面に戻る
                 </button>
@@ -5956,13 +6164,23 @@ export default function Home() {
 
             {authMode === "reset" ? (
               <form onSubmit={handleResetPasswordSubmit} className="space-y-3.5">
-                <p className="text-xs text-[#786f66] leading-relaxed bg-[#eae4d9] p-2.5 rounded-xl border border-[#ded6c9]">
+                <p
+                  className="text-xs leading-relaxed p-2.5 rounded-xl border"
+                  style={{
+                    backgroundColor: activeTheme.bgSub,
+                    borderColor: activeTheme.border,
+                    color: activeTheme.textSecondary,
+                  }}
+                >
                   登録時に保存した【復旧キー】を入力して、新しいパスワードを設定します。
                 </p>
 
                 {/* ユーザー名入力 */}
                 <div>
-                  <label className="block text-xs font-bold text-[#3d3731] mb-1">
+                  <label
+                    className="block text-xs font-bold mb-1"
+                    style={{ color: activeTheme.textPrimary }}
+                  >
                     ユーザー名（ID）
                   </label>
                   <input
@@ -5973,13 +6191,21 @@ export default function Home() {
                     autoCapitalize="none"
                     autoCorrect="off"
                     required
-                    className="w-full px-3 py-2 text-sm bg-[#faf8f5] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] placeholder-[#b0a598]"
+                    className="w-full px-3 py-2 text-sm rounded-xl border focus:outline-none transition-colors"
+                    style={{
+                      backgroundColor: activeTheme.bgSub,
+                      borderColor: activeTheme.border,
+                      color: activeTheme.textPrimary,
+                    }}
                   />
                 </div>
 
                 {/* 復旧キー入力 */}
                 <div>
-                  <label className="block text-xs font-bold text-[#3d3731] mb-1">
+                  <label
+                    className="block text-xs font-bold mb-1"
+                    style={{ color: activeTheme.textPrimary }}
+                  >
                     復旧キー
                   </label>
                   <input
@@ -5990,13 +6216,21 @@ export default function Home() {
                     autoCapitalize="characters"
                     autoCorrect="off"
                     required
-                    className="w-full px-3 py-2 text-sm font-mono bg-[#faf8f5] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] placeholder-[#b0a598]"
+                    className="w-full px-3 py-2 text-sm font-mono rounded-xl border focus:outline-none transition-colors"
+                    style={{
+                      backgroundColor: activeTheme.bgSub,
+                      borderColor: activeTheme.border,
+                      color: activeTheme.textPrimary,
+                    }}
                   />
                 </div>
 
                 {/* 新しいパスワード入力 */}
                 <div>
-                  <label className="block text-xs font-bold text-[#3d3731] mb-1">
+                  <label
+                    className="block text-xs font-bold mb-1"
+                    style={{ color: activeTheme.textPrimary }}
+                  >
                     新しいパスワード（6文字以上）
                   </label>
                   <div className="relative flex items-center">
@@ -6006,12 +6240,18 @@ export default function Home() {
                       value={authPasswordInput}
                       onChange={(e) => setAuthPasswordInput(e.target.value)}
                       required
-                      className="w-full px-3 py-2 pr-10 text-sm bg-[#faf8f5] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] placeholder-[#b0a598]"
+                      className="w-full px-3 py-2 pr-10 text-sm rounded-xl border focus:outline-none transition-colors"
+                      style={{
+                        backgroundColor: activeTheme.bgSub,
+                        borderColor: activeTheme.border,
+                        color: activeTheme.textPrimary,
+                      }}
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-2.5 text-[#8a7f72] hover:text-[#3d3731] text-sm p-1 transition-colors"
+                      className="absolute right-2.5 text-sm p-1 transition-opacity hover:opacity-80"
+                      style={{ color: activeTheme.textSecondary }}
                       title={showPassword ? "パスワードを隠す" : "パスワードを表示する"}
                       aria-label={showPassword ? "パスワードを隠す" : "パスワードを表示する"}
                     >
@@ -6022,7 +6262,10 @@ export default function Home() {
 
                 {/* 新しいパスワード確認用入力 */}
                 <div>
-                  <label className="block text-xs font-bold text-[#3d3731] mb-1">
+                  <label
+                    className="block text-xs font-bold mb-1"
+                    style={{ color: activeTheme.textPrimary }}
+                  >
                     新しいパスワード（確認用）
                   </label>
                   <div className="relative flex items-center">
@@ -6032,12 +6275,18 @@ export default function Home() {
                       value={authPasswordConfirmInput}
                       onChange={(e) => setAuthPasswordConfirmInput(e.target.value)}
                       required
-                      className="w-full px-3 py-2 pr-10 text-sm bg-[#faf8f5] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] placeholder-[#b0a598]"
+                      className="w-full px-3 py-2 pr-10 text-sm rounded-xl border focus:outline-none transition-colors"
+                      style={{
+                        backgroundColor: activeTheme.bgSub,
+                        borderColor: activeTheme.border,
+                        color: activeTheme.textPrimary,
+                      }}
                     />
                     <button
                       type="button"
                       onClick={() => setShowPasswordConfirm(!showPasswordConfirm)}
-                      className="absolute right-2.5 text-[#8a7f72] hover:text-[#3d3731] text-sm p-1 transition-colors"
+                      className="absolute right-2.5 text-sm p-1 transition-opacity hover:opacity-80"
+                      style={{ color: activeTheme.textSecondary }}
                       title={showPasswordConfirm ? "パスワードを隠す" : "パスワードを表示する"}
                       aria-label={showPasswordConfirm ? "パスワードを隠す" : "パスワードを表示する"}
                     >
@@ -6065,7 +6314,11 @@ export default function Home() {
                   <button
                     type="submit"
                     disabled={isAuthLoading}
-                    className="w-full py-2.5 rounded-xl bg-[#3d3731] text-[#faf8f5] text-sm font-bold hover:bg-[#292420] active:scale-[0.99] transition-all disabled:opacity-50 shadow-xs cursor-pointer"
+                    className="w-full py-2.5 rounded-xl text-sm font-bold active:scale-[0.99] transition-all disabled:opacity-50 shadow-xs cursor-pointer hover:opacity-85"
+                    style={{
+                      backgroundColor: activeTheme.accent,
+                      color: activeTheme.accentText,
+                    }}
                   >
                     {isAuthLoading ? "再設定中..." : "パスワードを再設定してログイン"}
                   </button>
@@ -6075,7 +6328,10 @@ export default function Home() {
               <form onSubmit={handleAuthSubmit} className="space-y-3.5">
                 {/* ユーザー名入力 */}
                 <div>
-                  <label className="block text-xs font-bold text-[#3d3731] mb-1">
+                  <label
+                    className="block text-xs font-bold mb-1"
+                    style={{ color: activeTheme.textPrimary }}
+                  >
                     ユーザー名（ID）
                   </label>
                   <input
@@ -6086,10 +6342,18 @@ export default function Home() {
                     autoCapitalize="none"
                     autoCorrect="off"
                     required
-                    className="w-full px-3 py-2 text-sm bg-[#faf8f5] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] placeholder-[#b0a598]"
+                    className="w-full px-3 py-2 text-sm rounded-xl border focus:outline-none transition-colors"
+                    style={{
+                      backgroundColor: activeTheme.bgSub,
+                      borderColor: activeTheme.border,
+                      color: activeTheme.textPrimary,
+                    }}
                   />
                   {authMode === "signup" && (
-                    <span className="text-[10px] text-[#8a7f72] block mt-1">
+                    <span
+                      className="text-[10px] block mt-1"
+                      style={{ color: activeTheme.textSecondary }}
+                    >
                       ※半角英数字（a-z, 0-9）のみ使用できます
                     </span>
                   )}
@@ -6102,7 +6366,10 @@ export default function Home() {
 
                 {/* パスワード入力 */}
                 <div>
-                  <label className="block text-xs font-bold text-[#3d3731] mb-1">
+                  <label
+                    className="block text-xs font-bold mb-1"
+                    style={{ color: activeTheme.textPrimary }}
+                  >
                     パスワード（6文字以上）
                   </label>
                   <div className="relative flex items-center">
@@ -6112,12 +6379,18 @@ export default function Home() {
                       value={authPasswordInput}
                       onChange={(e) => setAuthPasswordInput(e.target.value)}
                       required
-                      className="w-full px-3 py-2 pr-10 text-sm bg-[#faf8f5] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] placeholder-[#b0a598]"
+                      className="w-full px-3 py-2 pr-10 text-sm rounded-xl border focus:outline-none transition-colors"
+                      style={{
+                        backgroundColor: activeTheme.bgSub,
+                        borderColor: activeTheme.border,
+                        color: activeTheme.textPrimary,
+                      }}
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-2.5 text-[#8a7f72] hover:text-[#3d3731] text-sm p-1 transition-colors"
+                      className="absolute right-2.5 text-sm p-1 transition-opacity hover:opacity-80"
+                      style={{ color: activeTheme.textSecondary }}
                       title={showPassword ? "パスワードを隠す" : "パスワードを表示する"}
                       aria-label={showPassword ? "パスワードを隠す" : "パスワードを表示する"}
                     >
@@ -6129,7 +6402,10 @@ export default function Home() {
                 {/* 新規登録時のみ：パスワード確認用入力 */}
                 {authMode === "signup" && (
                   <div>
-                    <label className="block text-xs font-bold text-[#3d3731] mb-1">
+                    <label
+                      className="block text-xs font-bold mb-1"
+                      style={{ color: activeTheme.textPrimary }}
+                    >
                       パスワード（確認用）
                     </label>
                     <div className="relative flex items-center">
@@ -6139,12 +6415,18 @@ export default function Home() {
                         value={authPasswordConfirmInput}
                         onChange={(e) => setAuthPasswordConfirmInput(e.target.value)}
                         required
-                        className="w-full px-3 py-2 pr-10 text-sm bg-[#faf8f5] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] placeholder-[#b0a598]"
+                        className="w-full px-3 py-2 pr-10 text-sm rounded-xl border focus:outline-none transition-colors"
+                        style={{
+                          backgroundColor: activeTheme.bgSub,
+                          borderColor: activeTheme.border,
+                          color: activeTheme.textPrimary,
+                        }}
                       />
                       <button
                         type="button"
                         onClick={() => setShowPasswordConfirm(!showPasswordConfirm)}
-                        className="absolute right-2.5 text-[#8a7f72] hover:text-[#3d3731] text-sm p-1 transition-colors"
+                        className="absolute right-2.5 text-sm p-1 transition-opacity hover:opacity-80"
+                        style={{ color: activeTheme.textSecondary }}
                         title={showPasswordConfirm ? "パスワードを隠す" : "パスワードを表示する"}
                         aria-label={showPasswordConfirm ? "パスワードを隠す" : "パスワードを表示する"}
                       >
@@ -6155,7 +6437,14 @@ export default function Home() {
                 )}
 
                 {/* プライバシー安心注釈 */}
-                <div className="p-2.5 rounded-lg bg-[#eae4d9] border border-[#ded6c9] text-[11px] text-[#6b6257] leading-relaxed">
+                <div
+                  className="p-2.5 rounded-lg border text-[11px] leading-relaxed"
+                  style={{
+                    backgroundColor: activeTheme.bgSub,
+                    borderColor: activeTheme.border,
+                    color: activeTheme.textSecondary,
+                  }}
+                >
                   🛡️ <strong>メールアドレスは不要です</strong>。個人情報は一切収集せず、IDとパスワードのみで安全に端末間同期を行います。
                 </div>
 
@@ -6178,7 +6467,11 @@ export default function Home() {
                   <button
                     type="submit"
                     disabled={isAuthLoading}
-                    className="w-full py-2.5 rounded-xl bg-[#3d3731] text-[#faf8f5] text-sm font-bold hover:bg-[#292420] active:scale-[0.99] transition-all disabled:opacity-50 shadow-xs cursor-pointer"
+                    className="w-full py-2.5 rounded-xl text-sm font-bold active:scale-[0.99] transition-all disabled:opacity-50 shadow-xs cursor-pointer hover:opacity-85"
+                    style={{
+                      backgroundColor: activeTheme.accent,
+                      color: activeTheme.accentText,
+                    }}
                   >
                     {isAuthLoading
                       ? "通信中..."
@@ -6203,7 +6496,8 @@ export default function Home() {
                         setShowPassword(false);
                         setShowPasswordConfirm(false);
                       }}
-                      className="text-xs text-[#7d7367] hover:text-[#3d3731] underline font-medium cursor-pointer"
+                      className="text-xs underline font-medium cursor-pointer hover:opacity-80"
+                      style={{ color: activeTheme.textSecondary }}
                     >
                       パスワードをお忘れの方はこちら →
                     </button>
@@ -6224,25 +6518,48 @@ export default function Home() {
           }}
         >
           <div
-            className="bg-[#f7f4ed] rounded-2xl p-6 sm:p-7 max-w-sm w-full border border-[#ded6c9] shadow-2xl transition-all flex flex-col gap-4 text-center"
+            className="rounded-2xl p-6 sm:p-7 max-w-sm w-full border shadow-2xl transition-all flex flex-col gap-4 text-center"
+            style={{ backgroundColor: activeTheme.bgCard, borderColor: activeTheme.border }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex flex-col items-center gap-1">
               <span className="text-3xl">🌱</span>
-              <h2 className="text-base font-bold text-[#3d3731]">
+              <h2
+                className="text-base font-bold"
+                style={{ color: activeTheme.textPrimary }}
+              >
                 アカウントを作成しました！
               </h2>
-              <span className="text-xs text-[#8a7f72]">
+              <span
+                className="text-xs"
+                style={{ color: activeTheme.textSecondary }}
+              >
                 万が一パスワードを忘れたときの【復旧キー】です
               </span>
             </div>
 
             {/* 復旧キー枠 */}
-            <div className="p-3.5 bg-white rounded-xl border-2 border-[#d49e35] shadow-xs flex flex-col items-center gap-2">
-              <span className="text-[11px] font-bold text-[#8a7f72]">
+            <div
+              className="p-3.5 rounded-xl border-2 shadow-xs flex flex-col items-center gap-2"
+              style={{
+                backgroundColor: activeTheme.bgSub,
+                borderColor: activeTheme.accent,
+              }}
+            >
+              <span
+                className="text-[11px] font-bold"
+                style={{ color: activeTheme.textSecondary }}
+              >
                 あなたの復旧キー
               </span>
-              <code className="text-lg font-mono font-bold tracking-widest text-[#2d2926] select-all bg-[#faf8f5] px-3 py-1 rounded-lg border border-[#e5ded2]">
+              <code
+                className="text-lg font-mono font-bold tracking-widest select-all px-3 py-1 rounded-lg border"
+                style={{
+                  backgroundColor: activeTheme.bgCard,
+                  borderColor: activeTheme.border,
+                  color: activeTheme.textPrimary,
+                }}
+              >
                 {newlyRegisteredKey}
               </code>
               <button
@@ -6252,15 +6569,30 @@ export default function Home() {
                   setCopiedKeyToast(true);
                   setTimeout(() => setCopiedKeyToast(false), 2000);
                 }}
-                className="px-3.5 py-1 text-xs font-bold rounded-lg bg-[#f4f0e8] hover:bg-[#eae3d7] text-[#5c5348] border border-[#ded5c8] transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                className="px-3.5 py-1 text-xs font-bold rounded-lg border transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer hover:opacity-85"
+                style={{
+                  backgroundColor: activeTheme.bgCard,
+                  borderColor: activeTheme.border,
+                  color: activeTheme.textPrimary,
+                }}
               >
                 <span>📋</span> {copiedKeyToast ? "コピーしました！" : "キーをコピー"}
               </button>
             </div>
 
             {/* 3大注意点 */}
-            <div className="bg-[#fff9ed] border border-[#f0dcaf] rounded-xl p-3 text-left flex flex-col gap-1.5 text-xs text-[#7d5e1b] leading-relaxed">
-              <span className="font-bold text-[11px] flex items-center gap-1">
+            <div
+              className="border rounded-xl p-3 text-left flex flex-col gap-1.5 text-xs leading-relaxed"
+              style={{
+                backgroundColor: activeTheme.bgSub,
+                borderColor: activeTheme.border,
+                color: activeTheme.textSecondary,
+              }}
+            >
+              <span
+                className="font-bold text-[11px] flex items-center gap-1"
+                style={{ color: activeTheme.textPrimary }}
+              >
                 <span>⚠️</span> 大切なお願い（必ずお読みください）:
               </span>
               <ol className="list-decimal pl-4 space-y-1 text-[11px]">
@@ -6277,7 +6609,11 @@ export default function Home() {
                 setNewlyRegisteredKey(null);
                 setCopiedKeyToast(false);
               }}
-              className="w-full py-2.5 rounded-xl bg-[#3d3731] text-[#faf8f5] text-sm font-bold hover:bg-[#292420] active:scale-[0.99] transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+              className="w-full py-2.5 rounded-xl text-sm font-bold active:scale-[0.99] transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer hover:opacity-85"
+              style={{
+                backgroundColor: activeTheme.accent,
+                color: activeTheme.accentText,
+              }}
             >
               <span>📸</span> スクショを保存したので始める
             </button>
