@@ -126,7 +126,40 @@ const EyeOffIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
 type TabType = "home" | "list" | "categories" | "trash" | "settings";
 type FontSize = "normal" | "large";
 type ButtonSize = "normal" | "large";
+type FontFamily = "sans" | "serif" | "rounded";
 type CategorySortOrder = "usage" | "alphabetical" | "created";
+
+// フォントファミリーのCSSスタイル取得
+const getFontFamilyStyle = (family: FontFamily): string => {
+  switch (family) {
+    case "serif":
+      return "'Hiragino Mincho ProN', 'Yu Mincho', 'BIZ UDPMincho', 'MS PMincho', serif";
+    case "rounded":
+      return "'Hiragino Maru Gothic ProN', 'BIZ UDPGothic', 'Yu Gothic', sans-serif";
+    case "sans":
+    default:
+      return "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Hiragino Sans', 'Noto Sans JP', sans-serif";
+  }
+};
+
+export type NoteFontFamily = "sans" | "klee" | "yomogi" | "mincho" | "mono";
+
+// メモ本文専用のCSSフォントスタイル取得（手帳ペン字・ほっこり手書き・読書明朝・レトロ等幅・標準）
+const getNoteFontFamilyStyle = (font: NoteFontFamily): string => {
+  switch (font) {
+    case "klee":
+      return "'Klee One', 'Yu Kyokasho', 'Hiragino Maru Gothic ProN', sans-serif";
+    case "yomogi":
+      return "'Yomogi', 'Hannotate SC', 'Comic Sans MS', cursive, sans-serif";
+    case "mincho":
+      return "'Shippori Mincho', 'Hiragino Mincho ProN', 'Yu Mincho', serif";
+    case "mono":
+      return "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
+    case "sans":
+    default:
+      return "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Hiragino Sans', 'Noto Sans JP', sans-serif";
+  }
+};
 
 // テーマカラーの定義（標準クリーム、黒、および10色×パステル／ダーク）
 export type ColorHue =
@@ -716,7 +749,7 @@ const HELP_ITEMS = [
         <div className="pt-1.5 border-t border-[#e5ded2]">
           <strong className="block mb-0.5 text-[#3d3731]">本文の編集について：</strong>
           <p>
-            SeedNoteでは、過去の思考をありのまま残すため、<strong>本文の編集や削除はできない</strong>仕組みになっています（続きを書き足したい時は「追記」をご利用ください）。
+            ライトNoteでは、過去の思考をありのまま残すため、<strong>本文の編集や削除はできない</strong>仕組みになっています（続きを書き足したい時は「追記」をご利用ください）。
           </p>
         </div>
         <div className="pt-1.5 border-t border-[#e5ded2]">
@@ -802,6 +835,8 @@ export default function Home() {
   const [enableToast, setEnableToast] = useState(true);
   const [fontSize, setFontSize] = useState<FontSize>("normal");
   const [buttonSize, setButtonSize] = useState<ButtonSize>("normal");
+  const [fontFamily, setFontFamily] = useState<FontFamily>("sans");
+  const [noteFont, setNoteFont] = useState<NoteFontFamily>("sans");
 
   // テーマ関連のState（標準クリーム、黒、10色×パステル／ダーク）
   const [selectedHue, setSelectedHue] = useState<ColorHue>("cream");
@@ -954,6 +989,14 @@ export default function Home() {
       const savedBrightness = localStorage.getItem("seednote_theme_brightness") as ThemeBrightness | null;
       if (savedBrightness === "pastel" || savedBrightness === "dark") {
         setThemeBrightness(savedBrightness);
+      }
+      const savedFontFamily = localStorage.getItem("seednote_font_family") as FontFamily | null;
+      if (savedFontFamily === "sans" || savedFontFamily === "serif" || savedFontFamily === "rounded") {
+        setFontFamily(savedFontFamily);
+      }
+      const savedNoteFont = localStorage.getItem("seednote_note_font") as NoteFontFamily | null;
+      if (savedNoteFont && ["sans", "klee", "yomogi", "mincho", "mono"].includes(savedNoteFont)) {
+        setNoteFont(savedNoteFont);
       }
     } catch (e) {
       console.error("データの読み込みに失敗しました", e);
@@ -2015,7 +2058,7 @@ export default function Home() {
       .filter((s) => isHourInSlotDef(hour, s));
 
     if (active.length === 0) {
-      return { backgroundColor: "#e8e1d5" };
+      return { backgroundColor: activeTheme.bgSub };
     }
     if (active.length === 1) {
       return { backgroundColor: active[0].color };
@@ -2232,7 +2275,7 @@ export default function Home() {
     }
   };
 
-  const hasContent = content.trim().length > 0;
+  const hasContent = content.trim().length > 0 || title.trim().length > 0;
   const activeNotes = notes.filter((n) => !n.isTrash);
   const trashNotes = notes.filter((n) => n.isTrash);
 
@@ -2297,8 +2340,12 @@ export default function Home() {
 
   return (
     <div
-      className="min-h-screen font-sans flex flex-col justify-between p-4 sm:p-8 relative overflow-x-hidden transition-colors duration-300"
-      style={{ backgroundColor: activeTheme.bgApp, color: activeTheme.textPrimary }}
+      className="min-h-screen flex flex-col justify-between p-4 sm:p-8 relative overflow-x-hidden transition-colors duration-300"
+      style={{
+        backgroundColor: activeTheme.bgApp,
+        color: activeTheme.textPrimary,
+        fontFamily: getFontFamilyStyle(fontFamily),
+      }}
     >
       {/* メニューが開いている時に画面のどこを触っても確実に閉じる透明な膜 */}
       {activeMenuNoteId && (
@@ -2415,7 +2462,7 @@ export default function Home() {
           <div className="flex items-center justify-between mb-6 pb-3 border-b" style={{ borderColor: activeTheme.border }}>
             <div>
               <h2 className="font-bold text-base flex items-center gap-1.5" style={{ color: activeTheme.textPrimary }}>
-                <span>🌱</span> SeedNote
+                <span>💡</span> ライトNote
               </h2>
               <span className="text-[11px]" style={{ color: activeTheme.textSecondary }}>メニュー</span>
             </div>
@@ -2617,23 +2664,6 @@ export default function Home() {
             <button
               type="button"
               onClick={() => {
-                setActiveTab("settings");
-                setIsMenuOpen(false);
-              }}
-              className={`w-full flex items-center gap-3 ${
-                buttonSize === "large" ? "px-4 py-3 text-base" : "px-3.5 py-2.5 text-sm"
-              } rounded-xl font-medium transition-colors text-left`}
-              style={{
-                backgroundColor: activeTab === "settings" ? activeTheme.bgSub : "transparent",
-                color: activeTab === "settings" ? activeTheme.textPrimary : activeTheme.textSecondary,
-              }}
-            >
-              <span>⚙️</span> 設定
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
                 setIsHelpOpen(true);
                 setIsMenuOpen(false);
               }}
@@ -2662,16 +2692,39 @@ export default function Home() {
                 color: activeTheme.textSecondary,
               }}
             >
-              <span>📜</span> 利用規約・プライバシー
+              <span className="shrink-0">📜</span>
+              <div className="flex flex-col text-left leading-tight">
+                <span>利用規約・</span>
+                <span>プライバシー</span>
+              </div>
             </button>
           </nav>
         </div>
 
-        <div
-          className="text-[11px] text-center pt-4 border-t"
-          style={{ borderColor: activeTheme.border, color: activeTheme.textSecondary }}
-        >
-          SeedNote v0.2
+        {/* 最下部：設定ボタン（区切り線で独立） ＆ バージョン */}
+        <div className="pt-3 border-t flex flex-col gap-1.5" style={{ borderColor: activeTheme.border }}>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("settings");
+              setIsMenuOpen(false);
+            }}
+            className={`w-full flex items-center gap-3 ${
+              buttonSize === "large" ? "px-4 py-3 text-base" : "px-3.5 py-2.5 text-sm"
+            } rounded-xl font-medium transition-colors text-left`}
+            style={{
+              backgroundColor: activeTab === "settings" ? activeTheme.bgSub : "transparent",
+              color: activeTab === "settings" ? activeTheme.textPrimary : activeTheme.textSecondary,
+            }}
+          >
+            <span>⚙️</span> 設定
+          </button>
+          <div
+            className="text-[11px] text-center pt-1"
+            style={{ color: activeTheme.textSecondary }}
+          >
+            SeedNote v0.2
+          </div>
         </div>
       </aside>
 
@@ -2725,7 +2778,10 @@ export default function Home() {
                 className={`w-full ${
                   fontSize === "large" ? "text-lg sm:text-xl" : "text-base"
                 } bg-transparent border-0 focus:outline-none resize-none leading-relaxed relative z-10`}
-                style={{ color: activeTheme.textPrimary }}
+                style={{
+                  color: activeTheme.textPrimary,
+                  fontFamily: getNoteFontFamilyStyle(noteFont),
+                }}
               />
             </div>
 
@@ -3591,7 +3647,10 @@ export default function Home() {
                         className={`${
                           fontSize === "large" ? "text-base" : "text-sm"
                         } whitespace-pre-wrap leading-relaxed`}
-                        style={{ color: activeTheme.textPrimary }}
+                        style={{
+                          color: activeTheme.textPrimary,
+                          fontFamily: getNoteFontFamilyStyle(noteFont),
+                        }}
                       >
                         {note.content}
                       </p>
@@ -3654,7 +3713,10 @@ export default function Home() {
                                   </div>
                                   <p
                                     className="line-through opacity-80 whitespace-pre-wrap leading-relaxed"
-                                    style={{ color: activeTheme.textSecondary }}
+                                    style={{
+                                      color: activeTheme.textSecondary,
+                                      fontFamily: getNoteFontFamilyStyle(noteFont),
+                                    }}
                                   >
                                     {history.previousContent}
                                   </p>
@@ -3716,7 +3778,10 @@ export default function Home() {
                                     className={`${
                                       fontSize === "large" ? "text-sm" : "text-xs"
                                     } whitespace-pre-wrap leading-relaxed`}
-                                    style={{ color: activeTheme.textPrimary }}
+                                    style={{
+                                      color: activeTheme.textPrimary,
+                                      fontFamily: getNoteFontFamilyStyle(noteFont),
+                                    }}
                                   >
                                     {reply.content}
                                   </p>
@@ -3745,6 +3810,7 @@ export default function Home() {
                               backgroundColor: activeTheme.bgSub,
                               borderColor: activeTheme.border,
                               color: activeTheme.textPrimary,
+                              fontFamily: getNoteFontFamilyStyle(noteFont),
                             }}
                             autoFocus
                           />
@@ -3917,17 +3983,20 @@ export default function Home() {
 
                   {/* ② お気に入り表示 */}
                   <div>
-                    <span className="block text-[11px] font-bold text-[#8a7f72] mb-1.5">
+                    <span className="block text-[11px] font-bold mb-1.5" style={{ color: activeTheme.textSecondary }}>
                       ⭐ お気に入り
                     </span>
                     <button
                       type="button"
                       onClick={() => setTrashFilterOnlyFavorite(!trashFilterOnlyFavorite)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
-                        trashFilterOnlyFavorite
-                          ? "bg-[#d49e35] text-white shadow-xs font-bold"
-                          : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 border ${
+                        trashFilterOnlyFavorite ? "shadow-xs font-bold" : "hover:opacity-85"
                       }`}
+                      style={{
+                        backgroundColor: trashFilterOnlyFavorite ? activeTheme.accent : activeTheme.bgSub,
+                        borderColor: trashFilterOnlyFavorite ? activeTheme.accent : activeTheme.border,
+                        color: trashFilterOnlyFavorite ? activeTheme.accentText : activeTheme.textSecondary,
+                      }}
                     >
                       <span>{trashFilterOnlyFavorite ? "★" : "☆"}</span>
                       {trashFilterOnlyFavorite ? "お気に入りのみ表示中" : "お気に入りのみ表示"}
@@ -3941,15 +4010,15 @@ export default function Home() {
                       onClick={() => setIsTrashSearchCategoryOpen(!isTrashSearchCategoryOpen)}
                       className="w-full flex items-center justify-between mb-1.5 text-left group"
                     >
-                      <span className="text-[11px] font-bold text-[#8a7f72] flex items-center gap-1 group-hover:text-[#3d3731] transition-colors">
+                      <span className="text-[11px] font-bold flex items-center gap-1 transition-opacity hover:opacity-80" style={{ color: activeTheme.textSecondary }}>
                         <span>{isTrashSearchCategoryOpen ? "▼" : "▶"}</span> 🏷️ カテゴリからさがす
                       </span>
                       {trashFilterCategories.includes("uncategorized") ? (
-                        <span className="text-[10px] text-[#8a7f72] bg-[#f4f0e8] px-2 py-0.5 rounded-md">
+                        <span className="text-[10px] px-2 py-0.5 rounded-md border" style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border, color: activeTheme.textSecondary }}>
                           ”未分類” のメモを表示中
                         </span>
                       ) : trashFilterCategories.length > 1 ? (
-                        <span className="text-[10px] text-[#8a7f72] bg-[#f4f0e8] px-2 py-0.5 rounded-md">
+                        <span className="text-[10px] px-2 py-0.5 rounded-md border" style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border, color: activeTheme.textSecondary }}>
                           {trashFilterCategories.length}個のカテゴリで絞り込み中 (AND検索)
                         </span>
                       ) : null}
@@ -3960,11 +4029,16 @@ export default function Home() {
                         <button
                           type="button"
                           onClick={() => setTrashFilterCategories([])}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all border ${
                             trashFilterCategories.length === 0
-                              ? "bg-[#3d3731] text-white shadow-xs font-bold"
-                              : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
+                              ? "shadow-xs font-bold"
+                              : "hover:opacity-85"
                           }`}
+                          style={{
+                            backgroundColor: trashFilterCategories.length === 0 ? activeTheme.accent : activeTheme.bgSub,
+                            borderColor: trashFilterCategories.length === 0 ? activeTheme.accent : activeTheme.border,
+                            color: trashFilterCategories.length === 0 ? activeTheme.accentText : activeTheme.textSecondary,
+                          }}
                         >
                           ”すべてのメモ”
                         </button>
@@ -3978,11 +4052,16 @@ export default function Home() {
                               onClick={() =>
                                 setTrashFilterCategories(isUncategorizedSelected ? [] : ["uncategorized"])
                               }
-                              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all border ${
                                 isUncategorizedSelected
-                                  ? "bg-[#3d3731] text-white shadow-xs font-bold"
-                                  : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
+                                  ? "shadow-xs font-bold"
+                                  : "hover:opacity-85"
                               }`}
+                              style={{
+                                backgroundColor: isUncategorizedSelected ? activeTheme.accent : activeTheme.bgSub,
+                                borderColor: isUncategorizedSelected ? activeTheme.accent : activeTheme.border,
+                                color: isUncategorizedSelected ? activeTheme.accentText : activeTheme.textSecondary,
+                              }}
                             >
                               ”未分類”
                             </button>
@@ -4004,11 +4083,16 @@ export default function Home() {
                                     : [...withoutUncategorized, cat];
                                 })
                               }
-                              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all border ${
                                 isSelected
-                                  ? "bg-[#3d3731] text-white shadow-xs font-bold"
-                                  : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
+                                  ? "shadow-xs font-bold"
+                                  : "hover:opacity-85"
                               }`}
+                              style={{
+                                backgroundColor: isSelected ? activeTheme.accent : activeTheme.bgSub,
+                                borderColor: isSelected ? activeTheme.accent : activeTheme.border,
+                                color: isSelected ? activeTheme.accentText : activeTheme.textSecondary,
+                              }}
                             >
                               {cat}
                             </button>
@@ -4020,7 +4104,7 @@ export default function Home() {
 
                   {/* ヒット件数 */}
                   {(trashFilterOnlyFavorite || trashFilterCategories.length > 0 || trashSearchQuery.trim().length > 0) && (
-                    <div className="text-[11px] text-[#8a7f72] pt-1 border-t border-[#f4f0e8] flex items-center justify-between">
+                    <div className="text-[11px] pt-1 border-t flex items-center justify-between" style={{ borderColor: activeTheme.border, color: activeTheme.textSecondary }}>
                       <span>該当するメモ: {displayedTrashNotes.length}件</span>
                       <button
                         type="button"
@@ -4029,7 +4113,8 @@ export default function Home() {
                           setTrashFilterCategories([]);
                           setTrashSearchQuery("");
                         }}
-                        className="text-[11px] text-[#8a7f72] hover:text-[#3d3731] underline"
+                        className="text-[11px] underline hover:opacity-80"
+                        style={{ color: activeTheme.textSecondary }}
                       >
                         条件をリセット
                       </button>
@@ -4042,11 +4127,14 @@ export default function Home() {
               {/* メモ一覧カードリスト */}
               <div className="flex flex-col gap-3">
               {trashNotes.length === 0 ? (
-                <div className="text-center py-10 text-sm text-[#8a7f72]">
+                <div className="text-center py-10 text-sm" style={{ color: activeTheme.textSecondary }}>
                   ゴミ箱は空です。
                 </div>
               ) : displayedTrashNotes.length === 0 ? (
-                <div className="text-center py-10 text-xs text-[#8a7f72] bg-white/50 rounded-xl border border-dashed border-[#ded6c9] p-4">
+                <div
+                  className="text-center py-10 text-xs rounded-xl border border-dashed p-4"
+                  style={{ backgroundColor: activeTheme.bgCard, borderColor: activeTheme.border, color: activeTheme.textSecondary }}
+                >
                   条件に一致するメモが見つかりませんでした。<br />
                   <button
                     type="button"
@@ -4055,7 +4143,8 @@ export default function Home() {
                       setTrashFilterCategories([]);
                       setTrashSearchQuery("");
                     }}
-                    className="mt-2 text-xs text-[#3d3731] font-bold underline hover:text-black"
+                    className="mt-2 text-xs font-bold underline hover:opacity-80"
+                    style={{ color: activeTheme.textPrimary }}
                   >
                     条件をリセットして全件表示
                   </button>
@@ -4064,20 +4153,27 @@ export default function Home() {
                 displayedTrashNotes.map((note) => (
                   <article
                     key={note.id}
-                    className="p-4 rounded-xl bg-white/70 border border-[#e5ded2] opacity-80"
+                    className="p-4 rounded-xl border opacity-90 transition-colors"
+                    style={{
+                      backgroundColor: activeTheme.bgCard,
+                      borderColor: activeTheme.border,
+                      color: activeTheme.textPrimary,
+                    }}
                   >
                     <div className="flex items-baseline justify-between gap-2 mb-1.5">
                       <h3
-                        className={`font-bold text-[#3d3731] ${
+                        className={`font-bold ${
                           fontSize === "large" ? "text-base" : "text-sm"
                         }`}
+                        style={{ color: activeTheme.textPrimary }}
                       >
-                        {note.title || <span className="text-[#b0a598] font-normal italic">（無題）</span>}
+                        {note.title || <span className="opacity-50 font-normal italic">（無題）</span>}
                       </h3>
                       <time
                         className={`${
                           fontSize === "large" ? "text-xs" : "text-[11px]"
-                        } text-[#8a7f72] shrink-0 font-mono`}
+                        } shrink-0 font-mono`}
+                        style={{ color: activeTheme.textSecondary }}
                       >
                         {formatDate(note.createdAt)}
                       </time>
@@ -4089,7 +4185,12 @@ export default function Home() {
                         {note.categories.map((cat) => (
                           <span
                             key={cat}
-                            className="text-[10px] bg-[#eae3d7] text-[#6b6257] px-2 py-0.5 rounded-md font-medium border border-[#ded6c9]"
+                            className="text-[10px] px-2 py-0.5 rounded-md font-medium border"
+                            style={{
+                              backgroundColor: activeTheme.bgSub,
+                              borderColor: activeTheme.border,
+                              color: activeTheme.textSecondary,
+                            }}
                           >
                             🏷️ {cat}
                           </span>
@@ -4100,23 +4201,28 @@ export default function Home() {
                     <p
                       className={`${
                         fontSize === "large" ? "text-base" : "text-sm"
-                      } text-[#5c5348] whitespace-pre-wrap leading-relaxed mb-2`}
+                      } whitespace-pre-wrap leading-relaxed mb-2`}
+                      style={{
+                        color: activeTheme.textPrimary,
+                        fontFamily: getNoteFontFamilyStyle(noteFont),
+                      }}
                     >
                       {note.content}
                     </p>
 
                     {/* 追記スレッド表示（デフォルトは折りたたみ） */}
                     {note.replies && note.replies.length > 0 && (
-                      <div className="mt-2 mb-3 pt-2 border-t border-[#ede7de] flex flex-col gap-2">
+                      <div className="mt-2 mb-3 pt-2 border-t flex flex-col gap-2" style={{ borderColor: activeTheme.border }}>
                         <button
                           type="button"
                           onClick={() => handleToggleReplies(note.id)}
-                          className="text-[11px] font-bold text-[#7d7367] hover:text-[#3d3731] flex items-center justify-between w-full text-left py-1 px-1.5 rounded-lg hover:bg-[#f4f0e8] transition-colors group cursor-pointer"
+                          className="text-[11px] font-bold flex items-center justify-between w-full text-left py-1 px-1.5 rounded-lg transition-colors group cursor-pointer hover:opacity-80"
+                          style={{ color: activeTheme.textSecondary }}
                         >
                           <span className="flex items-center gap-1.5">
                             <span>💬</span> 追記 ({note.replies.length}件)
                           </span>
-                          <span className="text-[10px] text-[#9c9184] group-hover:text-[#3d3731] flex items-center gap-1 font-normal font-mono">
+                          <span className="text-[10px] flex items-center gap-1 font-normal font-mono">
                             {expandedReplyNoteIds.includes(note.id) ? (
                               <>
                                 <span>たたむ</span>
@@ -4132,18 +4238,26 @@ export default function Home() {
                         </button>
 
                         {expandedReplyNoteIds.includes(note.id) && (
-                          <div className="flex flex-col gap-1.5 pl-2.5 border-l-2 border-[#d5cdc0]">
+                          <div className="flex flex-col gap-1.5 pl-2.5 border-l-2" style={{ borderColor: activeTheme.border }}>
                             {note.replies.map((reply) => (
                               <div
                                 key={reply.id}
-                                className="p-2 rounded-lg bg-[#faf8f5]/80 border border-[#e8e2d5] text-xs"
+                                className="p-2 rounded-lg border text-xs"
+                                style={{
+                                  backgroundColor: activeTheme.bgSub,
+                                  borderColor: activeTheme.border,
+                                  color: activeTheme.textPrimary,
+                                }}
                               >
                                 <div className="flex justify-end mb-0.5">
-                                  <time className="text-[10px] text-[#8a7f72] font-mono">
+                                  <time className="text-[10px] font-mono" style={{ color: activeTheme.textSecondary }}>
                                     {formatDate(reply.createdAt)}
                                   </time>
                                 </div>
-                                <p className="text-[#5c5348] whitespace-pre-wrap leading-relaxed">
+                                <p
+                                  className="whitespace-pre-wrap leading-relaxed"
+                                  style={{ fontFamily: getNoteFontFamilyStyle(noteFont) }}
+                                >
                                   {reply.content}
                                 </p>
                               </div>
@@ -4152,7 +4266,7 @@ export default function Home() {
                         )}
                       </div>
                     )}
-                    <div className="flex justify-end pt-2 border-t border-[#f4f0e8]">
+                    <div className="flex justify-end pt-2 border-t" style={{ borderColor: activeTheme.border }}>
                       <button
                         type="button"
                         onClick={() => handleRestoreFromTrash(note.id)}
@@ -4160,7 +4274,12 @@ export default function Home() {
                           buttonSize === "large"
                             ? "text-sm px-4 py-2"
                             : "text-xs px-3 py-1"
-                        } text-[#6b6257] hover:text-[#2d2926] bg-[#eae3d7] rounded-lg transition-colors flex items-center gap-1 font-medium`}
+                        } rounded-lg transition-colors flex items-center gap-1 font-medium border hover:opacity-85`}
+                        style={{
+                          backgroundColor: activeTheme.bgSub,
+                          borderColor: activeTheme.border,
+                          color: activeTheme.textPrimary,
+                        }}
                       >
                         <span>↩️</span> 元に戻す
                       </button>
@@ -4485,29 +4604,35 @@ export default function Home() {
                       <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
-                          onClick={() => handleChangeTheme("cream")}
-                          className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium border transition-all ${
+                          onClick={() => handleChangeTheme("cream", "pastel")}
+                          className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
                             selectedHue === "cream"
                               ? "ring-2 ring-[#3d3731] font-bold shadow-xs scale-102"
                               : "hover:opacity-85"
                           }`}
                           style={{ backgroundColor: "#e8e2d5", color: "#2d2926", borderColor: "#c7bcac" }}
                         >
-                          <span className="w-3.5 h-3.5 rounded-full border border-black/20" style={{ backgroundColor: "#f2efe9" }} />
+                          <span
+                            className="w-3.5 h-3.5 rounded-full border border-black/20 transition-colors"
+                            style={{ backgroundColor: selectedHue === "cream" ? "#3d3731" : "#f2efe9" }}
+                          />
                           <span>標準クリーム</span>
                         </button>
 
                         <button
                           type="button"
-                          onClick={() => handleChangeTheme("black")}
-                          className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium border transition-all ${
+                          onClick={() => handleChangeTheme("black", "dark")}
+                          className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
                             selectedHue === "black"
                               ? "ring-2 ring-white font-bold shadow-xs scale-102"
                               : "hover:opacity-85"
                           }`}
                           style={{ backgroundColor: "#1a1918", color: "#eae5dc", borderColor: "#3d3935" }}
                         >
-                          <span className="w-3.5 h-3.5 rounded-full border border-white/20" style={{ backgroundColor: "#262422" }} />
+                          <span
+                            className="w-3.5 h-3.5 rounded-full border border-white/20 transition-colors"
+                            style={{ backgroundColor: selectedHue === "black" ? "#d49e35" : "#262422" }}
+                          />
                           <span>黒（ダークモード）</span>
                         </button>
                       </div>
@@ -4521,7 +4646,14 @@ export default function Home() {
                       <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5">
                         {HUE_OPTIONS.map((opt) => {
                           const isSelected = selectedHue === opt.id;
-                          const dot = themeBrightness === "pastel" ? opt.pastelDot : opt.darkDot;
+                          const optPalette = getThemePalette(opt.id, themeBrightness);
+                          // イラストの指定：選択前は淡い色、選択後は濃い色（ダーク調は彩度の上がった鮮やかな色）
+                          const dotColor = isSelected
+                            ? optPalette.accent
+                            : themeBrightness === "pastel"
+                            ? opt.pastelDot
+                            : opt.darkDot;
+
                           return (
                             <button
                               key={opt.id}
@@ -4534,23 +4666,28 @@ export default function Home() {
                               }`}
                               style={{
                                 backgroundColor: activeTheme.bgCard,
-                                borderColor: isSelected ? activeTheme.accent : activeTheme.border,
+                                borderColor: isSelected ? optPalette.accent : activeTheme.border,
                               }}
                               title={`${opt.label}（${themeBrightness === "pastel" ? "パステル" : "ダーク"}）`}
                             >
                               <span
-                                className={`w-5 h-5 rounded-full transition-all ${
-                                  isSelected
-                                    ? "ring-2 ring-white ring-offset-2 ring-offset-[#3d3731] scale-110 shadow-sm"
-                                    : "border border-black/15 shadow-2xs"
+                                className={`w-5 h-5 rounded-full transition-all border shadow-2xs ${
+                                  isSelected ? "scale-110 shadow-sm" : ""
                                 }`}
-                                style={{ backgroundColor: dot }}
+                                style={{
+                                  backgroundColor: dotColor,
+                                  borderColor: isSelected
+                                    ? optPalette.accent
+                                    : themeBrightness === "pastel"
+                                    ? "rgba(0,0,0,0.15)"
+                                    : "rgba(255,255,255,0.2)",
+                                }}
                               />
                               <span
                                 className={`text-[10px] leading-tight ${
                                   isSelected ? "font-bold" : "font-normal"
                                 }`}
-                                style={{ color: activeTheme.textPrimary }}
+                                style={{ color: isSelected ? optPalette.accent : activeTheme.textPrimary }}
                               >
                                 {opt.label}
                               </span>
@@ -4602,6 +4739,93 @@ export default function Home() {
                   >
                     大きめ
                   </button>
+                </div>
+              </div>
+
+              {/* 文字フォント */}
+              <div
+                className="flex items-center justify-between p-3.5 rounded-xl border transition-colors"
+                style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border }}
+              >
+                <div>
+                  <span className="font-medium block" style={{ color: activeTheme.textPrimary }}>文字フォント</span>
+                  <span className="text-xs" style={{ color: activeTheme.textSecondary }}>画面全体の文字の書体・雰囲気</span>
+                </div>
+                <div
+                  className="flex gap-1.5 p-1 rounded-lg border transition-colors"
+                  style={{ backgroundColor: activeTheme.bgApp, borderColor: activeTheme.border }}
+                >
+                  {[
+                    { id: "sans" as FontFamily, label: "ゴシック" },
+                    { id: "serif" as FontFamily, label: "明朝体" },
+                    { id: "rounded" as FontFamily, label: "丸ゴシック" },
+                  ].map((f) => {
+                    const isSelected = fontFamily === f.id;
+                    return (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => {
+                          setFontFamily(f.id);
+                          localStorage.setItem("seednote_font_family", f.id);
+                        }}
+                        className={`px-3 py-1.5 text-xs rounded-md font-medium transition-all ${
+                          isSelected ? "shadow-xs font-bold" : "hover:opacity-80"
+                        }`}
+                        style={{
+                          backgroundColor: isSelected ? activeTheme.accent : "transparent",
+                          color: isSelected ? activeTheme.accentText : activeTheme.textSecondary,
+                        }}
+                      >
+                        {f.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* メモ本文のフォント */}
+              <div
+                className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 p-3.5 rounded-xl border transition-colors"
+                style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border }}
+              >
+                <div>
+                  <span className="font-medium block" style={{ color: activeTheme.textPrimary }}>📝 メモ本文のフォント</span>
+                  <span className="text-xs" style={{ color: activeTheme.textSecondary }}>メモや追記の入力・表示の書体</span>
+                </div>
+                <div
+                  className="flex flex-wrap gap-1.5 p-1 rounded-lg border transition-colors"
+                  style={{ backgroundColor: activeTheme.bgApp, borderColor: activeTheme.border }}
+                >
+                  {[
+                    { id: "sans" as NoteFontFamily, label: "標準" },
+                    { id: "klee" as NoteFontFamily, label: "手帳ペン字" },
+                    { id: "yomogi" as NoteFontFamily, label: "ほっこり手書き" },
+                    { id: "mincho" as NoteFontFamily, label: "読書明朝" },
+                    { id: "mono" as NoteFontFamily, label: "レトロ等幅" },
+                  ].map((f) => {
+                    const isSelected = noteFont === f.id;
+                    return (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => {
+                          setNoteFont(f.id);
+                          localStorage.setItem("seednote_note_font", f.id);
+                        }}
+                        className={`px-2.5 py-1.5 text-xs rounded-md font-medium transition-all ${
+                          isSelected ? "shadow-xs font-bold" : "hover:opacity-80"
+                        }`}
+                        style={{
+                          backgroundColor: isSelected ? activeTheme.accent : "transparent",
+                          color: isSelected ? activeTheme.accentText : activeTheme.textSecondary,
+                          fontFamily: getNoteFontFamilyStyle(f.id),
+                        }}
+                      >
+                        {f.label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -4684,17 +4908,20 @@ export default function Home() {
               </div>
 
               {/* 時間帯の設定（アコーディオン形式で折りたたみ可能） */}
-              <div className="bg-white rounded-xl border border-[#e5ded2] overflow-hidden">
+              <div
+                className="rounded-xl border overflow-hidden transition-colors"
+                style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border }}
+              >
                 <button
                   type="button"
                   onClick={() => setIsTimeSlotsAccordionOpen(!isTimeSlotsAccordionOpen)}
-                  className="w-full p-4 flex items-center justify-between text-left hover:bg-[#faf8f5] transition-colors"
+                  className="w-full p-4 flex items-center justify-between text-left hover:opacity-90 transition-opacity cursor-pointer"
                 >
                   <div>
-                    <span className="font-bold text-[#3d3731] block">
+                    <span className="font-bold block" style={{ color: activeTheme.textPrimary }}>
                       ⏰ 時間帯の設定
                     </span>
-                    <span className="text-xs text-[#8a7f72]">
+                    <span className="text-xs" style={{ color: activeTheme.textSecondary }}>
                       {isTimeSlotsAccordionOpen
                         ? "バーの操作やボタンで、生活リズムに合わせて調整できます（重なりOK）"
                         : "生活リズムに合わせて調整（タップして設定を展開）"}
@@ -4702,14 +4929,15 @@ export default function Home() {
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {!isTimeSlotsAccordionOpen && (
-                      <span className="text-[11px] text-[#8a7f72] hidden sm:inline">
+                      <span className="text-[11px]" style={{ color: activeTheme.textSecondary }}>
                         5つの時間帯
                       </span>
                     )}
                     <span
-                      className={`text-xs text-[#8a7f72] transition-transform duration-200 ${
+                      className={`text-xs transition-transform duration-200 ${
                         isTimeSlotsAccordionOpen ? "rotate-90" : ""
                       }`}
+                      style={{ color: activeTheme.textSecondary }}
                     >
                       ▶
                     </span>
@@ -4717,33 +4945,41 @@ export default function Home() {
                 </button>
 
                 {isTimeSlotsAccordionOpen && (
-                  <div className="p-4 pt-1 border-t border-[#f4f0e8]">
+                  <div className="p-4 pt-1 border-t" style={{ borderColor: activeTheme.border }}>
                     <div className="flex justify-end pt-1 mb-2">
                       <button
                         type="button"
                         onClick={handleResetTimeSlots}
-                        className="text-xs text-[#8a7f72] hover:text-[#3d3731] bg-[#f4f0e8] hover:bg-[#eae3d7] px-2.5 py-1 rounded-lg transition-colors font-medium shrink-0"
+                        className="text-xs px-2.5 py-1 rounded-lg transition-colors font-medium shrink-0 border hover:opacity-85"
+                        style={{
+                          backgroundColor: activeTheme.bgCard,
+                          borderColor: activeTheme.border,
+                          color: activeTheme.textSecondary,
+                        }}
                       >
                         標準に戻す
                       </button>
                     </div>
 
                     {/* ── 24時間タイムラインバー ── */}
-                    <div className="my-4 p-3 bg-[#faf8f5] rounded-xl border border-[#ede7dd]">
+                    <div
+                      className="my-4 p-3 rounded-xl border transition-colors"
+                      style={{ backgroundColor: activeTheme.bgCard, borderColor: activeTheme.border }}
+                    >
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-bold text-[#5c5348] flex items-center gap-1.5">
+                        <span className="text-xs font-bold flex items-center gap-1.5" style={{ color: activeTheme.textPrimary }}>
                           <span>📊 24時間タイムライン</span>
-                          <span className="text-[10px] font-normal text-[#8a7f72]">
+                          <span className="text-[10px] font-normal" style={{ color: activeTheme.textSecondary }}>
                             （タップで時間帯を選択・調整）
                           </span>
                         </span>
-                        <span className="text-[11px] font-medium text-[#7d7367]">
-                          調整中: <span className="font-bold text-[#3d3731]">{timeSlots[selectedSlotForEdit]?.icon} {timeSlots[selectedSlotForEdit]?.label}</span>
+                        <span className="text-[11px] font-medium" style={{ color: activeTheme.textSecondary }}>
+                          調整中: <span className="font-bold" style={{ color: activeTheme.textPrimary }}>{timeSlots[selectedSlotForEdit]?.icon} {timeSlots[selectedSlotForEdit]?.label}</span>
                         </span>
                       </div>
 
                       {/* タイムライン上部の目盛りラベル (0:00, 6:00, 12:00, 18:00, 24:00) */}
-                      <div className="relative h-4 text-[10px] text-[#9c9184] font-mono select-none">
+                      <div className="relative h-4 text-[10px] font-mono select-none" style={{ color: activeTheme.textSecondary }}>
                         <span className="absolute left-0 -translate-x-0">0:00</span>
                         <span className="absolute left-1/4 -translate-x-1/2">6:00</span>
                         <span className="absolute left-2/4 -translate-x-1/2">12:00</span>
@@ -4802,7 +5038,8 @@ export default function Home() {
                       {/* 24時間のカラーバー本体（24分割） */}
                       <div
                         data-timeline-track
-                        className="w-full h-9 rounded-lg overflow-hidden border border-[#d5cdc0] flex shadow-inner relative cursor-pointer"
+                        className="w-full h-9 rounded-lg overflow-hidden border flex shadow-inner relative cursor-pointer"
+                        style={{ borderColor: activeTheme.border }}
                       >
                         {Array.from({ length: 24 }, (_, h) => {
                           const activeSlots = (Object.keys(DEFAULT_TIME_SLOTS) as TimeSlotKey[])
@@ -4889,18 +5126,19 @@ export default function Home() {
                       </div>
 
                       {/* 重なりOK（斜線ストライプ）の説明キャプション */}
-                      <div className="mt-1 flex items-center justify-between text-[11px] text-[#7d7367]">
+                      <div className="mt-1 flex items-center justify-between text-[11px]" style={{ color: activeTheme.textSecondary }}>
                         <span className="flex items-center gap-1.5">
                           <span
-                            className="inline-block w-4 h-3 rounded-xs border border-[#b8aea2]"
+                            className="inline-block w-4 h-3 rounded-xs border"
                             style={{
+                              borderColor: activeTheme.border,
                               backgroundImage:
                                 "repeating-linear-gradient(135deg, #529961, #529961 3px, #4a7bb0 3px, #4a7bb0 6px)",
                             }}
                           />
                           <span>斜線の区間＝複数時間帯の重複（重なりOK）</span>
                         </span>
-                        <span className="text-[10px] text-[#8a7f72]">ピンを左右にドラッグして伸縮</span>
+                        <span className="text-[10px]">ピンを左右にドラッグして伸縮</span>
                       </div>
                     </div>
 
@@ -4916,10 +5154,12 @@ export default function Home() {
                             key={key}
                             onClick={() => setSelectedSlotForEdit(key)}
                             className={`p-3 rounded-xl transition-all cursor-pointer border ${
-                              isSelected
-                                ? "bg-[#faf8f5] border-[#3d3731] shadow-xs ring-1 ring-[#3d3731]"
-                                : "bg-[#faf8f5]/60 hover:bg-[#faf8f5] border-[#ede7dd]"
+                              isSelected ? "shadow-sm ring-1" : "hover:opacity-90"
                             }`}
+                            style={{
+                              backgroundColor: activeTheme.bgCard,
+                              borderColor: isSelected ? activeTheme.accent : activeTheme.border,
+                            }}
                           >
                             {/* 上段：アイコン・名称・現在の範囲・重なりバッジ */}
                             <div className="flex flex-wrap items-center justify-between gap-1.5 mb-2.5">
@@ -4929,13 +5169,20 @@ export default function Home() {
                                   style={{ backgroundColor: slot.color }}
                                 />
                                 <span className="text-base leading-none">{slot.icon}</span>
-                                <span className="font-bold text-xs text-[#3d3731]">
+                                <span className="font-bold text-xs" style={{ color: activeTheme.textPrimary }}>
                                   {slot.label}
                                 </span>
-                                <span className="font-mono text-xs font-semibold text-[#5c5348] bg-white px-2 py-0.5 rounded-md border border-[#e5ded2]">
+                                <span
+                                  className="font-mono text-xs font-semibold px-2 py-0.5 rounded-md border"
+                                  style={{
+                                    backgroundColor: activeTheme.bgSub,
+                                    borderColor: activeTheme.border,
+                                    color: activeTheme.textPrimary,
+                                  }}
+                                >
                                   {slot.startHour}:00 〜 {slot.endHour}:59
                                   {slot.endHour < slot.startHour && (
-                                    <span className="ml-1 text-[10px] text-[#8a7f72] font-normal">
+                                    <span className="ml-1 text-[10px] font-normal" style={{ color: activeTheme.textSecondary }}>
                                       (翌日)
                                     </span>
                                   )}
@@ -4944,12 +5191,22 @@ export default function Home() {
 
                               <div className="flex items-center gap-1.5">
                                 {overlaps.length > 0 && (
-                                  <span className="text-[10px] bg-[#f0eade] text-[#6b6257] px-2 py-0.5 rounded-full border border-[#dcd4c6]">
+                                  <span
+                                    className="text-[10px] px-2 py-0.5 rounded-full border"
+                                    style={{
+                                      backgroundColor: activeTheme.bgSub,
+                                      borderColor: activeTheme.border,
+                                      color: activeTheme.textSecondary,
+                                    }}
+                                  >
                                     🔄 「{overlaps.join("・")}」と重なり
                                   </span>
                                 )}
                                 {isSelected && (
-                                  <span className="text-[10px] bg-[#3d3731] text-white px-2 py-0.5 rounded-full font-medium">
+                                  <span
+                                    className="text-[10px] px-2 py-0.5 rounded-full font-medium"
+                                    style={{ backgroundColor: activeTheme.accent, color: activeTheme.accentText }}
+                                  >
                                     選択中
                                   </span>
                                 )}
@@ -4958,17 +5215,26 @@ export default function Home() {
 
                             {/* 下段：開始・終了時間の微調整（[-] / [+] ステッパー ＆ セレクト） */}
                             <div
-                              className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-2 border-t border-[#ede7dd]"
+                              className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-2 border-t"
+                              style={{ borderColor: activeTheme.border }}
                               onClick={(e) => e.stopPropagation()}
                             >
                               {/* 開始時間 */}
-                              <div className="flex items-center justify-between sm:justify-start gap-2 bg-white px-2.5 py-1.5 rounded-lg border border-[#e5ded2]">
-                                <span className="text-[#8a7f72] text-[11px] font-medium shrink-0">開始:</span>
+                              <div
+                                className="flex items-center justify-between sm:justify-start gap-2 px-2.5 py-1.5 rounded-lg border"
+                                style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border }}
+                              >
+                                <span className="text-[11px] font-medium shrink-0" style={{ color: activeTheme.textSecondary }}>開始:</span>
                                 <div className="flex items-center gap-1">
                                   <button
                                     type="button"
                                     onClick={() => handleStepHour(key, "startHour", -1)}
-                                    className="w-6 h-6 rounded flex items-center justify-center bg-[#f4f0e8] hover:bg-[#e8e0d3] active:bg-[#ded5c8] text-[#3d3731] font-bold text-xs transition-colors"
+                                    className="w-6 h-6 rounded flex items-center justify-center font-bold text-xs transition-colors hover:opacity-80 border"
+                                    style={{
+                                      backgroundColor: activeTheme.bgCard,
+                                      borderColor: activeTheme.border,
+                                      color: activeTheme.textPrimary,
+                                    }}
                                     title="1時間戻す"
                                   >
                                     －
@@ -4978,18 +5244,28 @@ export default function Home() {
                                     onChange={(e) =>
                                       handleUpdateTimeSlot(key, "startHour", Number(e.target.value))
                                     }
-                                    className="bg-[#faf8f5] border border-[#ded5c8] rounded px-1.5 py-0.5 text-xs font-mono font-bold text-[#2d2926] focus:outline-none focus:border-[#968979]"
+                                    className="rounded px-1.5 py-0.5 font-mono text-xs font-semibold focus:outline-none border"
+                                    style={{
+                                      backgroundColor: activeTheme.bgCard,
+                                      borderColor: activeTheme.border,
+                                      color: activeTheme.textPrimary,
+                                    }}
                                   >
                                     {Array.from({ length: 24 }, (_, i) => (
-                                      <option key={i} value={i}>
-                                        {i}:00
+                                      <option key={i} value={i} style={{ backgroundColor: activeTheme.bgCard, color: activeTheme.textPrimary }}>
+                                        {i.toString().padStart(2, "0")}:00
                                       </option>
                                     ))}
                                   </select>
                                   <button
                                     type="button"
                                     onClick={() => handleStepHour(key, "startHour", 1)}
-                                    className="w-6 h-6 rounded flex items-center justify-center bg-[#f4f0e8] hover:bg-[#e8e0d3] active:bg-[#ded5c8] text-[#3d3731] font-bold text-xs transition-colors"
+                                    className="w-6 h-6 rounded flex items-center justify-center font-bold text-xs transition-colors hover:opacity-80 border"
+                                    style={{
+                                      backgroundColor: activeTheme.bgCard,
+                                      borderColor: activeTheme.border,
+                                      color: activeTheme.textPrimary,
+                                    }}
                                     title="1時間進める"
                                   >
                                     ＋
@@ -4998,13 +5274,21 @@ export default function Home() {
                               </div>
 
                               {/* 終了時間 */}
-                              <div className="flex items-center justify-between sm:justify-start gap-2 bg-white px-2.5 py-1.5 rounded-lg border border-[#e5ded2]">
-                                <span className="text-[#8a7f72] text-[11px] font-medium shrink-0">終了:</span>
+                              <div
+                                className="flex items-center justify-between sm:justify-start gap-2 px-2.5 py-1.5 rounded-lg border"
+                                style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border }}
+                              >
+                                <span className="text-[11px] font-medium shrink-0" style={{ color: activeTheme.textSecondary }}>終了:</span>
                                 <div className="flex items-center gap-1">
                                   <button
                                     type="button"
                                     onClick={() => handleStepHour(key, "endHour", -1)}
-                                    className="w-6 h-6 rounded flex items-center justify-center bg-[#f4f0e8] hover:bg-[#e8e0d3] active:bg-[#ded5c8] text-[#3d3731] font-bold text-xs transition-colors"
+                                    className="w-6 h-6 rounded flex items-center justify-center font-bold text-xs transition-colors hover:opacity-80 border"
+                                    style={{
+                                      backgroundColor: activeTheme.bgCard,
+                                      borderColor: activeTheme.border,
+                                      color: activeTheme.textPrimary,
+                                    }}
                                     title="1時間戻す"
                                   >
                                     －
@@ -5014,18 +5298,28 @@ export default function Home() {
                                     onChange={(e) =>
                                       handleUpdateTimeSlot(key, "endHour", Number(e.target.value))
                                     }
-                                    className="bg-[#faf8f5] border border-[#ded5c8] rounded px-1.5 py-0.5 text-xs font-mono font-bold text-[#2d2926] focus:outline-none focus:border-[#968979]"
+                                    className="rounded px-1.5 py-0.5 font-mono text-xs font-semibold focus:outline-none border"
+                                    style={{
+                                      backgroundColor: activeTheme.bgCard,
+                                      borderColor: activeTheme.border,
+                                      color: activeTheme.textPrimary,
+                                    }}
                                   >
                                     {Array.from({ length: 24 }, (_, i) => (
-                                      <option key={i} value={i}>
-                                        {i}:59
+                                      <option key={i} value={i} style={{ backgroundColor: activeTheme.bgCard, color: activeTheme.textPrimary }}>
+                                        {i.toString().padStart(2, "0")}:59
                                       </option>
                                     ))}
                                   </select>
                                   <button
                                     type="button"
                                     onClick={() => handleStepHour(key, "endHour", 1)}
-                                    className="w-6 h-6 rounded flex items-center justify-center bg-[#f4f0e8] hover:bg-[#e8e0d3] active:bg-[#ded5c8] text-[#3d3731] font-bold text-xs transition-colors"
+                                    className="w-6 h-6 rounded flex items-center justify-center font-bold text-xs transition-colors hover:opacity-80 border"
+                                    style={{
+                                      backgroundColor: activeTheme.bgCard,
+                                      borderColor: activeTheme.border,
+                                      color: activeTheme.textPrimary,
+                                    }}
                                     title="1時間進める"
                                   >
                                     ＋
@@ -5176,23 +5470,29 @@ export default function Home() {
           onClick={() => setIsHelpOpen(false)}
         >
           <div
-            className="bg-[#f4f0e8] rounded-2xl p-6 sm:p-7 max-w-lg w-full max-h-[85vh] flex flex-col border border-[#ded6c9] shadow-2xl"
+            className="rounded-2xl p-6 sm:p-7 max-w-lg w-full max-h-[85vh] flex flex-col border shadow-2xl transition-all"
+            style={{ backgroundColor: activeTheme.bgCard, borderColor: activeTheme.border }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* ヘルプモーダルのヘッダー */}
-            <div className="shrink-0 flex items-center justify-between pb-3 mb-3 border-b border-[#ded6c9]">
+            <div className="shrink-0 flex items-center justify-between pb-3 mb-3 border-b" style={{ borderColor: activeTheme.border }}>
               <div>
-                <h2 className="text-base font-bold text-[#3d3731] flex items-center gap-1.5">
+                <h2 className="text-base font-bold flex items-center gap-1.5" style={{ color: activeTheme.textPrimary }}>
                   <span>🌱</span> SeedNote ガイド・ヘルプ
                 </h2>
-                <span className="text-[11px] text-[#8a7f72]">
+                <span className="text-[11px]" style={{ color: activeTheme.textSecondary }}>
                   気になる項目をタップして詳細をご覧ください
                 </span>
               </div>
               <button
                 type="button"
                 onClick={() => setIsHelpOpen(false)}
-                className="w-7 h-7 rounded-full bg-[#e8e0d3] text-xs font-bold text-[#5c5348] hover:bg-[#ded6c9] transition-colors flex items-center justify-center shrink-0"
+                className="w-7 h-7 rounded-full text-xs font-bold transition-opacity hover:opacity-75 flex items-center justify-center shrink-0 border"
+                style={{
+                  backgroundColor: activeTheme.bgSub,
+                  borderColor: activeTheme.border,
+                  color: activeTheme.textSecondary,
+                }}
               >
                 ✕
               </button>
@@ -5205,27 +5505,40 @@ export default function Home() {
                 return (
                   <div
                     key={item.id}
-                    className="shrink-0 border border-[#ded6c9] rounded-xl bg-white overflow-hidden transition-colors"
+                    className="shrink-0 border rounded-xl overflow-hidden transition-colors"
+                    style={{
+                      backgroundColor: activeTheme.bgSub,
+                      borderColor: activeTheme.border,
+                    }}
                   >
                     <button
                       type="button"
                       onClick={() =>
                         setOpenHelpSection(isOpen ? null : item.id)
                       }
-                      className="w-full flex items-center justify-between p-3.5 text-left text-sm font-bold text-[#3d3731] hover:bg-[#faf8f5] transition-colors min-h-[48px]"
+                      className="w-full flex items-center justify-between p-3.5 text-left text-sm font-bold transition-opacity hover:opacity-85 min-h-[48px]"
+                      style={{ color: activeTheme.textPrimary }}
                     >
                       <span>{item.title}</span>
                       <span
-                        className={`text-xs text-[#8a7f72] transition-transform duration-200 ${
+                        className={`text-xs transition-transform duration-200 ${
                           isOpen ? "rotate-90" : ""
                         }`}
+                        style={{ color: activeTheme.textSecondary }}
                       >
                         ▶
                       </span>
                     </button>
 
                     {isOpen && (
-                      <div className="px-4 pb-4 pt-1 text-xs sm:text-sm text-[#453f38] leading-relaxed border-t border-[#f4f0e8] bg-[#faf8f5]/50">
+                      <div
+                        className="px-4 pb-4 pt-1 text-xs sm:text-sm leading-relaxed border-t transition-colors"
+                        style={{
+                          backgroundColor: activeTheme.bgCard,
+                          borderColor: activeTheme.border,
+                          color: activeTheme.textPrimary,
+                        }}
+                      >
                         {item.content}
                       </div>
                     )}
@@ -5450,7 +5763,10 @@ export default function Home() {
                 <label className="block text-xs font-bold text-[#8a7f72] mb-1">
                   訂正前の文章（第{(editingContentNote.editHistory?.length || 0) + 1}版として保存されます）
                 </label>
-                <div className="p-3 rounded-xl bg-white/60 border border-[#e5ded2] text-xs text-[#6b6257] whitespace-pre-wrap leading-relaxed max-h-28 overflow-y-auto select-text font-mono">
+                <div
+                  className="p-3 rounded-xl bg-white/60 border border-[#e5ded2] text-xs text-[#6b6257] whitespace-pre-wrap leading-relaxed max-h-28 overflow-y-auto select-text"
+                  style={{ fontFamily: getNoteFontFamilyStyle(noteFont) }}
+                >
                   {editingContentNote.content}
                 </div>
               </div>
@@ -5469,6 +5785,7 @@ export default function Home() {
                   className={`w-full ${
                     fontSize === "large" ? "p-3.5 text-base" : "p-3 text-sm"
                   } bg-[#faf8f5] rounded-xl border border-[#ded5c8] focus:outline-none focus:border-[#968979] text-[#2d2926] leading-relaxed resize-none`}
+                  style={{ fontFamily: getNoteFontFamilyStyle(noteFont) }}
                 />
               </div>
             </div>
@@ -5948,7 +6265,7 @@ export default function Home() {
               </span>
               <ol className="list-decimal pl-4 space-y-1 text-[11px]">
                 <li><strong>誰にも教えないでください</strong>（パスワードと同じ機密情報です）。</li>
-                <li><strong>SeedNoteの中にメモしないでください</strong>（ログインできないと見られなくなります）。</li>
+                <li><strong>ライトNoteの中にメモしないでください</strong>（ログインできないと見られなくなります）。</li>
                 <li><strong>スクリーンショットを撮る</strong>か、別の安全な場所に大切に保管してください。</li>
               </ol>
             </div>
@@ -5986,7 +6303,7 @@ export default function Home() {
                   <span>📜</span> 利用規約・プライバシー
                 </h2>
                 <span className="text-[11px]" style={{ color: activeTheme.textSecondary }}>
-                  SeedNoteをご利用いただく上での重要事項
+                  ライトNoteをご利用いただく上での重要事項
                 </span>
               </div>
               <button
@@ -6007,7 +6324,7 @@ export default function Home() {
                   <span>🌱</span> 1. 基本思想と不可逆性（編集・削除について）
                 </h3>
                 <p className="text-[11px] leading-relaxed">
-                  SeedNoteは「書くこと」よりも「後から思い出すこと（再発見）」を最優先にした、自分専用の思考アーカイブです。
+                  ライトNoteは「書くこと」よりも「後から思い出すこと（再発見）」を最優先にした、自分専用の思考アーカイブです。
                 </p>
                 <p className="text-[11px] leading-relaxed">
                   過去の思考の残骸や間違いも未来のアイデアの種となるため、<strong>メモの完全削除や本文の直接上書き編集はできない設計</strong>になっています。
@@ -6021,7 +6338,7 @@ export default function Home() {
                   <span>🔒</span> 2. プライバシーとデータ保護
                 </h3>
                 <p className="text-[11px] leading-relaxed">
-                  SeedNoteに記録されたすべてのメモ・追記・設定は、<strong>あなただけの完全なプライベートデータ</strong>です。
+                  ライトNoteに記録されたすべてのメモ・追記・設定は、<strong>あなただけの完全なプライベートデータ</strong>です。
                   SNSのように他人に公開されることは一切ありません。
                 </p>
                 <p className="text-[11px] leading-relaxed">
@@ -6035,11 +6352,11 @@ export default function Home() {
                   <span>⚠️</span> 3. 【最重要】パスワード復旧キーの管理について
                 </h3>
                 <p className="text-[11px] font-bold leading-relaxed text-[#b85448]">
-                  SeedNoteはメールアドレスを収集しない安心設計のため、パスワード再設定にはアカウント作成時に発行される「復旧キー（SEED-XXXX-XXXX）」が唯一の手段となります。
+                  ライトNoteはメールアドレスを収集しない安心設計のため、パスワード再設定にはアカウント作成時に発行される「復旧キー（SEED-XXXX-XXXX）」が唯一の手段となります。
                 </p>
                 <ul className="list-disc pl-4 space-y-1 text-[11px]">
                   <li>
-                    <strong>復旧キーは絶対にSeedNote内にメモしないでください。</strong>（ログインできなくなった際に見られなくなります）
+                    <strong>復旧キーは絶対にライトNote内にメモしないでください。</strong>（ログインできなくなった際に見られなくなります）
                   </li>
                   <li>
                     必ず<strong>スクリーンショットを撮影して保存する</strong>か、別の安全なメモ帳などに保管してください。
