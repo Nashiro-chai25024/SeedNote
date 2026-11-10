@@ -606,6 +606,8 @@ interface DbUserSettingsRow {
   time_slots: Record<TimeSlotKey, TimeSlotConfig> | null;
   font_size: FontSize | null;
   button_size: ButtonSize | null;
+  font_family?: FontFamily | null;
+  note_font?: NoteFontFamily | null;
   enable_toast: boolean | null;
   confirm_discard: boolean | null;
   recovery_key?: string | null;
@@ -1093,6 +1095,8 @@ export default function Home() {
     confirmDiscardOnEdit,
     selectedHue,
     themeBrightness,
+    fontFamily,
+    noteFont,
   });
 
   useEffect(() => {
@@ -1105,6 +1109,8 @@ export default function Home() {
       confirmDiscardOnEdit,
       selectedHue,
       themeBrightness,
+      fontFamily,
+      noteFont,
     };
   }, [
     categoriesList,
@@ -1115,6 +1121,8 @@ export default function Home() {
     confirmDiscardOnEdit,
     selectedHue,
     themeBrightness,
+    fontFamily,
+    noteFont,
   ]);
 
   // 設定のクラウド保存用デバウンスタイマー
@@ -1127,6 +1135,8 @@ export default function Home() {
       time_slots: Record<TimeSlotKey, TimeSlotConfig>;
       font_size: FontSize;
       button_size: ButtonSize;
+      font_family: FontFamily;
+      note_font: NoteFontFamily;
       enable_toast: boolean;
       confirm_discard: boolean;
       theme_hue: ColorHue;
@@ -1145,6 +1155,8 @@ export default function Home() {
           time_slots: partial.time_slots ?? cur.timeSlots,
           font_size: partial.font_size ?? cur.fontSize,
           button_size: partial.button_size ?? cur.buttonSize,
+          font_family: partial.font_family ?? cur.fontFamily,
+          note_font: partial.note_font ?? cur.noteFont,
           enable_toast: partial.enable_toast ?? cur.enableToast,
           confirm_discard: partial.confirm_discard ?? cur.confirmDiscardOnEdit,
           theme_hue: partial.theme_hue ?? cur.selectedHue,
@@ -1367,6 +1379,16 @@ export default function Home() {
           localStorage.setItem("seednote_theme_brightness", row.theme_brightness);
         }
 
+        // 文字フォント（全体・メモ専用）の同期
+        if (row.font_family === "sans" || row.font_family === "serif" || row.font_family === "rounded") {
+          setFontFamily(row.font_family);
+          localStorage.setItem("seednote_font_family", row.font_family);
+        }
+        if (row.note_font && ["sans", "klee", "yomogi", "mincho", "mono"].includes(row.note_font)) {
+          setNoteFont(row.note_font);
+          localStorage.setItem("seednote_note_font", row.note_font);
+        }
+
         // もしローカルやメモから新しいカテゴリが見つかった場合、クラウド側も最新化
         if (mergedCats.length > cloudCats.length) {
           const cur = latestSettingsRef.current;
@@ -1376,6 +1398,8 @@ export default function Home() {
             time_slots: row.time_slots || cur.timeSlots,
             font_size: row.font_size || cur.fontSize,
             button_size: row.button_size || cur.buttonSize,
+            font_family: row.font_family || cur.fontFamily,
+            note_font: row.note_font || cur.noteFont,
             enable_toast: row.enable_toast ?? cur.enableToast,
             confirm_discard: row.confirm_discard ?? cur.confirmDiscardOnEdit,
             theme_hue: row.theme_hue || cur.selectedHue,
@@ -1396,6 +1420,8 @@ export default function Home() {
           time_slots: cur.timeSlots,
           font_size: cur.fontSize,
           button_size: cur.buttonSize,
+          font_family: cur.fontFamily,
+          note_font: cur.noteFont,
           enable_toast: cur.enableToast,
           confirm_discard: cur.confirmDiscardOnEdit,
           recovery_key: generated,
@@ -2749,10 +2775,37 @@ export default function Home() {
       <main className="max-w-xl w-full mx-auto flex-1 flex flex-col justify-center py-3 sm:py-5 min-h-0">
         {/* ① ホーム（メモ入力：ノイズゼロのメイン空間） */}
         {activeTab === "home" && (
-          <div
-            className="relative rounded-2xl p-6 sm:p-8 shadow-sm border transition-all"
-            style={{ backgroundColor: activeTheme.bgCard, borderColor: activeTheme.border }}
-          >
+          <div className="relative pt-3.5">
+            {/* 上部に通る真円スパイラルリング（アイコンと同じ決定版真円ループ） */}
+            <svg
+              className="absolute top-0 left-1/2 -translate-x-1/2 w-4/5 max-w-[280px] h-7 z-10 pointer-events-none"
+              viewBox="0 0 200 24"
+              fill="none"
+              aria-hidden="true"
+            >
+              {/* カード上部のパンチ穴（6箇所） */}
+              <circle cx="20" cy="14" r="2.8" fill={activeTheme.bgApp} stroke={activeTheme.border} strokeWidth="0.8" />
+              <circle cx="50" cy="14" r="2.8" fill={activeTheme.bgApp} stroke={activeTheme.border} strokeWidth="0.8" />
+              <circle cx="80" cy="14" r="2.8" fill={activeTheme.bgApp} stroke={activeTheme.border} strokeWidth="0.8" />
+              <circle cx="110" cy="14" r="2.8" fill={activeTheme.bgApp} stroke={activeTheme.border} strokeWidth="0.8" />
+              <circle cx="140" cy="14" r="2.8" fill={activeTheme.bgApp} stroke={activeTheme.border} strokeWidth="0.8" />
+              <circle cx="170" cy="14" r="2.8" fill={activeTheme.bgApp} stroke={activeTheme.border} strokeWidth="0.8" />
+
+              {/* 真円スパイラルループ（半径6の真円円弧、右下がカード穴に抜ける） */}
+              <g stroke={activeTheme.accent} strokeWidth="2.2" strokeLinecap="round">
+                <path d="M 17.5 17 A 6 6 0 0 1 14 11 A 6 6 0 0 1 25.5 8" />
+                <path d="M 47.5 17 A 6 6 0 0 1 44 11 A 6 6 0 0 1 55.5 8" />
+                <path d="M 77.5 17 A 6 6 0 0 1 74 11 A 6 6 0 0 1 85.5 8" />
+                <path d="M 107.5 17 A 6 6 0 0 1 104 11 A 6 6 0 0 1 115.5 8" />
+                <path d="M 137.5 17 A 6 6 0 0 1 134 11 A 6 6 0 0 1 145.5 8" />
+                <path d="M 167.5 17 A 6 6 0 0 1 164 11 A 6 6 0 0 1 175.5 8" />
+              </g>
+            </svg>
+
+            <div
+              className="relative rounded-2xl p-6 sm:p-8 pt-7 sm:pt-8 shadow-sm border transition-all"
+              style={{ backgroundColor: activeTheme.bgCard, borderColor: activeTheme.border }}
+            >
             {/* 本文に文字が入った時だけ現れるタイトル欄 */}
             <div
               className={`overflow-hidden transition-all duration-300 ease-out ${
@@ -2916,7 +2969,8 @@ export default function Home() {
               </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
         {/* ② メモを見る（通常一覧：Twitter風のすっきり二層表示） */}
         {activeTab === "list" && (
@@ -4857,6 +4911,7 @@ export default function Home() {
                         onClick={() => {
                           setFontFamily(f.id);
                           localStorage.setItem("seednote_font_family", f.id);
+                          saveCloudSettings({ font_family: f.id }, true);
                         }}
                         className={`px-3 py-1.5 text-xs rounded-md font-medium transition-all ${
                           isSelected ? "shadow-xs font-bold" : "hover:opacity-80"
@@ -4901,6 +4956,7 @@ export default function Home() {
                         onClick={() => {
                           setNoteFont(f.id);
                           localStorage.setItem("seednote_note_font", f.id);
+                          saveCloudSettings({ note_font: f.id }, true);
                         }}
                         className={`px-2.5 py-1.5 text-xs rounded-md font-medium transition-all ${
                           isSelected ? "shadow-xs font-bold" : "hover:opacity-80"
