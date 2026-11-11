@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
 
@@ -949,6 +949,29 @@ export default function Home() {
   const [isAuthLoading, setIsAuthLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
+  // メモ入力テキストエリアの参照（チュートリアル時の自動フォーカス用）
+  const noteTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // インタラクティブ・ウォークスルーチュートリアルのState
+  const [tutorialStep, setTutorialStep] = useState<number | null>(null); // null: 非表示, 1〜8: ステップ番号
+  const [tutorialTargetRect, setTutorialTargetRect] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const [showInitialTutorialPrompt, setShowInitialTutorialPrompt] = useState(false);
+
+  // Step 2（入力体験）の時に自動でテキストエリアにフォーカスを当てる
+  useEffect(() => {
+    if (tutorialStep === 2) {
+      const timer = setTimeout(() => {
+        noteTextareaRef.current?.focus();
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [tutorialStep]);
+
   const [isLoaded, setIsLoaded] = useState(false);
 
   // 初回読み込み時にブラウザの保存領域 (localStorage) からデータを復元
@@ -1017,12 +1040,286 @@ export default function Home() {
       if (savedNoteFont && ["sans", "klee", "yomogi", "mincho", "mono"].includes(savedNoteFont)) {
         setNoteFont(savedNoteFont);
       }
+
+      // メモが0件かつ初回の場合のみ、控えめなチュートリアル案内を表示
+      const tutorialShown = localStorage.getItem("seednote_tutorial_shown");
+      if (!savedNotes || JSON.parse(savedNotes).length === 0) {
+        if (tutorialShown !== "true") {
+          setShowInitialTutorialPrompt(true);
+        }
+      }
     } catch (e) {
       console.error("データの読み込みに失敗しました", e);
     } finally {
       setIsLoaded(true);
     }
   }, []);
+
+  // チュートリアルのターゲット要素位置計算（スポットライト用）
+  const updateTutorialTargetRect = useCallback(() => {
+    if (tutorialStep === null || tutorialStep === 1 || tutorialStep === 8) {
+      setTutorialTargetRect(null);
+      return;
+    }
+
+    let targetId = "";
+    if (tutorialStep === 2 || tutorialStep === 3) {
+      targetId = "tutorial-target-input";
+    } else if (tutorialStep === 4) {
+      targetId = "tutorial-target-switch";
+    } else if (tutorialStep === 5) {
+      targetId = isSearchPanelOpen ? "tutorial-target-search-panel" : "tutorial-target-search-btn";
+    } else if (tutorialStep === 6) {
+      targetId = "tutorial-target-irreversible";
+    } else if (tutorialStep === 7) {
+      targetId = isMenuOpen ? "tutorial-target-menu-aside" : "tutorial-target-menu";
+    }
+
+    if (!targetId) {
+      setTutorialTargetRect(null);
+      return;
+    }
+
+    const el = document.getElementById(targetId);
+    if (el) {
+      const rect = el.getBoundingClientRect();
+      setTutorialTargetRect({
+        top: rect.top,
+        left: rect.left,
+        width: rect.width,
+        height: rect.height,
+      });
+      if (targetId !== "tutorial-target-menu-aside") {
+        if (tutorialStep === 2 || tutorialStep === 3) {
+          el.scrollIntoView({ behavior: "smooth", block: "start" });
+        } else {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }
+    } else {
+      setTutorialTargetRect(null);
+    }
+  }, [tutorialStep, isSearchPanelOpen, isMenuOpen, content, title]);
+
+  // 対象要素のリサイズ検知とスクロール連動
+  useEffect(() => {
+    updateTutorialTargetRect();
+    const handleResize = () => updateTutorialTargetRect();
+    window.addEventListener("resize", handleResize);
+    window.addEventListener("scroll", handleResize, true);
+
+    // アコーディオン開閉や文字入力によるターゲット要素のサイズ変化を監視
+    let resizeObserver: ResizeObserver | null = null;
+    let targetId = "";
+    if (tutorialStep === 2 || tutorialStep === 3) targetId = "tutorial-target-input";
+    else if (tutorialStep === 4) targetId = "tutorial-target-switch";
+    else if (tutorialStep === 5) targetId = isSearchPanelOpen ? "tutorial-target-search-panel" : "tutorial-target-search-btn";
+    else if (tutorialStep === 6) targetId = "tutorial-target-irreversible";
+    else if (tutorialStep === 7) targetId = isMenuOpen ? "tutorial-target-menu-aside" : "tutorial-target-menu";
+
+    if (targetId) {
+      const el = document.getElementById(targetId);
+      if (el && typeof ResizeObserver !== "undefined") {
+        resizeObserver = new ResizeObserver(() => {
+          updateTutorialTargetRect();
+        });
+        resizeObserver.observe(el);
+      }
+    }
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("scroll", handleResize, true);
+      if (resizeObserver) resizeObserver.disconnect();
+    };
+  }, [updateTutorialTargetRect, tutorialStep, isSearchPanelOpen, isMenuOpen]);
+
+  // チュートリアル中の画面外クリックガード（くり抜き枠とガイドカード以外の誤操作を防止）
+  useEffect(() => {
+    if (tutorialStep === null) return;
+    const handleTutorialClickCapture = (e: MouseEvent) => {
+      const guideCard = document.getElementById("tutorial-guide-card");
+      if (guideCard && guideCard.contains(e.target as Node)) {
+        return;
+      }
+      let targetId = "";
+      if (tutorialStep === 2 || tutorialStep === 3) targetId = "tutorial-target-input";
+      else if (tutorialStep === 4) targetId = "tutorial-target-switch";
+      else if (tutorialStep === 5) targetId = isSearchPanelOpen ? "tutorial-target-search-panel" : "tutorial-target-search-btn";
+      else if (tutorialStep === 6) targetId = "tutorial-target-irreversible";
+      else if (tutorialStep === 7) targetId = isMenuOpen ? "tutorial-target-menu-aside" : "tutorial-target-menu";
+
+      const targetEl = targetId ? document.getElementById(targetId) : null;
+      if (targetEl && targetEl.contains(e.target as Node)) {
+        return;
+      }
+
+      // 対象要素外のクリックは遮断
+      e.stopPropagation();
+      e.preventDefault();
+    };
+
+    window.addEventListener("click", handleTutorialClickCapture, true);
+    return () => window.removeEventListener("click", handleTutorialClickCapture, true);
+  }, [tutorialStep, isSearchPanelOpen, isMenuOpen]);
+
+  // ガイドカードの最適な配置スタイル（PCでは横の余白、スマホでは上下）
+  const getGuideCardStyle = (): React.CSSProperties => {
+    if (tutorialStep === 1 || tutorialStep === 8) {
+      return {
+        position: "fixed",
+        top: "50%",
+        left: "50%",
+        transform: "translate(-50%, -50%)",
+        maxWidth: "420px",
+        width: "92%",
+        zIndex: 50,
+      };
+    }
+
+    if (!tutorialTargetRect || typeof window === "undefined") {
+      return {
+        position: "fixed",
+        bottom: "24px",
+        left: "50%",
+        transform: "translateX(-50%)",
+        maxWidth: "380px",
+        width: "92%",
+        zIndex: 50,
+      };
+    }
+
+    const windowWidth = window.innerWidth;
+    const windowHeight = window.innerHeight;
+    const cardWidth = 360;
+
+    // Step 7でメニューが開いている場合はメニューの右横に配置
+    if (tutorialStep === 7 && isMenuOpen) {
+      return {
+        position: "fixed",
+        top: "80px",
+        left: windowWidth >= 700 ? "276px" : "50%",
+        transform: windowWidth >= 700 ? "none" : "translateX(-50%)",
+        maxWidth: "380px",
+        width: "92%",
+        zIndex: 50,
+      };
+    }
+
+    // PC画面（横幅860px以上）で、左右にガイドカードを置く十分な余白がある場合
+    const rightSpace = windowWidth - (tutorialTargetRect.left + tutorialTargetRect.width);
+    const leftSpace = tutorialTargetRect.left;
+
+    if (windowWidth >= 860 && rightSpace >= cardWidth + 24) {
+      // 右側の空きスペースにスマート配置（中央の要素と絶対に被らない）
+      const topPos = Math.min(
+        Math.max(20, tutorialTargetRect.top),
+        Math.max(20, windowHeight - 340)
+      );
+      return {
+        position: "fixed",
+        top: `${topPos}px`,
+        left: `${tutorialTargetRect.left + tutorialTargetRect.width + 20}px`,
+        width: `${cardWidth}px`,
+        zIndex: 50,
+      };
+    } else if (windowWidth >= 860 && leftSpace >= cardWidth + 24) {
+      // 左側の空きスペースに配置
+      const topPos = Math.min(
+        Math.max(20, tutorialTargetRect.top),
+        Math.max(20, windowHeight - 340)
+      );
+      return {
+        position: "fixed",
+        top: `${topPos}px`,
+        left: `${tutorialTargetRect.left - cardWidth - 20}px`,
+        width: `${cardWidth}px`,
+        zIndex: 50,
+      };
+    }
+
+    // スマホや余白が少ない画面：上下の空きスペースを計算して被りを完全防止
+    const topSpace = tutorialTargetRect.top;
+    const bottomSpace = windowHeight - (tutorialTargetRect.top + tutorialTargetRect.height);
+
+    // 下側にカードが入るスペースがある場合、または下側の方が広い場合は絶対に下（bottom）に配置！
+    if (bottomSpace >= 190 || bottomSpace >= topSpace) {
+      return {
+        position: "fixed",
+        bottom: "16px",
+        left: "50%",
+        transform: "translateX(-50%)",
+        maxWidth: "380px",
+        width: "92%",
+        zIndex: 50,
+      };
+    } else {
+      return {
+        position: "fixed",
+        top: "60px",
+        left: "50%",
+        transform: "translateX(-50%)",
+        maxWidth: "380px",
+        width: "92%",
+        zIndex: 50,
+      };
+    }
+  };
+
+  // チュートリアル操作ハンドラ
+  const handleStartTutorial = () => {
+    setActiveTab("home");
+    setTutorialStep(1);
+    setIsMenuOpen(false);
+    setShowInitialTutorialPrompt(false);
+    localStorage.setItem("seednote_tutorial_shown", "true");
+  };
+
+  const handleNextTutorialStep = () => {
+    if (tutorialStep === null) return;
+    if (tutorialStep >= 8) {
+      handleCloseTutorial();
+      return;
+    }
+    const nextStep = tutorialStep + 1;
+    if (nextStep === 4) {
+      setActiveTab("home");
+      setIsMenuOpen(false);
+    } else if (nextStep === 5 || nextStep === 6) {
+      setActiveTab("list");
+      setIsMenuOpen(false);
+    } else if (nextStep === 7) {
+      setIsMenuOpen(false); // 閉じた状態からスタート！ユーザー自身に≡を押してもらう
+    } else if (nextStep === 8) {
+      setIsMenuOpen(false);
+    }
+    setTutorialStep(nextStep);
+  };
+
+  const handlePrevTutorialStep = () => {
+    if (tutorialStep === null || tutorialStep <= 1) return;
+    const prevStep = tutorialStep - 1;
+    if (prevStep <= 4) {
+      setActiveTab("home");
+      setIsMenuOpen(false);
+    } else if (prevStep === 5 || prevStep === 6) {
+      setActiveTab("list");
+      setIsMenuOpen(false);
+    } else if (prevStep === 7) {
+      setIsMenuOpen(false);
+    } else {
+      setIsMenuOpen(false);
+    }
+    setTutorialStep(prevStep);
+  };
+
+  const handleCloseTutorial = () => {
+    setTutorialStep(null);
+    setTutorialTargetRect(null);
+    setIsMenuOpen(false);
+    setShowInitialTutorialPrompt(false);
+    localStorage.setItem("seednote_tutorial_shown", "true");
+  };
 
   // カテゴリの並び順変更
   const handleCategorySortOrderChange = (order: CategorySortOrder) => {
@@ -1965,6 +2262,13 @@ export default function Home() {
         setShowToast(false);
       }, 1500);
     }
+
+    // チュートリアルStep 3（タイトル・タグ・保存体験）の場合、保存完了時に自動でStep 4へ進む
+    if (tutorialStep === 3) {
+      setTimeout(() => {
+        handleNextTutorialStep();
+      }, 700);
+    }
   };
 
   // ゴミ箱へ移動する処理（※データは消さず、isTrashをtrueにするだけ）
@@ -2416,6 +2720,7 @@ export default function Home() {
       <header className="flex justify-between items-center max-w-xl w-full mx-auto pt-2">
         {/* 左上：ハンバーガーメニューボタン ≡ */}
         <button
+          id="tutorial-target-menu"
           type="button"
           onClick={() => setIsMenuOpen(true)}
           className={`${
@@ -2433,6 +2738,7 @@ export default function Home() {
 
         {/* 中央：書く / 見る クイックアクセス切り替え（カプセル型） */}
         <div
+          id="tutorial-target-switch"
           className="flex items-center p-0.5 rounded-xl border transition-colors"
           style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border }}
         >
@@ -2468,6 +2774,7 @@ export default function Home() {
 
         {/* 右上：ガイド・ヘルプボタン ？ */}
         <button
+          id="tutorial-target-help"
           type="button"
           onClick={() => setIsHelpOpen(true)}
           className={`${
@@ -2492,6 +2799,7 @@ export default function Home() {
         />
       )}
       <aside
+        id="tutorial-target-menu-aside"
         className={`fixed top-0 left-0 bottom-0 w-64 z-50 shadow-xl border-r flex flex-col justify-between p-6 transition-transform duration-300 ease-out ${
           isMenuOpen ? "translate-x-0" : "-translate-x-full"
         }`}
@@ -2706,6 +3014,20 @@ export default function Home() {
 
             <button
               type="button"
+              onClick={handleStartTutorial}
+              className={`w-full flex items-center gap-3 ${
+                buttonSize === "large" ? "px-4 py-3 text-base" : "px-3.5 py-2.5 text-sm"
+              } rounded-xl font-medium transition-colors text-left hover:opacity-80`}
+              style={{
+                backgroundColor: "transparent",
+                color: activeTheme.textSecondary,
+              }}
+            >
+              <span>📖</span> チュートリアルを見る
+            </button>
+
+            <button
+              type="button"
               onClick={() => {
                 setIsHelpOpen(true);
                 setIsMenuOpen(false);
@@ -2775,7 +3097,7 @@ export default function Home() {
       <main className="max-w-xl w-full mx-auto flex-1 flex flex-col justify-center py-3 sm:py-5 min-h-0">
         {/* ① ホーム（メモ入力：ノイズゼロのメイン空間） */}
         {activeTab === "home" && (
-          <div className="relative pt-3.5">
+          <div className="relative pt-3.5" id="tutorial-target-input">
             {/* 上部に通る真円スパイラルリング（アイコンと同じ決定版真円ループ） */}
             <svg
               className="absolute top-0 left-1/2 -translate-x-1/2 w-4/5 max-w-[280px] h-7 z-10 pointer-events-none"
@@ -2839,6 +3161,7 @@ export default function Home() {
                 </div>
               )}
               <textarea
+                ref={noteTextareaRef}
                 rows={6}
                 placeholder=""
                 value={content}
@@ -2857,8 +3180,11 @@ export default function Home() {
 
             {/* 本文に文字が入った時だけ現れる下部エリア（左：カテゴリ選択、右：保存ボタン） */}
             <div
+              id="tutorial-target-meta"
               className={`overflow-hidden transition-all duration-300 ease-out border-t pt-3 mt-1 ${
-                hasContent ? "max-h-60 opacity-100" : "max-h-0 opacity-0 pointer-events-none pt-0 mt-0 border-t-0"
+                hasContent || tutorialStep === 3
+                  ? "max-h-60 opacity-100"
+                  : "max-h-0 opacity-0 pointer-events-none pt-0 mt-0 border-t-0"
               }`}
               style={{ borderColor: activeTheme.border }}
             >
@@ -2969,6 +3295,47 @@ export default function Home() {
               </div>
             </div>
           </div>
+
+          {/* 初回訪問時かつメモ0件の時の控えめなチュートリアル案内カード（Rule 3 厳守） */}
+          {showInitialTutorialPrompt && notes.length === 0 && (
+            <div
+              className="mt-4 p-4 rounded-xl border flex items-center justify-between gap-3 animate-fadeIn"
+              style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border }}
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="text-xl shrink-0">🌱</span>
+                <div className="text-xs min-w-0">
+                  <span className="font-bold block truncate" style={{ color: activeTheme.textPrimary }}>
+                    初めてご利用の方へ
+                  </span>
+                  <span className="block truncate text-[11px]" style={{ color: activeTheme.textSecondary }}>
+                    1分でわかる簡単な使い方を体験してみませんか？
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowInitialTutorialPrompt(false);
+                    localStorage.setItem("seednote_tutorial_shown", "true");
+                  }}
+                  className="px-2.5 py-1 text-xs rounded-lg transition-colors hover:opacity-80"
+                  style={{ color: activeTheme.textSecondary }}
+                >
+                  スキップ
+                </button>
+                <button
+                  type="button"
+                  onClick={handleStartTutorial}
+                  className="px-3 py-1.5 text-xs font-bold rounded-lg shadow-xs transition-all hover:opacity-90"
+                  style={{ backgroundColor: activeTheme.accent, color: activeTheme.accentText }}
+                >
+                  はじめる
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -2989,9 +3356,11 @@ export default function Home() {
             {/* スクロール領域（検索バーとメモが一緒に流れるため、下スクロールでメモが画面いっぱいに広がる） */}
             <div className="flex-1 overflow-y-auto pr-1 pb-16 flex flex-col">
               {/* 検索・絞り込み機能エリア（スケッチの実装） */}
+              <div className="shrink-0 mb-3">
               {!isSearchPanelOpen ? (
-                <div className="mb-3 flex items-center justify-between shrink-0">
+                <div className="flex items-center justify-between">
                   <button
+                    id="tutorial-target-search-btn"
                     type="button"
                     onClick={() => setIsSearchPanelOpen(true)}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border`}
@@ -3034,6 +3403,7 @@ export default function Home() {
                 </div>
               ) : (
                 <div
+                  id="tutorial-target-search-panel"
                   className="mb-3 p-3.5 rounded-xl border shadow-xs flex flex-col gap-3 transition-all shrink-0"
                   style={{ backgroundColor: activeTheme.bgCard, borderColor: activeTheme.border }}
                 >
@@ -3472,6 +3842,7 @@ export default function Home() {
                   )}
                 </div>
               )}
+              </div>
 
               {/* メモ一覧カードリスト */}
               <div className="flex flex-col gap-3">
@@ -3480,7 +3851,15 @@ export default function Home() {
                   読み込み中...
                 </div>
               ) : activeNotes.length === 0 ? (
-                <div className="text-center py-10 text-sm text-[#8a7f72]">
+                <div
+                  id="tutorial-target-irreversible"
+                  className="text-center py-10 text-sm rounded-xl border border-dashed p-4"
+                  style={{
+                    backgroundColor: activeTheme.bgCard,
+                    borderColor: activeTheme.border,
+                    color: activeTheme.textSecondary,
+                  }}
+                >
                   まだメモがありません。ホームから思いつきを書いてみましょう。
                 </div>
               ) : displayedNotes.length === 0 ? (
@@ -3502,12 +3881,13 @@ export default function Home() {
                   </button>
                 </div>
               ) : (
-                displayedNotes.map((note) => {
+                displayedNotes.map((note, index) => {
                   const isMenuThisNoteOpen = activeMenuNoteId === note.id;
 
                   return (
                     <article
                       key={note.id}
+                      id={index === 0 ? "tutorial-target-irreversible" : undefined}
                       className={`p-4 rounded-xl shadow-2xs relative transition-colors border ${
                         note.isTrash ? "border-dashed opacity-90" : ""
                       }`}
@@ -6783,6 +7163,284 @@ export default function Home() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ⑨ インタラクティブ・ウォークスルーチュートリアル（スポットライト＆ガイドカード） */}
+      {tutorialStep !== null && (
+        <div className="fixed inset-0 z-50 pointer-events-none select-none">
+          {/* スポットライト（SVGの美しい角丸マスクでくり抜き、四隅のカクカク角張りを完全解消） */}
+          <svg className="fixed inset-0 w-full h-full pointer-events-none z-40 transition-all duration-300">
+            <defs>
+              <mask id="tutorial-spotlight-mask">
+                {/* 全画面を不透明（白＝暗幕表示） */}
+                <rect width="100%" height="100%" fill="white" />
+                {/* 対象要素のみ滑らかな角丸でくり抜き（黒＝透明） */}
+                {tutorialTargetRect && (
+                  <rect
+                    x={Math.max(0, tutorialTargetRect.left - 6)}
+                    y={Math.max(0, tutorialTargetRect.top - 6)}
+                    width={tutorialTargetRect.width + 12}
+                    height={tutorialTargetRect.height + 12}
+                    rx="16"
+                    ry="16"
+                    fill="black"
+                  />
+                )}
+              </mask>
+            </defs>
+            <rect
+              width="100%"
+              height="100%"
+              fill="rgba(0, 0, 0, 0.72)"
+              mask="url(#tutorial-spotlight-mask)"
+            />
+          </svg>
+
+          {/* くり抜き枠の光彩リング（pointer-events-none で下への入力を100%通す） */}
+          {tutorialTargetRect && (
+            <div
+              className="fixed pointer-events-none z-40 rounded-2xl ring-2 ring-white/60 shadow-2xl transition-all duration-300 ease-out"
+              style={{
+                top: Math.max(0, tutorialTargetRect.top - 6),
+                left: Math.max(0, tutorialTargetRect.left - 6),
+                width: tutorialTargetRect.width + 12,
+                height: tutorialTargetRect.height + 12,
+              }}
+            />
+          )}
+
+          {/* ガイド案内カード（getGuideCardStyle によりPCでは横余白、スマホでは上下に自動配置して被りを完全防止） */}
+          <div
+            id="tutorial-guide-card"
+            className="pointer-events-auto transition-all duration-300"
+            style={getGuideCardStyle()}
+          >
+            <div
+              className="w-full rounded-2xl p-4 sm:p-5 border shadow-2xl transition-all duration-300 flex flex-col gap-2.5 animate-fadeIn"
+              style={{
+                backgroundColor: activeTheme.bgCard,
+                borderColor: activeTheme.border,
+                color: activeTheme.textPrimary,
+              }}
+            >
+              {/* カードヘッダー */}
+              <div className="flex items-center justify-between pb-2 border-b" style={{ borderColor: activeTheme.border }}>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-base font-bold flex items-center gap-1">
+                    {tutorialStep === 1 && "🌱 はじめに"}
+                    {tutorialStep === 2 && "✏️ 思考の即メモ"}
+                    {tutorialStep === 3 && "🏷️ タイトルとタグ"}
+                    {tutorialStep === 4 && "🔄 書く・見るの切り替え"}
+                    {tutorialStep === 5 && "🔍 検索・絞り込み"}
+                    {tutorialStep === 6 && "📜 思考の不可逆性"}
+                    {tutorialStep === 7 && "⚙️ メニューとアカウント"}
+                    {tutorialStep === 8 && "🎉 準備完了！"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span
+                    className="text-[10px] font-bold px-2 py-0.5 rounded-full border font-mono"
+                    style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border, color: activeTheme.textSecondary }}
+                  >
+                    {tutorialStep} / 8
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleCloseTutorial}
+                    className="text-xs px-1.5 py-0.5 hover:opacity-75 transition-opacity"
+                    style={{ color: activeTheme.textSecondary }}
+                    title="チュートリアルを終了する"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              {/* カード本文 */}
+              <div className="text-xs leading-relaxed space-y-1.5">
+                {tutorialStep === 1 && (
+                  <>
+                    <p className="font-bold text-sm mb-1">ライトNoteへようこそ！</p>
+                    <p>ライトNoteは、思いついたアイデアや思考を<strong>忘れる前に光のように即メモする</strong>ための自分専用ノートです。</p>
+                    <p className="text-[11px]" style={{ color: activeTheme.textSecondary }}>
+                      基本の操作を、画面を見ながら実際に触って体験してみましょう！
+                    </p>
+                  </>
+                )}
+                {tutorialStep === 2 && (
+                  <>
+                    <p className="font-bold text-sm mb-1">思考を逃さず即メモ</p>
+                    <p>枠で光っている部分がメモ入力エリアです。認知的ノイズをなくすため、起動直後は入力欄だけが表示されます。</p>
+                    {content.trim().length > 0 ? (
+                      <p className="text-[11px] font-bold p-2 rounded-lg border mt-1 text-[#2e6e3c] bg-[#eef7f0] border-[#b8dfc4] animate-fadeIn">
+                        ✨ 入力できましたね！右下の「次へ →」を押して進みましょう。
+                      </p>
+                    ) : (
+                      <p className="text-[11px] font-bold p-2 rounded-lg border mt-1" style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border }}>
+                        💡 光っている枠をタップして、実際に何か文字を入力してみてください！
+                      </p>
+                    )}
+                  </>
+                )}
+                {tutorialStep === 3 && (
+                  <>
+                    <p className="font-bold text-sm mb-1">タグとタイトル、そして保存</p>
+                    <p>文字を入力すると、カテゴリタグやタイトル欄、保存ボタンが現れます。</p>
+                    <p className="text-[11px]" style={{ color: activeTheme.textSecondary }}>
+                      急いでいるときは<strong>「無題」「”未分類”」のままでOK！</strong>
+                    </p>
+                    <p className="text-[11px] font-bold p-2.5 rounded-lg border mt-1 text-[#2e6e3c] bg-[#eef7f0] border-[#b8dfc4] animate-fadeIn">
+                      💡 右下の<strong>「保存」ボタン</strong>を押してメモを保存してみましょう！（※自動で次の画面へ進みます）
+                    </p>
+                  </>
+                )}
+                {tutorialStep === 4 && (
+                  <>
+                    <p className="font-bold text-sm mb-1">「書く」と「見る」を切り替え</p>
+                    <p>最上部中央のカプセルボタンで、メモを書く画面と、過去のメモを振り返る画面をいつでもワンタップで行き来できます。</p>
+                    <p className="text-[11px] font-bold p-2 rounded-lg border mt-1" style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border }}>
+                      💡 「次へ」を押すと、過去のメモを見る一覧画面に切り替わります！
+                    </p>
+                  </>
+                )}
+                {tutorialStep === 5 && (
+                  <>
+                    <p className="font-bold text-sm mb-1">探したい思考を素早く検索</p>
+                    <p>一覧画面の「🔍 検索機能」から、キーワード検索はもちろん、タグ、お気に入り（⭐）、書いた時間帯（朝・昼・夜など）で目的のメモを絞り込めます。</p>
+                  </>
+                )}
+                {tutorialStep === 6 && (
+                  <>
+                    <p className="font-bold text-sm mb-1">過去の思考を消さない「不可逆性」</p>
+                    <p>ライトNoteでは過去の思考の残骸もアイデアの種となるため、メモの完全削除や上書き編集はありません。</p>
+                    <p className="text-[11px]" style={{ color: activeTheme.textSecondary }}>
+                      書き足したい時は<strong>「💬 追記」</strong>、誤字を直したい時は過去ログが残る<strong>「✏️ 本文訂正」</strong>を使います。
+                    </p>
+                  </>
+                )}
+                {tutorialStep === 7 && (
+                  <>
+                    <p className="font-bold text-sm mb-1">メニューとアカウント</p>
+                    {!isMenuOpen ? (
+                      <>
+                        <p>左上の「≡」メニューから、文字サイズ変更やテーマカラー（全22色）、ゴミ箱の確認ができます。</p>
+                        <p className="text-[11px] font-bold p-2.5 rounded-lg border mt-1 text-[#2e6e3c] bg-[#eef7f0] border-[#b8dfc4] animate-fadeIn">
+                          💡 左上の<strong>「≡」ボタンをタップ</strong>して、メニューを開いてみましょう！
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p>メニューが開きました！テーマカラー（全22色）の変更や、複数端末でメモを同期できるアカウント設定がここから行えます。</p>
+                        <p className="text-[11px] font-bold p-2.5 rounded-lg border mt-1 text-[#2e6e3c] bg-[#eef7f0] border-[#b8dfc4] animate-fadeIn">
+                          🎉 開けましたね！右下の「次へ →」を押して最後のステップへ進みましょう。
+                        </p>
+                      </>
+                    )}
+                  </>
+                )}
+                {tutorialStep === 8 && (
+                  <>
+                    <p className="font-bold text-sm mb-1">準備完了です！</p>
+                    <p>これで基本操作はバッチリです！より詳しい使い方は、右上の「？」ボタン（ガイド・ヘルプ）からいつでも確認できます。</p>
+                    <p className="text-[11px] font-bold p-2 rounded-lg border mt-1" style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border }}>
+                      💡 このチュートリアルも、左上メニュー（≡）の「📖 チュートリアルを見る」から何度でも見直せます。
+                    </p>
+                  </>
+                )}
+              </div>
+
+              {/* 注意書き */}
+              <div className="text-[10px] text-center" style={{ color: activeTheme.textSecondary }}>
+                ※途中で閉じても、左上メニュー（≡）からいつでも再開できます
+              </div>
+
+              {/* ボタン操作 */}
+              <div className="flex items-center justify-between gap-2 pt-2 border-t" style={{ borderColor: activeTheme.border }}>
+                {tutorialStep === 1 ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleCloseTutorial}
+                      className="px-3.5 py-1.5 text-xs rounded-xl font-medium transition-colors hover:opacity-80"
+                      style={{ color: activeTheme.textSecondary }}
+                    >
+                      スキップ
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleNextTutorialStep}
+                      className="px-5 py-2 text-xs font-bold rounded-xl shadow-xs transition-all hover:opacity-90"
+                      style={{ backgroundColor: activeTheme.accent, color: activeTheme.accentText }}
+                    >
+                      体験してみる →
+                    </button>
+                  </>
+                ) : tutorialStep === 8 ? (
+                  <button
+                    type="button"
+                    onClick={handleCloseTutorial}
+                    className="w-full py-2.5 text-xs font-bold rounded-xl shadow-xs transition-all hover:opacity-90 flex items-center justify-center gap-1.5"
+                    style={{ backgroundColor: activeTheme.accent, color: activeTheme.accentText }}
+                  >
+                    <span>✨</span> ライトNoteを始める
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handlePrevTutorialStep}
+                      className="px-3.5 py-1.5 text-xs rounded-xl font-medium transition-colors hover:opacity-80 border"
+                      style={{
+                        backgroundColor: activeTheme.bgSub,
+                        borderColor: activeTheme.border,
+                        color: activeTheme.textSecondary,
+                      }}
+                    >
+                      ← 前へ
+                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleCloseTutorial}
+                        className="px-2.5 py-1.5 text-xs rounded-xl font-medium transition-colors hover:opacity-80"
+                        style={{ color: activeTheme.textSecondary }}
+                      >
+                        終了
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleNextTutorialStep}
+                        className="px-4 py-1.5 text-xs font-bold rounded-xl shadow-xs transition-all hover:opacity-90"
+                        style={{ backgroundColor: activeTheme.accent, color: activeTheme.accentText }}
+                      >
+                        次へ →
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ローカル検証用：チュートリアルデモ開始フローティングボタン */}
+      {tutorialStep === null && (
+        <div className="fixed bottom-4 right-4 z-30">
+          <button
+            type="button"
+            onClick={handleStartTutorial}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-bold shadow-lg border transition-all hover:scale-105 active:scale-95"
+            style={{
+              backgroundColor: activeTheme.accent,
+              color: activeTheme.accentText,
+              borderColor: activeTheme.border,
+            }}
+            title="チュートリアルデモを体験する"
+          >
+            <span>🌟</span> チュートリアルデモ
+          </button>
         </div>
       )}
     </div>

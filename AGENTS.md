@@ -29,3 +29,13 @@
 ## 3. 開発の進め方
 - 第1週は「最小限のメモ入力・保存・一覧表示」を本番公開することを最優先とし、複雑な機能（ログイン画面など）を前倒しで勝手に実装しないこと。
 - 「水平スライス（画面だけ作る、DBだけ作る）」ではなく、毎週「画面・ロジック・DB・公開」までが全て繋がった垂直スライスで進めること。
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
