@@ -29,9 +29,37 @@ interface Note {
   isFavorite?: boolean; // お気に入りフラグ
   replies?: NoteReply[]; // 追記リスト（大元のメモにぶら下がる1階層の時系列ログ）
   editHistory?: NoteEditHistory[]; // 訂正履歴リスト（過去の文章をいつでも振り返れる）
+  remindAt?: string; // 見返す日（YYYY-MM-DD形式のローカル日付）
+  isLocked?: boolean; // 鍵付きメモフラグ
 }
 
-// Supabase DB用レコード定義
+// 運営からのお知らせのデータ型定義
+interface AnnouncementItem {
+  id: string;
+  title: string;
+  content: string;
+  category: string;
+  published_at: string;
+}
+
+const getAnnouncementCategoryLabel = (category: string) => {
+  switch (category) {
+    case "important":
+    case "重要":
+      return { label: "重要", isImportant: true };
+    case "update":
+    case "アップデート":
+      return { label: "アップデート", isImportant: false };
+    case "info":
+    case "お知らせ":
+    case "":
+      return { label: "お知らせ", isImportant: false };
+    default:
+      return { label: category, isImportant: false };
+  }
+};
+
+// DB行からNoteオブジェクトへのマッピング
 interface DbNoteRow {
   id: string;
   user_id: string;
@@ -43,9 +71,10 @@ interface DbNoteRow {
   categories: string[] | null;
   replies: NoteReply[] | null;
   edit_history?: NoteEditHistory[] | null;
+  remind_at?: string | null;
+  is_locked?: boolean | null;
 }
 
-// DB行からNoteオブジェクトへのマッピング
 const mapDbRowToNote = (row: DbNoteRow): Note => ({
   id: row.id,
   title: row.title || undefined,
@@ -56,6 +85,8 @@ const mapDbRowToNote = (row: DbNoteRow): Note => ({
   categories: row.categories && row.categories.length > 0 ? row.categories : undefined,
   replies: Array.isArray(row.replies) && row.replies.length > 0 ? row.replies : undefined,
   editHistory: Array.isArray(row.edit_history) && row.edit_history.length > 0 ? row.edit_history : undefined,
+  remindAt: row.remind_at || undefined,
+  isLocked: Boolean(row.is_locked),
 });
 
 // NoteオブジェクトからDB行へのマッピング
@@ -74,8 +105,119 @@ const mapNoteToDbRow = (note: Note, userId: string): DbNoteRow => {
   if (note.editHistory && note.editHistory.length > 0) {
     row.edit_history = note.editHistory;
   }
+  if (note.remindAt) {
+    row.remind_at = note.remindAt;
+  }
+  if (note.isLocked) {
+    row.is_locked = true;
+  }
   return row;
 };
+
+type AutoLockMode = "manual" | "5m" | "15m" | "background";
+
+// 鍵付きメモのテキストを改行を保ったまま文字数分の「・」でマスクする
+const maskLockedText = (text: string): string => text.replace(/[^\r\n]/g, "・");
+
+// HTTPS以外のローカルネットワーク環境でも同一に動作する純粋JS版SHA-256ハッシュ
+const hashLockPassword = (passcode: string): string => {
+  const input = `seednote-lock-v1:${passcode}`;
+  const bytes: number[] = [];
+  if (typeof TextEncoder !== "undefined") {
+    bytes.push(...Array.from(new TextEncoder().encode(input)));
+  } else {
+    const encoded = unescape(encodeURIComponent(input));
+    for (let i = 0; i < encoded.length; i++) {
+      bytes.push(encoded.charCodeAt(i));
+    }
+  }
+
+  const K = [
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+  ];
+  const H = [
+    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+    0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
+  ];
+
+  const bitLen = bytes.length * 8;
+  bytes.push(0x80);
+  while ((bytes.length % 64) !== 56) bytes.push(0);
+  const highBits = Math.floor(bitLen / 0x100000000);
+  const lowBits = bitLen >>> 0;
+  for (let i = 3; i >= 0; i--) bytes.push((highBits >>> (i * 8)) & 0xff);
+  for (let i = 3; i >= 0; i--) bytes.push((lowBits >>> (i * 8)) & 0xff);
+
+  const w = new Array<number>(64);
+  for (let offset = 0; offset < bytes.length; offset += 64) {
+    for (let i = 0; i < 16; i++) {
+      const idx = offset + i * 4;
+      w[i] = ((bytes[idx] << 24) | (bytes[idx + 1] << 16) | (bytes[idx + 2] << 8) | bytes[idx + 3]) >>> 0;
+    }
+    for (let i = 16; i < 64; i++) {
+      const s0 = (((w[i - 15] >>> 7) | (w[i - 15] << 25)) ^ ((w[i - 15] >>> 18) | (w[i - 15] << 14)) ^ (w[i - 15] >>> 3)) >>> 0;
+      const s1 = (((w[i - 2] >>> 17) | (w[i - 2] << 15)) ^ ((w[i - 2] >>> 19) | (w[i - 2] << 13)) ^ (w[i - 2] >>> 10)) >>> 0;
+      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) >>> 0;
+    }
+    let [a, b, c, d, e, f, g, h] = H;
+    for (let i = 0; i < 64; i++) {
+      const S1 = (((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7))) >>> 0;
+      const ch = ((e & f) ^ (~e & g)) >>> 0;
+      const temp1 = (h + S1 + ch + K[i] + w[i]) >>> 0;
+      const S0 = (((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10))) >>> 0;
+      const maj = ((a & b) ^ (a & c) ^ (b & c)) >>> 0;
+      const temp2 = (S0 + maj) >>> 0;
+      h = g; g = f; f = e; e = (d + temp1) >>> 0;
+      d = c; c = b; b = a; a = (temp1 + temp2) >>> 0;
+    }
+    H[0] = (H[0] + a) >>> 0; H[1] = (H[1] + b) >>> 0; H[2] = (H[2] + c) >>> 0; H[3] = (H[3] + d) >>> 0;
+    H[4] = (H[4] + e) >>> 0; H[5] = (H[5] + f) >>> 0; H[6] = (H[6] + g) >>> 0; H[7] = (H[7] + h) >>> 0;
+  }
+
+  return H.map((v) => v.toString(16).padStart(8, "0")).join("");
+};
+
+// ローカルタイムゾーンで YYYY-MM-DD 形式の日付文字列を生成
+const getLocalYmd = (offsetDays: number = 0): string => {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+
+const formatReminderLabel = (ymd: string): { label: string; isDue: boolean } => {
+  const today = getLocalYmd(0);
+  const tomorrow = getLocalYmd(1);
+  const parts = ymd.split("-");
+  const shortDate =
+    parts.length === 3 ? `${Number(parts[1])}/${Number(parts[2])}` : ymd;
+
+  if (ymd < today) {
+    return { label: `期限超過 (${shortDate})`, isDue: true };
+  }
+  if (ymd === today) {
+    return { label: "今日見返す", isDue: true };
+  }
+  if (ymd === tomorrow) {
+    return { label: `明日 (${shortDate})`, isDue: false };
+  }
+  return { label: `${shortDate} 見返す`, isDue: false };
+};
+
+const REMINDER_PRESET_OFFSETS = [
+  { label: "明日", days: 1 },
+  { label: "3日後", days: 3 },
+  { label: "1週間後", days: 7 },
+] as const;
 
 // すっきりしたシンプルな線画SVGアイコン（絵文字の重複や怖さを解消）
 const CopyIcon = ({ className = "w-3.5 h-3.5" }: { className?: string }) => (
@@ -613,6 +755,9 @@ interface DbUserSettingsRow {
   recovery_key?: string | null;
   theme_hue?: ColorHue | null;
   theme_brightness?: ThemeBrightness | null;
+  lock_password_hash?: string | null;
+  mask_locked_title?: boolean | null;
+  auto_lock_mode?: AutoLockMode | null;
   updated_at?: string;
 }
 
@@ -623,9 +768,9 @@ const HELP_ITEMS = [
     title: "ライトNoteとは",
     content: (
       <div className="space-y-1.5">
-        <p>自分のアイデアや思いついたことを素早く記録し、あとから簡単に探し出せる自分専用のアプリです。</p>
+        <p>自分のアイデアや思いついたことを素早く記録し、あとから簡単に探し出せるメモアプリです。</p>
         <p>日記、仕事や勉強のメモ、読書記録、ふと思いついたアイデアなど、ジャンルを問わず自由に記録できます。</p>
-        <p>SNSのように気軽に投稿できますが、書いた内容はすべて自分だけのプライベートな記録になります。</p>
+        <p>思いついた一言を気軽に記録でき、書いた内容はすべてプライベートなメモとして保存されます。</p>
       </div>
     ),
   },
@@ -634,15 +779,15 @@ const HELP_ITEMS = [
     title: "ライトNoteの考え方",
     content: (
       <div className="space-y-1.5">
-        <p>ライトNoteは、<strong>「書くこと」よりも「思い出すこと」</strong>を一番大切にしています。</p>
-        <p>アイデアは、書いた直後よりも数か月後や数年後に思いがけない価値を持つことがあります。</p>
-        <p>そのため、「まずはパッと記録する」「整理は後からでOK」「過去の記録をなるべく残す」という考え方で作られています。</p>
+        <p>ライトNoteは、<strong>「思いついた瞬間にすぐ書けること」</strong>を一番大切にしています。</p>
+        <p>せっかくのアイデアや気づきも、書こうとして迷っているうちに忘れてしまってはもったいないからです。</p>
+        <p>まずは余計な装飾のない画面にパッと書き留めておき、整理や振り返りは「見る」画面や検索機能から後からゆっくり行える設計になっています。</p>
       </div>
     ),
   },
   {
     id: "start",
-    title: "はじめかた",
+    title: "記録の仕方",
     content: (
       <div className="space-y-2">
         <ol className="list-decimal pl-5 space-y-1">
@@ -686,14 +831,20 @@ const HELP_ITEMS = [
     title: "カテゴリ（”未分類”について）",
     content: (
       <div className="space-y-2.5">
-        <div>
+        <div className="space-y-1.5">
           <strong className="block mb-0.5">カテゴリの作成：</strong>
           <p>「日記」「仕事」「勉強」など、自分の好きなカテゴリを自由に作れます。一度使ったカテゴリは候補として表示されるので、次からはワンタップで選べます。</p>
+          <div
+            className="px-2.5 py-1.5 rounded-lg text-xs leading-relaxed"
+            style={{ backgroundColor: "rgba(128, 128, 128, 0.1)" }}
+          >
+            💡 <strong>ヒント：</strong> カテゴリ名に「💼 仕事」「🌱 アイデア」のように絵文字をつけると、一覧でパッと見分けやすくなります！
+          </div>
         </div>
         <div className="pt-1.5 border-t" style={{ borderColor: "rgba(128, 128, 128, 0.22)" }}>
           <strong className="block mb-0.5">”未分類”での保存：</strong>
           <p>
-            カテゴリで迷ったときは、何も選ばず<strong>「”未分類”」のまま保存して大丈夫</strong>です。「アイデアが浮かんだ瞬間にすぐ書くこと」を一番優先してほしいので、カテゴリは後からいつでも設定・変更できます。
+            カテゴリで迷ったときは、何も選ばず<strong>そのまま保存して大丈夫</strong>です（自動的に「”未分類”」として記録されます）。「アイデアが浮かんだ瞬間にすぐ書くこと」を一番優先してほしいので、カテゴリは後からいつでも設定・変更できます。
           </p>
         </div>
       </div>
@@ -709,9 +860,23 @@ const HELP_ITEMS = [
           <li><strong>✏️ 書く：</strong> 思考を逃さず即メモできる入力画面（ホーム）に戻ります。</li>
           <li><strong>📋 見る：</strong> 保存した過去のメモを振り返る一覧画面へ移動します。</li>
         </ul>
-        <p className="text-[11px] opacity-75 pt-1">
-          ※ゴミ箱やカテゴリ管理、文字サイズなどの設定は、左上の「≡」メニューから開けます。
-        </p>
+      </div>
+    ),
+  },
+  {
+    id: "menu",
+    title: "メニュー（≡）の使い方",
+    content: (
+      <div className="space-y-1.5 text-xs">
+        <p>画面左上の「≡」ボタンから、各種画面やサポート機能へ移動できます。</p>
+        <ul className="list-disc pl-5 space-y-1">
+          <li><strong>✏️ メモを書く / 📋 メモを見る：</strong> 入力画面と一覧画面を切り替えます。</li>
+          <li><strong>🏷️ カテゴリ管理：</strong> カテゴリの追加、並び順の変更、不要なカテゴリの整理ができます。</li>
+          <li><strong>🗑️ ゴミ箱：</strong> 一覧から退避したメモの確認や復元ができます。</li>
+          <li><strong>📢 運営からのお知らせ：</strong> アップデート情報や大切なお知らせを確認できます（新着時はバッジでお知らせ）。</li>
+          <li><strong>❓ ガイド・ヘルプ / 📜 利用規約・プライバシー：</strong> 使い方やルールをいつでも確認できます。</li>
+          <li><strong>⚙️ 設定：</strong> 見た目・フォント・操作感やクラウド同期の設定を行えます。</li>
+        </ul>
       </div>
     ),
   },
@@ -722,12 +887,12 @@ const HELP_ITEMS = [
       <div className="space-y-2">
         <p>メモ一覧の「🔍 検索機能」ボタンから、見返したいメモを素早く探せます。</p>
         <ul className="list-disc pl-5 space-y-1.5 text-xs">
-          <li><strong>🔤 キーワード検索：</strong> タイトル、本文、追記に含まれる言葉で一発検索できます。</li>
+          <li><strong>🔤 キーワード検索：</strong> タイトル、本文、追記に含まれる言葉で一発検索できます（※ロック中の鍵付きメモは検索対象になりません）。</li>
           <li><strong>☆/★ お気に入りのみ：</strong> メモカード右上にある星マーク（☆/★）で登録した大切なお気に入りを絞り込みます。</li>
+          <li><strong>🗑️ ゴミ箱も含める：</strong> ONにすると、ゴミ箱内のメモも一緒に探して元の場所へ戻せます。</li>
           <li><strong>🏷️ カテゴリからさがす：</strong> 指定したカテゴリや「”未分類”」に絞って探せます（複数選んでのAND検索に対応）。</li>
           <li><strong>⏰ 時間帯から探す：</strong> 朝、昼、夕方、夜、深夜など、書いた時間帯で絞り込めます（複数選択可）。</li>
           <li><strong>📅 日付・カレンダーから探す：</strong> カレンダーで日付を選んで、その日に書いたメモをすぐに見返せます。</li>
-          <li><strong>🗑️ ゴミ箱も含める：</strong> ONにすると、ゴミ箱内のメモも一緒に探して元の場所へ戻せます。</li>
         </ul>
       </div>
     ),
@@ -770,6 +935,37 @@ const HELP_ITEMS = [
     ),
   },
   {
+    id: "reminder",
+    title: "見返す日（リマインダー）",
+    content: (
+      <div className="space-y-1.5 text-xs">
+        <p>
+          新規作成時の入力欄下部や、保存済みメモの「…」メニューから「🔔 見返す日」を設定できます。
+        </p>
+        <p>
+          見返す日が近づいたメモは「メモを見る」画面上部の「🔔」ボタンから一覧で確認でき、見終わったら「✓ 確認済み」や日付の変更ができます。
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: "locked_notes",
+    title: "鍵付きメモ（パスワード保護）",
+    content: (
+      <div className="space-y-2 text-xs">
+        <p>
+          書いたメモに鍵をかけると、普段は文字数・改行どおりに「・」で伏せ字表示され、専用の鍵パスワード（4文字以上）を入力した時だけ読めるようになります。
+        </p>
+        <ul className="list-disc pl-5 space-y-1">
+          <li><strong>かけ方・外し方：</strong> 新規入力欄下部の「🔒 鍵をつける」ボタン、または保存済みメモ右上の「…」メニューから「🔒 鍵をかける / 🔓 鍵を外す」で切り替えられます。</li>
+          <li><strong>閲覧とロック戻し：</strong> 一度鍵パスワードで開けると、他の鍵付きメモも再入力なしで開けます。カード内の「隠す」や検索横の「🔒 すべて隠す」でいつでもロック状態に戻せます。</li>
+          <li><strong>ロック中の制限：</strong> 本文は伏せ字になり、キーワード検索の対象外（タグや日時・お気に入り等では検索可）、追記・訂正・コピー・通知文表示も行えません。ゴミ箱へ移動しても鍵はかかったまま保護されます。</li>
+          <li><strong>詳細設定：</strong> 「⚙️ 設定」の「🔐 鍵付きメモ設定」で、ロック中のタイトル表示（隠す／表示する）、自動で隠すタイミング（手動・5分・15分・別画面切替時）、パスワード変更・再設定を行えます。</li>
+        </ul>
+      </div>
+    ),
+  },
+  {
     id: "trash",
     title: "ゴミ箱",
     content: (
@@ -777,7 +973,7 @@ const HELP_ITEMS = [
         <div>
           <strong className="block mb-0.5">ゴミ箱への移動手順：</strong>
           <p>
-            メモカード右上の「…」メニューを開き、「🗑️ ゴミ箱へ移動」を選ぶとゴミ箱へ移動します（一覧画面から誤タップで消えてしまわないようメニュー内に配置しています）。
+            メモカード右上の「…」メニューを開き、「🗑️ ゴミ箱へ移動」を選ぶとゴミ箱へ移動します。
           </p>
         </div>
         <div className="pt-1.5 border-t" style={{ borderColor: "rgba(128, 128, 128, 0.22)" }}>
@@ -793,13 +989,30 @@ const HELP_ITEMS = [
     ),
   },
   {
+    id: "settings",
+    title: "設定（デザイン・鍵・アカウント同期）",
+    content: (
+      <div className="space-y-2 text-xs">
+        <p>左メニューの「⚙️ 設定」から、見た目や使い心地、セキュリティを自分好みにカスタマイズできます。</p>
+        <ul className="list-disc pl-5 space-y-1">
+          <li><strong>🎨 テーマカラー・明るさ：</strong> クリーム系などのライトモード・目に優しいダークモードやアクセントカラーを変更できます。</li>
+          <li><strong>📏 文字・ボタンの大きさ：</strong> 「標準」「大きめ」から読みやすい・押しやすいサイズを選べます。</li>
+          <li><strong>✒️ 文字フォント・メモ専用フォント：</strong> アプリ全体の書体と、メモ本文の書体（ゴシック・手書き風・明朝など）を別々に変更できます。</li>
+          <li><strong>🔔 保存時通知・編集破棄の確認：</strong> 保存時のトースト表示や、変更途中で閉じる際の確認ダイアログをON/OFFできます。</li>
+          <li><strong>⏰ 時間帯の設定：</strong> 朝・昼・夕方・夜・深夜の区切り時刻を生活リズムに合わせて調整できます。</li>
+          <li><strong>🔐 鍵付きメモ設定：</strong> 鍵メモ専用パスワードの設定・変更・再設定や、ロック中のタイトル表示、自動で隠すタイミングを設定できます。</li>
+          <li><strong>☁️ アカウント・クラウド同期：</strong> ユーザー名（ID）とパスワードだけでスマホやPC間のメモ・設定を自動同期できます（復旧キーの確認も可能です）。</li>
+        </ul>
+      </div>
+    ),
+  },
+  {
     id: "timezone",
     title: "時間帯の設定",
     content: (
       <div className="space-y-1.5">
-        <p>「深夜」や「夕方」と感じる時間は人によって違います。</p>
-        <p>設定画面から「朝・昼・夕方・夜・深夜」の区切りを自分の生活リズムに合わせて自由に変更できます。</p>
-        <p>設定した時間帯は、検索機能にもそのまま反映されます。</p>
+        <p>朝・昼・夕方・夜・深夜といった時間帯の感覚は、生活リズムによって人それぞれです。</p>
+        <p>設定からそれぞれの時間帯の区切りを自分の生活に合わせて自由に調整できます。</p>
       </div>
     ),
   },
@@ -1047,6 +1260,41 @@ export default function Home() {
   const [deleteAccountError, setDeleteAccountError] = useState<string | null>(null);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
+  // 運営からのお知らせのState
+  const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
+  const [isAnnouncementsOpen, setIsAnnouncementsOpen] = useState(false);
+  const [isLoadingAnnouncements, setIsLoadingAnnouncements] = useState(false);
+  const [announcementsFetchError, setAnnouncementsFetchError] = useState(false);
+  const [readAnnouncementIds, setReadAnnouncementIds] = useState<string[]>([]);
+  const [newlyOpenedAnnouncementIds, setNewlyOpenedAnnouncementIds] = useState<string[]>([]);
+
+  // リマインダー機能（見返す日）のState
+  const [newNoteRemindAt, setNewNoteRemindAt] = useState("");
+  const [isReminderPanelOpen, setIsReminderPanelOpen] = useState(false);
+  const [reminderTargetNote, setReminderTargetNote] = useState<Note | null>(null);
+  const [reminderDateInput, setReminderDateInput] = useState("");
+
+  // 鍵付きメモ機能のState
+  const [lockPasswordHash, setLockPasswordHash] = useState("");
+  const [maskLockedTitle, setMaskLockedTitle] = useState(true);
+  const [autoLockMode, setAutoLockMode] = useState<AutoLockMode>("manual");
+  const [newNoteIsLocked, setNewNoteIsLocked] = useState(false);
+  const [unlockedNoteIds, setUnlockedNoteIds] = useState<string[]>([]);
+  const [isLockSessionVerified, setIsLockSessionVerified] = useState(false);
+  const [lockModalMode, setLockModalMode] = useState<null | "unlock" | "setup" | "change" | "forgot">(null);
+  const [pendingUnlockNoteId, setPendingUnlockNoteId] = useState<string | null>(null);
+  const [pendingLockAction, setPendingLockAction] = useState<
+    null | { type: "toggleComposeLock" } | { type: "lockExistingNote"; noteId: string }
+  >(null);
+  const [lockInput1, setLockInput1] = useState("");
+  const [lockInput2, setLockInput2] = useState("");
+  const [lockInput3, setLockInput3] = useState("");
+  const [showLockInput1, setShowLockInput1] = useState(false);
+  const [showLockInput2, setShowLockInput2] = useState(false);
+  const [showLockInput3, setShowLockInput3] = useState(false);
+  const [lockModalError, setLockModalError] = useState<string | null>(null);
+  const [isLockModalBusy, setIsLockModalBusy] = useState(false);
+
   // メモ入力テキストエリアの参照（チュートリアル時のフォーカス制御用）
   const noteTextareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -1138,12 +1386,139 @@ export default function Home() {
       if (savedNoteFont && ["sans", "klee", "yomogi", "mincho", "mono"].includes(savedNoteFont)) {
         setNoteFont(savedNoteFont);
       }
+      const savedReadAnnouncementIds = localStorage.getItem("seednote_read_announcement_ids");
+      if (savedReadAnnouncementIds) {
+        const parsedIds = JSON.parse(savedReadAnnouncementIds);
+        if (Array.isArray(parsedIds)) {
+          setReadAnnouncementIds(parsedIds.filter((id): id is string => typeof id === "string"));
+        }
+      }
+      const savedLockHash = localStorage.getItem("seednote_lock_password_hash");
+      if (savedLockHash) {
+        setLockPasswordHash(savedLockHash);
+      }
+      const savedMaskTitle = localStorage.getItem("seednote_mask_locked_title");
+      if (savedMaskTitle === "true" || savedMaskTitle === "false") {
+        setMaskLockedTitle(savedMaskTitle === "true");
+      }
+      const savedAutoLock = localStorage.getItem("seednote_auto_lock_mode") as AutoLockMode | null;
+      if (savedAutoLock && ["manual", "5m", "15m", "background"].includes(savedAutoLock)) {
+        setAutoLockMode(savedAutoLock);
+      }
     } catch (e) {
       console.error("データの読み込みに失敗しました", e);
     } finally {
       setIsLoaded(true);
     }
   }, []);
+
+  // 解除中の鍵付きメモをすべてロック状態へ戻す
+  const lockAllNotes = useCallback((showNotice: boolean = false) => {
+    setUnlockedNoteIds([]);
+    setIsLockSessionVerified(false);
+    setLockModalMode((prev) => (prev === "unlock" ? null : prev));
+    setPendingUnlockNoteId(null);
+    if (showNotice) {
+      setToastMessage("🔒 鍵付きメモを非表示にしました");
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 1800);
+    }
+  }, []);
+
+  // 設定されたタイミングでの自動ロック監視
+  useEffect(() => {
+    const hasOpenSecret = unlockedNoteIds.length > 0 || isLockSessionVerified;
+    if (!hasOpenSecret || autoLockMode === "manual") return;
+
+    if (autoLockMode === "background") {
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === "hidden") {
+          lockAllNotes(false);
+        }
+      };
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+      return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+    }
+
+    const durationMs = autoLockMode === "5m" ? 5 * 60 * 1000 : 15 * 60 * 1000;
+    let timerId = setTimeout(() => lockAllNotes(true), durationMs);
+
+    const resetTimer = () => {
+      clearTimeout(timerId);
+      timerId = setTimeout(() => lockAllNotes(true), durationMs);
+    };
+
+    const events: (keyof WindowEventMap)[] = ["pointerdown", "keydown", "scroll", "touchstart"];
+    events.forEach((ev) => window.addEventListener(ev, resetTimer, { passive: true }));
+
+    return () => {
+      clearTimeout(timerId);
+      events.forEach((ev) => window.removeEventListener(ev, resetTimer));
+    };
+  }, [autoLockMode, unlockedNoteIds.length, isLockSessionVerified, lockAllNotes]);
+
+  // 運営からのお知らせを取得（Supabase announcements テーブル）
+  const fetchAnnouncements = useCallback(async () => {
+    setIsLoadingAnnouncements(true);
+    setAnnouncementsFetchError(false);
+    try {
+      const { data, error } = await supabase
+        .from("announcements")
+        .select("id, title, content, category, published_at")
+        .eq("is_published", true)
+        .order("published_at", { ascending: false })
+        .limit(30);
+
+      if (error) {
+        console.warn("お知らせの取得に失敗しました:", error.message);
+        setAnnouncementsFetchError(true);
+        return;
+      }
+      if (Array.isArray(data)) {
+        setAnnouncements(data as AnnouncementItem[]);
+      }
+    } catch (e) {
+      console.warn("お知らせ取得中にエラーが発生しました:", e);
+      setAnnouncementsFetchError(true);
+    } finally {
+      setIsLoadingAnnouncements(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAnnouncements();
+  }, [fetchAnnouncements]);
+
+  const unreadAnnouncementsCount = useMemo(() => {
+    if (!isLoaded) return 0;
+    return announcements.filter((a) => !readAnnouncementIds.includes(a.id)).length;
+  }, [announcements, readAnnouncementIds, isLoaded]);
+
+  const markAllAnnouncementsRead = useCallback(
+    (items: AnnouncementItem[]) => {
+      if (items.length === 0) return;
+      setReadAnnouncementIds((prev) => {
+        const merged = Array.from(new Set([...prev, ...items.map((item) => item.id)]));
+        try {
+          localStorage.setItem("seednote_read_announcement_ids", JSON.stringify(merged));
+        } catch (e) {
+          console.warn("お知らせ既読情報の保存に失敗しました:", e);
+        }
+        return merged;
+      });
+    },
+    []
+  );
+
+  const handleOpenAnnouncements = useCallback(() => {
+    const unreadIds = announcements
+      .filter((a) => !readAnnouncementIds.includes(a.id))
+      .map((a) => a.id);
+    setNewlyOpenedAnnouncementIds(unreadIds);
+    markAllAnnouncementsRead(announcements);
+    setIsAnnouncementsOpen(true);
+    setIsMenuOpen(false);
+  }, [announcements, readAnnouncementIds, markAllAnnouncementsRead]);
 
   // チュートリアルのターゲット要素位置計算（スポットライト用）
   const updateTutorialTargetRect = useCallback(() => {
@@ -1793,6 +2168,20 @@ export default function Home() {
           localStorage.setItem("seednote_note_font", row.note_font);
         }
 
+        // 鍵付きメモ設定の同期
+        if (typeof row.lock_password_hash === "string" && row.lock_password_hash) {
+          setLockPasswordHash(row.lock_password_hash);
+          localStorage.setItem("seednote_lock_password_hash", row.lock_password_hash);
+        }
+        if (typeof row.mask_locked_title === "boolean") {
+          setMaskLockedTitle(row.mask_locked_title);
+          localStorage.setItem("seednote_mask_locked_title", String(row.mask_locked_title));
+        }
+        if (row.auto_lock_mode && ["manual", "5m", "15m", "background"].includes(row.auto_lock_mode)) {
+          setAutoLockMode(row.auto_lock_mode);
+          localStorage.setItem("seednote_auto_lock_mode", row.auto_lock_mode);
+        }
+
         // もしローカルやメモから新しいカテゴリが見つかった場合、クラウド側も最新化
         if (mergedCats.length > cloudCats.length) {
           const cur = latestSettingsRef.current;
@@ -2172,6 +2561,8 @@ export default function Home() {
     await supabase.auth.signOut();
     setCurrentUser(null);
     setCurrentUsername("");
+    setUnlockedNoteIds([]);
+    setIsLockSessionVerified(false);
   };
 
   // アカウント削除時にローカル保存データと画面状態を初期化するヘルパー
@@ -2191,8 +2582,16 @@ export default function Home() {
       "seednote_font_family",
       "seednote_note_font",
       "seednote_tutorial_shown",
+      "seednote_lock_password_hash",
+      "seednote_mask_locked_title",
+      "seednote_auto_lock_mode",
     ];
     storageKeys.forEach((key) => localStorage.removeItem(key));
+    setUnlockedNoteIds([]);
+    setIsLockSessionVerified(false);
+    setLockPasswordHash("");
+    setMaskLockedTitle(true);
+    setAutoLockMode("manual");
 
     setNotes([]);
     setTitle("");
@@ -2564,6 +2963,8 @@ export default function Home() {
       createdAt: new Date().toISOString(),
       isTrash: false,
       categories: selectedCategories.length > 0 ? selectedCategories : undefined,
+      remindAt: newNoteRemindAt || undefined,
+      isLocked: newNoteIsLocked || undefined,
     };
 
     const updatedNotes = [newNote, ...notes];
@@ -2589,6 +2990,8 @@ export default function Home() {
     setContent("");
     setTitle("");
     setSelectedCategories([]);
+    setNewNoteRemindAt("");
+    setNewNoteIsLocked(false);
     setIsAddingCategoryInline(false);
     setInlineNewCategoryName("");
 
@@ -2792,6 +3195,339 @@ export default function Home() {
     return `${month}月${date}日 ${hours}:${minutes}`;
   };
 
+  // 見返す日（リマインダー）の設定・変更・完了処理
+  const handleSetNoteReminder = (noteId: string, nextRemindAt?: string) => {
+    const normalized = nextRemindAt?.trim() || undefined;
+    const updatedNotes = notes.map((note) =>
+      note.id === noteId ? { ...note, remindAt: normalized } : note
+    );
+    setNotes(updatedNotes);
+    try {
+      localStorage.setItem("seednote_items", JSON.stringify(updatedNotes));
+    } catch (e) {
+      console.error("リマインダーの保存に失敗しました", e);
+    }
+
+    if (currentUser) {
+      supabase
+        .from("notes")
+        .update({ remind_at: normalized ?? null })
+        .eq("id", noteId)
+        .then(({ error }) => {
+          if (error) console.warn("リマインダーのクラウド更新に失敗しました:", error.message);
+        });
+    }
+
+    if (enableToast) {
+      setToastMessage(normalized ? "🔔 見返す日を設定しました" : "✓ リマインダーを完了しました");
+      setShowToast(true);
+      setTimeout(() => {
+        setShowToast(false);
+      }, 1500);
+    }
+  };
+
+  const handleOpenReminderModal = (note: Note) => {
+    setReminderTargetNote(note);
+    setReminderDateInput(note.remindAt || getLocalYmd(1));
+    setActiveMenuNoteId(null);
+  };
+
+  // 鍵付きメモの本文が表示可能か判定
+  const isNoteContentVisible = (note: Note) =>
+    !note.isLocked || unlockedNoteIds.includes(note.id);
+
+  // 鍵付きメモ関連の設定をクラウドへ同期
+  const saveLockSettingsToCloud = (
+    partial: Partial<{
+      lock_password_hash: string;
+      mask_locked_title: boolean;
+      auto_lock_mode: AutoLockMode;
+    }>
+  ) => {
+    if (!currentUser) return;
+    supabase
+      .from("user_settings")
+      .update({
+        ...partial,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", currentUser.id)
+      .then(({ error }) => {
+        if (error) console.warn("鍵設定のクラウド保存エラー:", error.message);
+      });
+  };
+
+  const handleChangeMaskLockedTitle = (nextVal: boolean) => {
+    setMaskLockedTitle(nextVal);
+    localStorage.setItem("seednote_mask_locked_title", String(nextVal));
+    saveLockSettingsToCloud({ mask_locked_title: nextVal });
+  };
+
+  const handleChangeAutoLockMode = (nextMode: AutoLockMode) => {
+    setAutoLockMode(nextMode);
+    localStorage.setItem("seednote_auto_lock_mode", nextMode);
+    saveLockSettingsToCloud({ auto_lock_mode: nextMode });
+  };
+
+  const openLockModal = (
+    mode: "unlock" | "setup" | "change" | "forgot",
+    options?: {
+      unlockNoteId?: string | null;
+      action?: { type: "toggleComposeLock" } | { type: "lockExistingNote"; noteId: string } | null;
+    }
+  ) => {
+    setLockModalMode(mode);
+    setPendingUnlockNoteId(options?.unlockNoteId ?? null);
+    setPendingLockAction(options?.action ?? null);
+    setLockInput1("");
+    setLockInput2("");
+    setLockInput3("");
+    setShowLockInput1(false);
+    setShowLockInput2(false);
+    setShowLockInput3(false);
+    setLockModalError(null);
+    setIsLockModalBusy(false);
+  };
+
+  const closeLockModal = () => {
+    setLockModalMode(null);
+    setPendingUnlockNoteId(null);
+    setPendingLockAction(null);
+    setLockInput1("");
+    setLockInput2("");
+    setLockInput3("");
+    setShowLockInput1(false);
+    setShowLockInput2(false);
+    setShowLockInput3(false);
+    setLockModalError(null);
+    setIsLockModalBusy(false);
+  };
+
+  const handleSetNoteLock = (noteId: string, nextLocked: boolean) => {
+    const updatedNotes = notes.map((note) =>
+      note.id === noteId ? { ...note, isLocked: nextLocked ? true : undefined } : note
+    );
+    setNotes(updatedNotes);
+    try {
+      localStorage.setItem("seednote_items", JSON.stringify(updatedNotes));
+    } catch (e) {
+      console.error("鍵状態の保存に失敗しました", e);
+    }
+
+    if (nextLocked) {
+      setUnlockedNoteIds((prev) => prev.filter((id) => id !== noteId));
+      setExpandedHistoryNoteIds((prev) => prev.filter((id) => id !== noteId));
+      setExpandedReplyNoteIds((prev) => prev.filter((id) => id !== noteId));
+      if (replyingNoteId === noteId) {
+        setReplyingNoteId(null);
+        setReplyContent("");
+      }
+    } else {
+      setUnlockedNoteIds((prev) => prev.filter((id) => id !== noteId));
+    }
+
+    if (currentUser) {
+      supabase
+        .from("notes")
+        .update({ is_locked: nextLocked })
+        .eq("id", noteId)
+        .then(({ error }) => {
+          if (error) console.warn("鍵状態のクラウド更新に失敗しました:", error.message);
+        });
+    }
+
+    setToastMessage(nextLocked ? "🔒 メモに鍵をつけました" : "🔓 メモの鍵を外しました");
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 1800);
+  };
+
+  const handleToggleComposeLock = () => {
+    if (newNoteIsLocked) {
+      setNewNoteIsLocked(false);
+      return;
+    }
+    if (!lockPasswordHash) {
+      openLockModal("setup", { action: { type: "toggleComposeLock" } });
+      return;
+    }
+    setNewNoteIsLocked(true);
+  };
+
+  const handleToggleNoteLock = (note: Note) => {
+    setActiveMenuNoteId(null);
+    if (!note.isLocked) {
+      if (!lockPasswordHash) {
+        openLockModal("setup", { action: { type: "lockExistingNote", noteId: note.id } });
+        return;
+      }
+      handleSetNoteLock(note.id, true);
+      return;
+    }
+    if (!isNoteContentVisible(note)) {
+      setToastMessage("🔒 鍵を外すには先にロック解除してください");
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 2000);
+      return;
+    }
+    handleSetNoteLock(note.id, false);
+  };
+
+  const handleRequestUnlockNote = (noteId: string) => {
+    if (!lockPasswordHash) {
+      setUnlockedNoteIds((prev) => (prev.includes(noteId) ? prev : [...prev, noteId]));
+      setIsLockSessionVerified(true);
+      return;
+    }
+    if (isLockSessionVerified) {
+      setUnlockedNoteIds((prev) => (prev.includes(noteId) ? prev : [...prev, noteId]));
+      return;
+    }
+    openLockModal("unlock", { unlockNoteId: noteId });
+  };
+
+  const handleHideUnlockedNote = (noteId: string) => {
+    setUnlockedNoteIds((prev) => prev.filter((id) => id !== noteId));
+    setExpandedHistoryNoteIds((prev) => prev.filter((id) => id !== noteId));
+    setExpandedReplyNoteIds((prev) => prev.filter((id) => id !== noteId));
+    if (replyingNoteId === noteId) {
+      setReplyingNoteId(null);
+      setReplyContent("");
+    }
+  };
+
+  const handleSubmitLockModal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isLockModalBusy) return;
+    setLockModalError(null);
+
+    if (lockModalMode === "unlock") {
+      const entered = lockInput1.trim();
+      if (!entered) {
+        setLockModalError("鍵メモ用パスワードを入力してください");
+        return;
+      }
+      const enteredHash = hashLockPassword(entered);
+      if (enteredHash !== lockPasswordHash) {
+        setLockModalError("パスワードが正しくありません");
+        return;
+      }
+      setIsLockSessionVerified(true);
+      if (pendingUnlockNoteId) {
+        setUnlockedNoteIds((prev) =>
+          prev.includes(pendingUnlockNoteId) ? prev : [...prev, pendingUnlockNoteId]
+        );
+      }
+      closeLockModal();
+      return;
+    }
+
+    if (lockModalMode === "setup") {
+      const nextPass = lockInput1.trim();
+      const confirmPass = lockInput2.trim();
+      if (nextPass.length < 4) {
+        setLockModalError("4文字以上で設定してください");
+        return;
+      }
+      if (nextPass !== confirmPass) {
+        setLockModalError("確認用パスワードと一致しません");
+        return;
+      }
+      const nextHash = hashLockPassword(nextPass);
+      setLockPasswordHash(nextHash);
+      localStorage.setItem("seednote_lock_password_hash", nextHash);
+      saveLockSettingsToCloud({ lock_password_hash: nextHash });
+
+      const pendingActionCopy = pendingLockAction;
+      closeLockModal();
+      if (pendingActionCopy?.type === "toggleComposeLock") {
+        setNewNoteIsLocked(true);
+      } else if (pendingActionCopy?.type === "lockExistingNote") {
+        handleSetNoteLock(pendingActionCopy.noteId, true);
+      }
+      setToastMessage("🔐 鍵メモ用パスワードを設定しました");
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 2000);
+      return;
+    }
+
+    if (lockModalMode === "change") {
+      const curPass = lockInput1.trim();
+      const nextPass = lockInput2.trim();
+      const confirmPass = lockInput3.trim();
+      if (!curPass) {
+        setLockModalError("現在の鍵メモ用パスワードを入力してください");
+        return;
+      }
+      if (hashLockPassword(curPass) !== lockPasswordHash) {
+        setLockModalError("現在のパスワードが正しくありません");
+        return;
+      }
+      if (nextPass.length < 4) {
+        setLockModalError("新しいパスワードは4文字以上で入力してください");
+        return;
+      }
+      if (nextPass !== confirmPass) {
+        setLockModalError("新しいパスワードが一致しません");
+        return;
+      }
+      const nextHash = hashLockPassword(nextPass);
+      setLockPasswordHash(nextHash);
+      localStorage.setItem("seednote_lock_password_hash", nextHash);
+      saveLockSettingsToCloud({ lock_password_hash: nextHash });
+      closeLockModal();
+      setToastMessage("🔐 鍵メモ用パスワードを変更しました");
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 2000);
+      return;
+    }
+
+    if (lockModalMode === "forgot") {
+      if (!currentUser || !currentUsername) {
+        setLockModalError("ログイン中のみアカウントパスワードでの再設定が可能です");
+        return;
+      }
+      const accountPass = lockInput1.trim();
+      const nextPass = lockInput2.trim();
+      const confirmPass = lockInput3.trim();
+      if (!accountPass) {
+        setLockModalError("アカウントのパスワードを入力してください");
+        return;
+      }
+      if (nextPass.length < 4) {
+        setLockModalError("新しい鍵パスワードは4文字以上で入力してください");
+        return;
+      }
+      if (nextPass !== confirmPass) {
+        setLockModalError("新しい鍵パスワードが一致しません");
+        return;
+      }
+      setIsLockModalBusy(true);
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: getInternalEmail(currentUsername),
+          password: accountPass,
+        });
+        if (error || !data.user) {
+          setLockModalError("アカウントのパスワードが正しくありません");
+          return;
+        }
+        const nextHash = hashLockPassword(nextPass);
+        setLockPasswordHash(nextHash);
+        localStorage.setItem("seednote_lock_password_hash", nextHash);
+        saveLockSettingsToCloud({ lock_password_hash: nextHash });
+        closeLockModal();
+        setToastMessage("🔐 鍵メモ用パスワードを再設定しました");
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 2000);
+      } catch {
+        setLockModalError("通信エラーが発生しました。接続をご確認ください。");
+      } finally {
+        setIsLockModalBusy(false);
+      }
+    }
+  };
+
   // お気に入りの切り替え（☆ ⇄ ★）
   const handleToggleFavorite = (id: string) => {
     let nextFav = false;
@@ -2860,6 +3596,10 @@ export default function Home() {
 
   // メモのワンタッチコピー（タイトル＋本文をクリップボードにコピー）
   const handleCopyNote = async (note: Note) => {
+    if (!isNoteContentVisible(note)) {
+      handleRequestUnlockNote(note.id);
+      return;
+    }
     try {
       const textToCopy = note.title ? `【${note.title}】\n${note.content}` : note.content;
       if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText) {
@@ -2964,6 +3704,27 @@ export default function Home() {
   const activeNotes = notes.filter((n) => !n.isTrash);
   const trashNotes = notes.filter((n) => n.isTrash);
 
+  const todayYmd = getLocalYmd(0);
+  const reminderActiveNotes = activeNotes
+    .filter((n) => Boolean(n.remindAt))
+    .sort((a, b) => (a.remindAt || "").localeCompare(b.remindAt || ""));
+  const dueReminderNotes = reminderActiveNotes.filter((n) => (n.remindAt || "") <= todayYmd);
+  const upcomingReminderNotes = reminderActiveNotes.filter((n) => (n.remindAt || "") > todayYmd);
+
+  const handleJumpToReminderNote = (noteId: string) => {
+    setFilterOnlyFavorite(false);
+    setFilterCategories([]);
+    setIncludeTrashInSearch(false);
+    setSearchQuery("");
+    setFilterTimeSlots([]);
+    setFilterDate("");
+    setIsReminderPanelOpen(false);
+    setTimeout(() => {
+      const target = document.querySelector(`[data-note-id="${noteId}"]`);
+      target?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 60);
+  };
+
   // 通常一覧の対象メモ（ゴミ箱も含めるフラグがONなら全体、OFFなら通常メモのみ）
   const baseNotesForList = includeTrashInSearch ? notes : activeNotes;
 
@@ -2980,6 +3741,7 @@ export default function Home() {
       if (!matchesAll) return false;
     }
     if (searchQuery.trim()) {
+      if (!isNoteContentVisible(note)) return false;
       const q = searchQuery.trim().toLowerCase();
       const matchTitle = note.title?.toLowerCase().includes(q) ?? false;
       const matchContent = note.content.toLowerCase().includes(q);
@@ -3014,6 +3776,7 @@ export default function Home() {
       if (!matchesAll) return false;
     }
     if (trashSearchQuery.trim()) {
+      if (!isNoteContentVisible(note)) return false;
       const q = trashSearchQuery.trim().toLowerCase();
       const matchTitle = note.title?.toLowerCase().includes(q) ?? false;
       const matchContent = note.content.toLowerCase().includes(q);
@@ -3061,7 +3824,7 @@ export default function Home() {
           id="tutorial-target-menu"
           type="button"
           onClick={() => setIsMenuOpen(true)}
-          className={`${
+          className={`relative ${
             buttonSize === "large" ? "w-11 h-11 text-2xl" : "w-9 h-9 text-xl"
           } flex items-center justify-center rounded-xl transition-all border`}
           style={{
@@ -3072,6 +3835,16 @@ export default function Home() {
           aria-label="メニューを開く"
         >
           <span className="leading-none">≡</span>
+          {unreadAnnouncementsCount > 0 && (
+            <span
+              className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2"
+              style={{
+                backgroundColor: "#c96256",
+                borderColor: activeTheme.bgApp,
+              }}
+              aria-label={`未読のお知らせが${unreadAnnouncementsCount}件あります`}
+            />
+          )}
         </button>
 
         {/* 中央：書く / 見る クイックアクセス切り替え（カプセル型） */}
@@ -3353,6 +4126,33 @@ export default function Home() {
 
             <button
               type="button"
+              onClick={handleOpenAnnouncements}
+              className={`w-full flex items-center justify-between ${
+                buttonSize === "large" ? "px-4 py-3 text-base" : "px-3.5 py-2.5 text-sm"
+              } rounded-xl font-medium transition-colors text-left hover:opacity-80`}
+              style={{
+                backgroundColor: "transparent",
+                color: unreadAnnouncementsCount > 0 ? activeTheme.textPrimary : activeTheme.textSecondary,
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <span>📢</span> 運営からのお知らせ
+              </div>
+              {unreadAnnouncementsCount > 0 && (
+                <span
+                  className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0"
+                  style={{
+                    backgroundColor: "#c96256",
+                    color: "#ffffff",
+                  }}
+                >
+                  新着 {unreadAnnouncementsCount}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
               onClick={() => {
                 setIsHelpOpen(true);
                 setIsMenuOpen(false);
@@ -3429,14 +4229,14 @@ export default function Home() {
         {/* ① ホーム（メモ入力：ノイズゼロのメイン空間） */}
         {activeTab === "home" && (
           <div className="relative pt-3.5" id="tutorial-target-input">
-            {/* 上部に通る真円スパイラルリング（ピタゴラス真円・穴のど真ん中に完全一致） */}
+            {/* 上部に通る真円スパイラルリング（ピタゴラス真円・穴のど真ん中に完全一致：計8個） */}
             <svg
-              className="absolute top-0 left-1/2 -translate-x-1/2 w-4/5 max-w-[280px] h-7 z-10 pointer-events-none"
-              viewBox="0 0 200 28"
+              className="absolute top-0 left-1/2 -translate-x-1/2 w-[90%] max-w-[364px] h-7 z-10 pointer-events-none"
+              viewBox="-30 0 260 28"
               fill="none"
               aria-hidden="true"
             >
-              {[25, 55, 85, 115, 145, 175].map((hx) => (
+              {[-5, 25, 55, 85, 115, 145, 175, 205].map((hx) => (
                 <g key={hx}>
                   {/* カード上部のパンチ穴（上辺y=14から6px内側、完全左右対称） */}
                   <circle
@@ -3519,7 +4319,7 @@ export default function Home() {
               id="tutorial-target-meta"
               className={`overflow-hidden transition-all duration-300 ease-out border-t pt-3 mt-1 ${
                 hasContent || tutorialStep === 3
-                  ? "max-h-60 opacity-100"
+                  ? "max-h-96 opacity-100"
                   : "max-h-0 opacity-0 pointer-events-none pt-0 mt-0 border-t-0"
               }`}
               style={{ borderColor: activeTheme.border }}
@@ -3629,6 +4429,79 @@ export default function Home() {
                   </button>
                 </div>
               </div>
+
+              {/* リマインダー（見返す日）控えめ設定行（チュートリアルStep3では高さ維持のため非表示） */}
+              {tutorialStep !== 3 && (
+                <div
+                  className="mt-2.5 pt-2.5 border-t flex flex-wrap items-center gap-1.5 text-xs"
+                  style={{ borderColor: activeTheme.border }}
+                >
+                  <span
+                    className="flex items-center gap-1 text-[11px] font-medium mr-0.5 select-none"
+                    style={{ color: activeTheme.textSecondary }}
+                  >
+                    🔔 見返す日:
+                  </span>
+                  {REMINDER_PRESET_OFFSETS.map((preset) => {
+                    const targetYmd = getLocalYmd(preset.days);
+                    const isSelected = newNoteRemindAt === targetYmd;
+                    return (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        onClick={() => setNewNoteRemindAt(isSelected ? "" : targetYmd)}
+                        className={`px-2 py-0.5 rounded-lg text-[11px] font-medium transition-all ${
+                          isSelected ? "shadow-xs font-bold" : "border"
+                        }`}
+                        style={{
+                          backgroundColor: isSelected ? activeTheme.accent : activeTheme.bgSub,
+                          borderColor: isSelected ? activeTheme.accent : activeTheme.border,
+                          color: isSelected ? activeTheme.accentText : activeTheme.textSecondary,
+                        }}
+                      >
+                        {preset.label}
+                      </button>
+                    );
+                  })}
+                  <input
+                    type="date"
+                    value={newNoteRemindAt}
+                    onChange={(e) => setNewNoteRemindAt(e.target.value)}
+                    aria-label="見返す日を指定"
+                    className="px-2 py-0.5 rounded-lg text-[11px] border bg-transparent focus:outline-none"
+                    style={{
+                      borderColor: newNoteRemindAt ? activeTheme.accent : activeTheme.border,
+                      color: activeTheme.textPrimary,
+                      backgroundColor: activeTheme.bgSub,
+                    }}
+                  />
+                  {newNoteRemindAt && (
+                    <button
+                      type="button"
+                      onClick={() => setNewNoteRemindAt("")}
+                      className="text-[11px] px-1.5 py-0.5 rounded-md hover:opacity-75"
+                      style={{ color: activeTheme.textSecondary }}
+                    >
+                      ✕ 解除
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleToggleComposeLock}
+                    className={`ml-auto px-2.5 py-0.5 rounded-lg text-[11px] font-medium transition-all flex items-center gap-1 ${
+                      newNoteIsLocked ? "shadow-xs font-bold" : "border"
+                    }`}
+                    style={{
+                      backgroundColor: newNoteIsLocked ? activeTheme.accent : activeTheme.bgSub,
+                      borderColor: newNoteIsLocked ? activeTheme.accent : activeTheme.border,
+                      color: newNoteIsLocked ? activeTheme.accentText : activeTheme.textSecondary,
+                    }}
+                  >
+                    <span>{newNoteIsLocked ? "🔒" : "🔓"}</span>
+                    <span>{newNoteIsLocked ? "鍵付きで保存" : "鍵をつける"}</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -3675,7 +4548,7 @@ export default function Home() {
         {/* ② メモを見る（通常一覧：Twitter風のすっきり二層表示） */}
         {activeTab === "list" && (
           <div className="flex flex-col flex-1 min-h-0 w-full">
-            <div className="flex items-center justify-between mb-3 pb-2 border-b shrink-0" style={{ borderColor: activeTheme.border }}>
+            <div className="flex items-center justify-between gap-2 mb-3 pb-2 border-b shrink-0" style={{ borderColor: activeTheme.border }}>
               <h2
                 className={`${
                   fontSize === "large" ? "text-xl" : "text-lg"
@@ -3684,14 +4557,183 @@ export default function Home() {
               >
                 メモ一覧 ({activeNotes.length}件)
               </h2>
+              <button
+                type="button"
+                onClick={() => setIsReminderPanelOpen((prev) => !prev)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border shrink-0"
+                style={{
+                  backgroundColor:
+                    dueReminderNotes.length > 0 || isReminderPanelOpen
+                      ? activeTheme.accent
+                      : activeTheme.bgSub,
+                  borderColor:
+                    dueReminderNotes.length > 0 || isReminderPanelOpen
+                      ? activeTheme.accent
+                      : activeTheme.border,
+                  color:
+                    dueReminderNotes.length > 0 || isReminderPanelOpen
+                      ? activeTheme.accentText
+                      : activeTheme.textSecondary,
+                }}
+                aria-expanded={isReminderPanelOpen}
+              >
+                <span>🔔</span>
+                {dueReminderNotes.length > 0 ? (
+                  <span>今日見返す ({dueReminderNotes.length})</span>
+                ) : upcomingReminderNotes.length > 0 ? (
+                  <span>予定 ({upcomingReminderNotes.length})</span>
+                ) : (
+                  <span>リマインダー</span>
+                )}
+              </button>
             </div>
 
             {/* スクロール領域（検索バーとメモが一緒に流れるため、下スクロールでメモが画面いっぱいに広がる） */}
             <div className="flex-1 overflow-y-auto pr-1 pb-16 flex flex-col">
+              {/* リマインダー折りたたみパネル（メモ一覧横の 🔔 ボタンで開閉） */}
+              {isReminderPanelOpen && (
+                <div
+                  className="mb-3 p-3.5 rounded-xl border flex flex-col gap-3 shrink-0"
+                  style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border }}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold flex items-center gap-1.5" style={{ color: activeTheme.textPrimary }}>
+                      <span>🔔</span> 見返すメモ（リマインダー）
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setIsReminderPanelOpen(false)}
+                      className="text-[11px] font-medium hover:opacity-75"
+                      style={{ color: activeTheme.textSecondary }}
+                    >
+                      閉じる ✕
+                    </button>
+                  </div>
+
+                  {reminderActiveNotes.length === 0 ? (
+                    <p className="text-xs py-2 text-center leading-relaxed" style={{ color: activeTheme.textSecondary }}>
+                      見返す日が設定されたメモはありません。<br />
+                      メモ右上の「…」メニューや新規保存時に設定できます。
+                    </p>
+                  ) : (
+                    <>
+                      {[
+                        { heading: "📌 今日見返すメモ", items: dueReminderNotes },
+                        { heading: "📅 これからの予定", items: upcomingReminderNotes },
+                      ]
+                      .filter((section) => section.items.length > 0)
+                      .map((section) => (
+                        <div key={section.heading} className="flex flex-col gap-2">
+                          <div className="text-[11px] font-bold" style={{ color: activeTheme.textSecondary }}>
+                            {section.heading} ({section.items.length})
+                          </div>
+                          {section.items.map((rNote) => {
+                            const meta = formatReminderLabel(rNote.remindAt || todayYmd);
+                            return (
+                              <div
+                                key={rNote.id}
+                                className="p-3 rounded-xl border flex flex-col gap-2"
+                                style={{
+                                  backgroundColor: activeTheme.bgCard,
+                                  borderColor: meta.isDue ? activeTheme.accent : activeTheme.border,
+                                }}
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleJumpToReminderNote(rNote.id)}
+                                    className="text-left flex-1 min-w-0 hover:opacity-80 transition-opacity"
+                                  >
+                                    {(() => {
+                                      const rVisible = isNoteContentVisible(rNote);
+                                      return (
+                                        <>
+                                          {rNote.title && (
+                                            <div className="text-xs font-bold truncate" style={{ color: activeTheme.textPrimary }}>
+                                              {rVisible || !maskLockedTitle ? rNote.title : maskLockedText(rNote.title)}
+                                            </div>
+                                          )}
+                                          <p
+                                            className="text-xs line-clamp-2 whitespace-pre-wrap leading-relaxed"
+                                            style={{ color: activeTheme.textSecondary }}
+                                          >
+                                            {rVisible ? rNote.content : maskLockedText(rNote.content)}
+                                          </p>
+                                        </>
+                                      );
+                                    })()}
+                                  </button>
+                                  <span
+                                    className="text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0 border"
+                                    style={
+                                      meta.isDue
+                                        ? {
+                                            backgroundColor: activeTheme.accent,
+                                            borderColor: activeTheme.accent,
+                                            color: activeTheme.accentText,
+                                          }
+                                        : {
+                                            backgroundColor: activeTheme.bgSub,
+                                            borderColor: activeTheme.border,
+                                            color: activeTheme.textSecondary,
+                                          }
+                                    }
+                                  >
+                                    🔔 {meta.label}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleJumpToReminderNote(rNote.id)}
+                                    className="px-2.5 py-1 rounded-lg text-[11px] font-medium border hover:opacity-80"
+                                    style={{
+                                      backgroundColor: activeTheme.bgSub,
+                                      borderColor: activeTheme.border,
+                                      color: activeTheme.textSecondary,
+                                    }}
+                                  >
+                                    メモへ
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenReminderModal(rNote)}
+                                    className="px-2.5 py-1 rounded-lg text-[11px] font-medium border hover:opacity-80"
+                                    style={{
+                                      backgroundColor: activeTheme.bgSub,
+                                      borderColor: activeTheme.border,
+                                      color: activeTheme.textPrimary,
+                                    }}
+                                  >
+                                    📅 日付変更
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSetNoteReminder(rNote.id, undefined)}
+                                    className="px-2.5 py-1 rounded-lg text-[11px] font-bold hover:opacity-90"
+                                    style={{
+                                      backgroundColor: activeTheme.accent,
+                                      color: activeTheme.accentText,
+                                    }}
+                                  >
+                                    ✓ 確認済み
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </div>
+              )}
+
               {/* 検索・絞り込み機能エリア（スケッチの実装） */}
               <div className="shrink-0 mb-3">
               {!isSearchPanelOpen ? (
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap">
                   <button
                     id="tutorial-target-search-btn"
                     type="button"
@@ -3716,6 +4758,26 @@ export default function Home() {
                       <span>検索機能</span>
                     )}
                   </button>
+                  {(unlockedNoteIds.length > 0 || isLockSessionVerified) && (
+                    <button
+                      type="button"
+                      onClick={() => lockAllNotes(true)}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-opacity hover:opacity-85"
+                      style={{
+                        backgroundColor: activeTheme.bgSub,
+                        borderColor: activeTheme.accent,
+                        color: activeTheme.textPrimary,
+                      }}
+                    >
+                      <span>🔒</span>
+                      <span>
+                        {unlockedNoteIds.length > 0
+                          ? `すべて隠す (${unlockedNoteIds.length})`
+                          : "鍵をロック"}
+                      </span>
+                    </button>
+                  )}
+                  </div>
                   {(filterOnlyFavorite || filterCategories.length > 0 || includeTrashInSearch || searchQuery.trim().length > 0 || filterTimeSlots.length > 0 || Boolean(filterDate)) && (
                     <button
                       type="button"
@@ -4216,10 +5278,12 @@ export default function Home() {
               ) : (
                 displayedNotes.map((note, index) => {
                   const isMenuThisNoteOpen = activeMenuNoteId === note.id;
+                  const isContentVisible = isNoteContentVisible(note);
 
                   return (
                     <article
                       key={note.id}
+                      data-note-id={note.id}
                       id={index === 0 ? "tutorial-target-irreversible" : undefined}
                       className={`p-4 rounded-xl shadow-2xs relative transition-colors border ${
                         note.isTrash ? "border-dashed opacity-90" : ""
@@ -4238,12 +5302,30 @@ export default function Home() {
                             }`}
                             style={{ color: activeTheme.textPrimary }}
                           >
-                            {note.title || (
+                            {note.title ? (
+                              isContentVisible || !maskLockedTitle ? (
+                                note.title
+                              ) : (
+                                maskLockedText(note.title)
+                              )
+                            ) : (
                               <span className="font-normal italic" style={{ color: activeTheme.textSecondary }}>
                                 （無題）
                               </span>
                             )}
                           </h3>
+                          {note.isLocked && (
+                            <span
+                              className="text-[10px] px-1.5 py-0.5 rounded font-medium border shrink-0"
+                              style={{
+                                backgroundColor: activeTheme.bgSub,
+                                borderColor: activeTheme.border,
+                                color: activeTheme.textSecondary,
+                              }}
+                            >
+                              {isContentVisible ? "🔓 解除中" : "🔒 ロック中"}
+                            </span>
+                          )}
                           {note.isTrash && (
                             <span className="text-[10px] bg-[#eedcd8] text-[#a6483b] px-1.5 py-0.5 rounded font-medium border border-[#e0c0b8] shrink-0">
                               🗑️ ゴミ箱内
@@ -4260,13 +5342,13 @@ export default function Home() {
                               if (tutorialStep !== null) return;
                               handleCopyNote(note);
                             }}
-                            aria-disabled={tutorialStep !== null}
+                            aria-disabled={tutorialStep !== null || !isContentVisible}
                             className={`w-7 h-7 flex items-center justify-center rounded-lg text-xs leading-none transition-colors ${
-                              tutorialStep !== null ? "opacity-55 cursor-default" : "hover:opacity-80"
+                              tutorialStep !== null || !isContentVisible ? "opacity-40 cursor-default" : "hover:opacity-80"
                             }`}
                             style={{ color: activeTheme.textSecondary }}
                             aria-label="メモをクリップボードにコピー"
-                            title="メモをコピー"
+                            title={isContentVisible ? "メモをコピー" : "ロック中はコピーできません"}
                           >
                             <CopyIcon className="w-3.5 h-3.5" />
                           </button>
@@ -4349,16 +5431,21 @@ export default function Home() {
                                 type="button"
                                 onClick={() => {
                                   if (tutorialStep !== null) return;
+                                  if (!isContentVisible) {
+                                    setActiveMenuNoteId(null);
+                                    handleRequestUnlockNote(note.id);
+                                    return;
+                                  }
                                   handleCopyNote(note);
                                   setActiveMenuNoteId(null);
                                 }}
-                                aria-disabled={tutorialStep !== null}
+                                aria-disabled={tutorialStep !== null || !isContentVisible}
                                 className={`w-full text-left ${
                                   buttonSize === "large"
                                     ? "px-3 py-2 text-sm"
                                     : "px-2.5 py-1.5 text-xs"
                                 } rounded-lg flex items-center gap-1.5 font-medium transition-colors ${
-                                  tutorialStep !== null ? "opacity-60 cursor-default" : "hover:opacity-80"
+                                  tutorialStep !== null || !isContentVisible ? "opacity-50 cursor-default" : "hover:opacity-80"
                                 }`}
                                 style={{ color: activeTheme.textPrimary }}
                               >
@@ -4368,15 +5455,20 @@ export default function Home() {
                                 type="button"
                                 onClick={() => {
                                   if (tutorialStep !== null) return;
+                                  if (!isContentVisible) {
+                                    setActiveMenuNoteId(null);
+                                    handleRequestUnlockNote(note.id);
+                                    return;
+                                  }
                                   handleOpenContentEditModal(note);
                                 }}
-                                aria-disabled={tutorialStep !== null}
+                                aria-disabled={tutorialStep !== null || !isContentVisible}
                                 className={`w-full text-left ${
                                   buttonSize === "large"
                                     ? "px-3 py-2 text-sm"
                                     : "px-2.5 py-1.5 text-xs"
                                 } rounded-lg flex items-center gap-1.5 font-medium transition-colors ${
-                                  tutorialStep !== null ? "opacity-60 cursor-default" : "hover:opacity-80"
+                                  tutorialStep !== null || !isContentVisible ? "opacity-50 cursor-default" : "hover:opacity-80"
                                 }`}
                                 style={{ color: activeTheme.textPrimary }}
                               >
@@ -4386,15 +5478,20 @@ export default function Home() {
                                 type="button"
                                 onClick={() => {
                                   if (tutorialStep !== null) return;
+                                  if (!isContentVisible) {
+                                    setActiveMenuNoteId(null);
+                                    handleRequestUnlockNote(note.id);
+                                    return;
+                                  }
                                   handleOpenEditModal(note);
                                 }}
-                                aria-disabled={tutorialStep !== null}
+                                aria-disabled={tutorialStep !== null || !isContentVisible}
                                 className={`w-full text-left ${
                                   buttonSize === "large"
                                     ? "px-3 py-2 text-sm"
                                     : "px-2.5 py-1.5 text-xs"
                                 } rounded-lg flex items-center gap-1.5 font-medium transition-colors ${
-                                  tutorialStep !== null ? "opacity-60 cursor-default" : "hover:opacity-80"
+                                  tutorialStep !== null || !isContentVisible ? "opacity-50 cursor-default" : "hover:opacity-80"
                                 }`}
                                 style={{ color: activeTheme.textPrimary }}
                               >
@@ -4404,12 +5501,35 @@ export default function Home() {
                                 type="button"
                                 onClick={() => {
                                   if (tutorialStep !== null) return;
+                                  if (!isContentVisible) {
+                                    setActiveMenuNoteId(null);
+                                    handleRequestUnlockNote(note.id);
+                                    return;
+                                  }
                                   setReplyingNoteId(note.id);
                                   setReplyContent("");
                                   setActiveMenuNoteId(null);
                                   setExpandedReplyNoteIds((prev) =>
                                     prev.includes(note.id) ? prev : [...prev, note.id]
                                   );
+                                }}
+                                aria-disabled={tutorialStep !== null || !isContentVisible}
+                                className={`w-full text-left ${
+                                  buttonSize === "large"
+                                    ? "px-3 py-2 text-sm"
+                                    : "px-2.5 py-1.5 text-xs"
+                                } rounded-lg flex items-center gap-1.5 font-medium transition-colors ${
+                                  tutorialStep !== null || !isContentVisible ? "opacity-50 cursor-default" : "hover:opacity-80"
+                                }`}
+                                style={{ color: activeTheme.textPrimary }}
+                              >
+                                <span>💬</span> 追記する
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (tutorialStep !== null) return;
+                                  handleOpenReminderModal(note);
                                 }}
                                 aria-disabled={tutorialStep !== null}
                                 className={`w-full text-left ${
@@ -4421,7 +5541,28 @@ export default function Home() {
                                 }`}
                                 style={{ color: activeTheme.textPrimary }}
                               >
-                                <span>💬</span> 追記する
+                                <span>🔔</span> {note.remindAt ? "見返す日を変更" : "見返す日を設定"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (tutorialStep !== null) return;
+                                  handleToggleNoteLock(note);
+                                }}
+                                aria-disabled={tutorialStep !== null || (Boolean(note.isLocked) && !isContentVisible)}
+                                className={`w-full text-left ${
+                                  buttonSize === "large"
+                                    ? "px-3 py-2 text-sm"
+                                    : "px-2.5 py-1.5 text-xs"
+                                } rounded-lg flex items-center gap-1.5 font-medium transition-colors ${
+                                  tutorialStep !== null || (Boolean(note.isLocked) && !isContentVisible)
+                                    ? "opacity-50 cursor-default"
+                                    : "hover:opacity-80"
+                                }`}
+                                style={{ color: activeTheme.textPrimary }}
+                              >
+                                <span>{note.isLocked ? "🔓" : "🔒"}</span>
+                                {note.isLocked ? "鍵を外す" : "鍵をつける"}
                               </button>
                               <div className="my-0.5 border-t" style={{ borderColor: activeTheme.border }} />
                               <button
@@ -4446,10 +5587,10 @@ export default function Home() {
                         </div>
                       </div>
 
-                      {/* カテゴリタグ一覧 */}
-                      {note.categories && note.categories.length > 0 && (
+                      {/* カテゴリタグ・リマインダー一覧 */}
+                      {((note.categories && note.categories.length > 0) || note.remindAt) && (
                         <div className="flex flex-wrap gap-1 mb-2">
-                          {note.categories.map((cat) => (
+                          {note.categories?.map((cat) => (
                             <span
                               key={cat}
                               className="text-[10px] px-2 py-0.5 rounded-md font-medium border"
@@ -4462,23 +5603,87 @@ export default function Home() {
                               🏷️ {cat}
                             </span>
                           ))}
+                          {note.remindAt && (() => {
+                            const rMeta = formatReminderLabel(note.remindAt);
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (tutorialStep !== null) return;
+                                  handleOpenReminderModal(note);
+                                }}
+                                className="text-[10px] px-2 py-0.5 rounded-md font-medium border transition-opacity hover:opacity-80"
+                                style={
+                                  rMeta.isDue
+                                    ? {
+                                        backgroundColor: activeTheme.accent,
+                                        borderColor: activeTheme.accent,
+                                        color: activeTheme.accentText,
+                                      }
+                                    : {
+                                        backgroundColor: activeTheme.bgSub,
+                                        borderColor: activeTheme.border,
+                                        color: activeTheme.textSecondary,
+                                      }
+                                }
+                              >
+                                🔔 {rMeta.label}
+                              </button>
+                            );
+                          })()}
                         </div>
                       )}
 
                       <p
                         className={`${
                           fontSize === "large" ? "text-base" : "text-sm"
-                        } whitespace-pre-wrap leading-relaxed`}
+                        } whitespace-pre-wrap leading-relaxed ${
+                          !isContentVisible ? "select-none opacity-80 tracking-wider" : ""
+                        }`}
                         style={{
                           color: activeTheme.textPrimary,
                           fontFamily: getNoteFontFamilyStyle(noteFont),
                         }}
                       >
-                        {note.content}
+                        {isContentVisible ? note.content : maskLockedText(note.content)}
                       </p>
 
+                      {note.isLocked && (
+                        <div className="mt-2.5 flex items-center justify-end">
+                          {isContentVisible ? (
+                            <button
+                              type="button"
+                              onClick={() => handleHideUnlockedNote(note.id)}
+                              className="px-2.5 py-1 rounded-lg text-[11px] font-medium border flex items-center gap-1 transition-opacity hover:opacity-80"
+                              style={{
+                                backgroundColor: activeTheme.bgSub,
+                                borderColor: activeTheme.border,
+                                color: activeTheme.textSecondary,
+                              }}
+                            >
+                              <span>🔒</span> 非表示にする
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (tutorialStep !== null) return;
+                                handleRequestUnlockNote(note.id);
+                              }}
+                              className="px-3 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 shadow-2xs transition-opacity hover:opacity-90"
+                              style={{
+                                backgroundColor: activeTheme.accent,
+                                color: activeTheme.accentText,
+                              }}
+                            >
+                              <span>🔓</span> {isLockSessionVerified ? "タップして表示" : "ロック解除して読む"}
+                            </button>
+                          )}
+                        </div>
+                      )}
+
                       {/* 訂正履歴表示（過去の文章をいつでも確認・振り返り可能） */}
-                      {note.editHistory && note.editHistory.length > 0 && (
+                      {note.editHistory && note.editHistory.length > 0 && isContentVisible && (
                         <div className="mt-2 pt-1.5 border-t border-dashed" style={{ borderColor: activeTheme.border }}>
                           <button
                             type="button"
@@ -4550,7 +5755,7 @@ export default function Home() {
                       )}
 
                       {/* 追記スレッド表示（デフォルトは折りたたみ） */}
-                      {note.replies && note.replies.length > 0 && (
+                      {note.replies && note.replies.length > 0 && isContentVisible && (
                         <div className="mt-3 pt-2.5 border-t flex flex-col gap-2" style={{ borderColor: activeTheme.border }}>
                           <button
                             type="button"
@@ -4972,7 +6177,9 @@ export default function Home() {
                   </button>
                 </div>
               ) : (
-                displayedTrashNotes.map((note) => (
+                displayedTrashNotes.map((note) => {
+                  const isTrashVisible = isNoteContentVisible(note);
+                  return (
                   <article
                     key={note.id}
                     className="p-4 rounded-xl border opacity-90 transition-colors"
@@ -4983,14 +6190,36 @@ export default function Home() {
                     }}
                   >
                     <div className="flex items-baseline justify-between gap-2 mb-1.5">
-                      <h3
-                        className={`font-bold ${
-                          fontSize === "large" ? "text-base" : "text-sm"
-                        }`}
-                        style={{ color: activeTheme.textPrimary }}
-                      >
-                        {note.title || <span className="opacity-50 font-normal italic">（無題）</span>}
-                      </h3>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3
+                          className={`font-bold ${
+                            fontSize === "large" ? "text-base" : "text-sm"
+                          }`}
+                          style={{ color: activeTheme.textPrimary }}
+                        >
+                          {note.title ? (
+                            isTrashVisible || !maskLockedTitle ? (
+                              note.title
+                            ) : (
+                              maskLockedText(note.title)
+                            )
+                          ) : (
+                            <span className="opacity-50 font-normal italic">（無題）</span>
+                          )}
+                        </h3>
+                        {note.isLocked && (
+                          <span
+                            className="text-[10px] px-1.5 py-0.5 rounded font-medium border shrink-0"
+                            style={{
+                              backgroundColor: activeTheme.bgSub,
+                              borderColor: activeTheme.border,
+                              color: activeTheme.textSecondary,
+                            }}
+                          >
+                            {isTrashVisible ? "🔓 解除中" : "🔒 ロック中"}
+                          </span>
+                        )}
+                      </div>
                       <time
                         className={`${
                           fontSize === "large" ? "text-xs" : "text-[11px]"
@@ -5023,17 +6252,50 @@ export default function Home() {
                     <p
                       className={`${
                         fontSize === "large" ? "text-base" : "text-sm"
-                      } whitespace-pre-wrap leading-relaxed mb-2`}
+                      } whitespace-pre-wrap leading-relaxed mb-2 ${
+                        !isTrashVisible ? "select-none opacity-80 tracking-wider" : ""
+                      }`}
                       style={{
                         color: activeTheme.textPrimary,
                         fontFamily: getNoteFontFamilyStyle(noteFont),
                       }}
                     >
-                      {note.content}
+                      {isTrashVisible ? note.content : maskLockedText(note.content)}
                     </p>
 
+                    {note.isLocked && (
+                      <div className="mb-2 flex items-center justify-end">
+                        {isTrashVisible ? (
+                          <button
+                            type="button"
+                            onClick={() => handleHideUnlockedNote(note.id)}
+                            className="px-2.5 py-1 rounded-lg text-[11px] font-medium border flex items-center gap-1 transition-opacity hover:opacity-80"
+                            style={{
+                              backgroundColor: activeTheme.bgSub,
+                              borderColor: activeTheme.border,
+                              color: activeTheme.textSecondary,
+                            }}
+                          >
+                            <span>🔒</span> 非表示にする
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleRequestUnlockNote(note.id)}
+                            className="px-3 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 shadow-2xs transition-opacity hover:opacity-90"
+                            style={{
+                              backgroundColor: activeTheme.accent,
+                              color: activeTheme.accentText,
+                            }}
+                          >
+                            <span>🔓</span> {isLockSessionVerified ? "タップして表示" : "ロック解除して読む"}
+                          </button>
+                        )}
+                      </div>
+                    )}
+
                     {/* 訂正履歴表示（過去の文章をいつでも確認・振り返り可能） */}
-                    {note.editHistory && note.editHistory.length > 0 && (
+                    {note.editHistory && note.editHistory.length > 0 && isTrashVisible && (
                       <div className="mt-2 pt-1.5 border-t border-dashed" style={{ borderColor: activeTheme.border }}>
                         <button
                           type="button"
@@ -5105,7 +6367,7 @@ export default function Home() {
                     )}
 
                     {/* 追記スレッド表示（デフォルトは折りたたみ） */}
-                    {note.replies && note.replies.length > 0 && (
+                    {note.replies && note.replies.length > 0 && isTrashVisible && (
                       <div className="mt-2 mb-3 pt-2 border-t flex flex-col gap-2" style={{ borderColor: activeTheme.border }}>
                         <button
                           type="button"
@@ -5179,7 +6441,8 @@ export default function Home() {
                       </button>
                     </div>
                   </article>
-                ))
+                  );
+                })
               )}
               </div>
             </div>
@@ -6246,6 +7509,151 @@ export default function Home() {
                 </div>
               </div>
 
+              {/* ── 項目X：🔐 鍵付きメモ設定 ── */}
+              <div
+                className="p-4 rounded-xl border flex flex-col gap-3 transition-colors"
+                style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border }}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <div className="font-bold text-sm flex items-center gap-1.5" style={{ color: activeTheme.textPrimary }}>
+                      <span>🔐</span> 鍵付きメモ設定
+                    </div>
+                    <div className="text-[11px] mt-0.5" style={{ color: activeTheme.textSecondary }}>
+                      鍵をかけたメモを「・」で隠すためのパスワードと表示ルール
+                    </div>
+                  </div>
+                  <span
+                    className="text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0"
+                    style={{
+                      backgroundColor: lockPasswordHash ? activeTheme.accent : activeTheme.bgCard,
+                      borderColor: lockPasswordHash ? activeTheme.accent : activeTheme.border,
+                      color: lockPasswordHash ? activeTheme.accentText : activeTheme.textSecondary,
+                    }}
+                  >
+                    {lockPasswordHash ? "設定済み" : "未設定"}
+                  </span>
+                </div>
+
+                {/* 鍵パスワードの設定・変更・再設定 */}
+                <div
+                  className="p-3 rounded-xl border flex flex-col gap-2"
+                  style={{ backgroundColor: activeTheme.bgCard, borderColor: activeTheme.border }}
+                >
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <span className="text-xs font-bold" style={{ color: activeTheme.textPrimary }}>
+                      鍵メモ専用パスワード
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => openLockModal(lockPasswordHash ? "change" : "setup")}
+                      className="px-3 py-1 rounded-lg text-xs font-bold transition-all shadow-2xs hover:opacity-90"
+                      style={{ backgroundColor: activeTheme.accent, color: activeTheme.accentText }}
+                    >
+                      {lockPasswordHash ? "パスワードを変更" : "パスワードを設定"}
+                    </button>
+                  </div>
+                  <div className="text-[11px] leading-relaxed" style={{ color: activeTheme.textSecondary }}>
+                    アカウントのログインパスワードとは別に管理されます（4文字以上）。
+                  </div>
+                  {lockPasswordHash && currentUser && (
+                    <div className="flex justify-end pt-1 border-t" style={{ borderColor: activeTheme.border }}>
+                      <button
+                        type="button"
+                        onClick={() => openLockModal("forgot")}
+                        className="text-[11px] underline hover:opacity-80"
+                        style={{ color: activeTheme.textSecondary }}
+                      >
+                        鍵パスワードを忘れた場合（アカウントパスワードで再設定）
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* ロック中のタイトル表示 */}
+                <div
+                  className="p-3 rounded-xl border flex items-center justify-between gap-2 flex-wrap"
+                  style={{ backgroundColor: activeTheme.bgCard, borderColor: activeTheme.border }}
+                >
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold" style={{ color: activeTheme.textPrimary }}>
+                      ロック中のタイトル表示
+                    </div>
+                    <div className="text-[11px]" style={{ color: activeTheme.textSecondary }}>
+                      鍵がかかっている間のタイトルの扱い
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 p-0.5 rounded-lg border" style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border }}>
+                    {[
+                      { label: "隠す（・・・）", value: true },
+                      { label: "表示する", value: false },
+                    ].map((opt) => {
+                      const active = maskLockedTitle === opt.value;
+                      return (
+                        <button
+                          key={opt.label}
+                          type="button"
+                          onClick={() => handleChangeMaskLockedTitle(opt.value)}
+                          className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all ${
+                            active ? "font-bold shadow-2xs" : "hover:opacity-80"
+                          }`}
+                          style={{
+                            backgroundColor: active ? activeTheme.accent : "transparent",
+                            color: active ? activeTheme.accentText : activeTheme.textSecondary,
+                          }}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 自動ロックのタイミング */}
+                <div
+                  className="p-3 rounded-xl border flex flex-col gap-2"
+                  style={{ backgroundColor: activeTheme.bgCard, borderColor: activeTheme.border }}
+                >
+                  <div>
+                    <div className="text-xs font-bold" style={{ color: activeTheme.textPrimary }}>
+                      自動で隠すタイミング
+                    </div>
+                    <div className="text-[11px]" style={{ color: activeTheme.textSecondary }}>
+                      解除したメモを自動でロック状態に戻す条件を選べます
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {(
+                      [
+                        { id: "manual", label: "手動・再読込時のみ" },
+                        { id: "5m", label: "無操作 5分" },
+                        { id: "15m", label: "無操作 15分" },
+                        { id: "background", label: "別画面に切替時" },
+                      ] as const
+                    ).map((opt) => {
+                      const active = autoLockMode === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => handleChangeAutoLockMode(opt.id)}
+                          className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-all text-center ${
+                            active ? "font-bold shadow-2xs" : "hover:opacity-80"
+                          }`}
+                          style={{
+                            backgroundColor: active ? activeTheme.accent : activeTheme.bgSub,
+                            borderColor: active ? activeTheme.accent : activeTheme.border,
+                            color: active ? activeTheme.accentText : activeTheme.textSecondary,
+                          }}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
               {/* アカウント・クラウド同期・復旧キー */}
               <div
                 className="p-3.5 rounded-xl border flex flex-col gap-2.5 transition-colors"
@@ -6511,6 +7919,458 @@ export default function Home() {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 鍵付きメモ パスワード設定・解除モーダル */}
+      {lockModalMode && (
+        <div
+          className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4"
+          onClick={closeLockModal}
+        >
+          <form
+            onSubmit={handleSubmitLockModal}
+            className="rounded-2xl p-6 max-w-sm w-full border shadow-2xl transition-all flex flex-col gap-3.5"
+            style={{ backgroundColor: activeTheme.bgCard, borderColor: activeTheme.border }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div>
+              <h3 className="text-base font-bold flex items-center gap-1.5" style={{ color: activeTheme.textPrimary }}>
+                <span>{lockModalMode === "unlock" ? "🔓" : "🔐"}</span>
+                <span>
+                  {lockModalMode === "unlock" && "鍵メモのロック解除"}
+                  {lockModalMode === "setup" && "鍵メモ用パスワードを設定"}
+                  {lockModalMode === "change" && "鍵メモ用パスワードを変更"}
+                  {lockModalMode === "forgot" && "鍵パスワードを再設定"}
+                </span>
+              </h3>
+              <p className="text-xs mt-1 leading-relaxed" style={{ color: activeTheme.textSecondary }}>
+                {lockModalMode === "unlock" &&
+                  "一度解除すると、他の鍵メモもタップだけで開けるようになります（「隠す」でロック）。"}
+                {lockModalMode === "setup" &&
+                  "すべての鍵付きメモに共通で使うパスワードを決めてください（4文字以上・アカウントパスワードと別でOK）。"}
+                {lockModalMode === "change" &&
+                  "現在の鍵パスワードを確認したうえで、新しいパスワードに変更します。"}
+                {lockModalMode === "forgot" &&
+                  "ログイン中アカウントのパスワードで本人確認を行い、新しい鍵パスワードを再設定します。"}
+              </p>
+            </div>
+
+            {lockModalError && (
+              <div
+                className="p-2.5 rounded-xl border text-xs font-medium"
+                style={{
+                  backgroundColor: "rgba(184, 84, 72, 0.12)",
+                  borderColor: "rgba(184, 84, 72, 0.35)",
+                  color: activeTheme.isDark ? "#f5a398" : "#b85448",
+                }}
+              >
+                ⚠️ {lockModalError}
+              </div>
+            )}
+
+            <div className="flex flex-col gap-2.5">
+              <div>
+                <label className="block text-xs font-bold mb-1" style={{ color: activeTheme.textPrimary }}>
+                  {lockModalMode === "unlock" && "鍵メモ用パスワード"}
+                  {lockModalMode === "setup" && "新しい鍵パスワード（4文字以上）"}
+                  {lockModalMode === "change" && "現在の鍵パスワード"}
+                  {lockModalMode === "forgot" && "アカウントのログインパスワード"}
+                </label>
+                <div className="relative flex items-center">
+                  <input
+                    type={showLockInput1 ? "text" : "password"}
+                    value={lockInput1}
+                    onChange={(e) => setLockInput1(e.target.value)}
+                    autoFocus
+                    className="w-full px-3 py-2 pr-9 text-sm rounded-xl border focus:outline-none"
+                    style={{
+                      backgroundColor: activeTheme.bgSub,
+                      borderColor: activeTheme.border,
+                      color: activeTheme.textPrimary,
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowLockInput1((prev) => !prev)}
+                    className="absolute right-2.5 p-1 hover:opacity-75"
+                    style={{ color: activeTheme.textSecondary }}
+                    aria-label={showLockInput1 ? "パスワードを隠す" : "パスワードを表示"}
+                  >
+                    {showLockInput1 ? <EyeOffIcon /> : <EyeIcon />}
+                  </button>
+                </div>
+              </div>
+
+              {(lockModalMode === "setup" || lockModalMode === "change" || lockModalMode === "forgot") && (
+                <div>
+                  <label className="block text-xs font-bold mb-1" style={{ color: activeTheme.textPrimary }}>
+                    {lockModalMode === "setup" ? "確認用（もう一度入力）" : "新しい鍵パスワード（4文字以上）"}
+                  </label>
+                  <div className="relative flex items-center">
+                    <input
+                      type={showLockInput2 ? "text" : "password"}
+                      value={lockInput2}
+                      onChange={(e) => setLockInput2(e.target.value)}
+                      className="w-full px-3 py-2 pr-9 text-sm rounded-xl border focus:outline-none"
+                      style={{
+                        backgroundColor: activeTheme.bgSub,
+                        borderColor: activeTheme.border,
+                        color: activeTheme.textPrimary,
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowLockInput2((prev) => !prev)}
+                      className="absolute right-2.5 p-1 hover:opacity-75"
+                      style={{ color: activeTheme.textSecondary }}
+                      aria-label={showLockInput2 ? "パスワードを隠す" : "パスワードを表示"}
+                    >
+                      {showLockInput2 ? <EyeOffIcon /> : <EyeIcon />}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {(lockModalMode === "change" || lockModalMode === "forgot") && (
+                <div>
+                  <label className="block text-xs font-bold mb-1" style={{ color: activeTheme.textPrimary }}>
+                    新しい鍵パスワード（確認用）
+                  </label>
+                  <div className="relative flex items-center">
+                    <input
+                      type={showLockInput3 ? "text" : "password"}
+                      value={lockInput3}
+                      onChange={(e) => setLockInput3(e.target.value)}
+                      className="w-full px-3 py-2 pr-9 text-sm rounded-xl border focus:outline-none"
+                      style={{
+                        backgroundColor: activeTheme.bgSub,
+                        borderColor: activeTheme.border,
+                        color: activeTheme.textPrimary,
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowLockInput3((prev) => !prev)}
+                      className="absolute right-2.5 p-1 hover:opacity-75"
+                      style={{ color: activeTheme.textSecondary }}
+                      aria-label={showLockInput3 ? "パスワードを隠す" : "パスワードを表示"}
+                    >
+                      {showLockInput3 ? <EyeOffIcon /> : <EyeIcon />}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {lockModalMode === "unlock" && currentUser && (
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => openLockModal("forgot")}
+                  className="text-[11px] underline hover:opacity-80"
+                  style={{ color: activeTheme.textSecondary }}
+                >
+                  パスワードを忘れた場合
+                </button>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t" style={{ borderColor: activeTheme.border }}>
+              <button
+                type="button"
+                onClick={closeLockModal}
+                className="px-3.5 py-2 rounded-xl text-xs font-medium hover:opacity-80"
+                style={{ color: activeTheme.textSecondary }}
+              >
+                キャンセル
+              </button>
+              <button
+                type="submit"
+                disabled={isLockModalBusy}
+                className="px-4 py-2 rounded-xl text-xs font-bold shadow-xs hover:opacity-90 disabled:opacity-50"
+                style={{ backgroundColor: activeTheme.accent, color: activeTheme.accentText }}
+              >
+                {isLockModalBusy
+                  ? "確認中..."
+                  : lockModalMode === "unlock"
+                  ? "解除する"
+                  : "保存する"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* リマインダー（見返す日）設定モーダル */}
+      {reminderTargetNote && (
+        <div
+          className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4"
+          onClick={() => setReminderTargetNote(null)}
+        >
+          <div
+            className="rounded-2xl p-6 max-w-sm w-full border shadow-2xl transition-all flex flex-col gap-4"
+            style={{ backgroundColor: activeTheme.bgCard, borderColor: activeTheme.border }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div>
+              <h3 className="text-base font-bold flex items-center gap-1.5" style={{ color: activeTheme.textPrimary }}>
+                <span>🔔</span> 見返す日を設定
+              </h3>
+              <p className="text-xs mt-1 line-clamp-2" style={{ color: activeTheme.textSecondary }}>
+                {isNoteContentVisible(reminderTargetNote)
+                  ? reminderTargetNote.title || reminderTargetNote.content
+                  : reminderTargetNote.title && !maskLockedTitle
+                  ? reminderTargetNote.title
+                  : maskLockedText(reminderTargetNote.title || reminderTargetNote.content)}
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2.5">
+              <div className="flex flex-wrap gap-1.5">
+                {[{ label: "今日", days: 0 }, ...REMINDER_PRESET_OFFSETS].map((preset) => {
+                  const targetYmd = getLocalYmd(preset.days);
+                  const isSelected = reminderDateInput === targetYmd;
+                  return (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => setReminderDateInput(targetYmd)}
+                      className="px-3 py-1.5 rounded-xl text-xs font-medium border transition-all"
+                      style={{
+                        backgroundColor: isSelected ? activeTheme.accent : activeTheme.bgSub,
+                        borderColor: isSelected ? activeTheme.accent : activeTheme.border,
+                        color: isSelected ? activeTheme.accentText : activeTheme.textPrimary,
+                      }}
+                    >
+                      {preset.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <input
+                type="date"
+                value={reminderDateInput}
+                onChange={(e) => setReminderDateInput(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border text-sm bg-transparent focus:outline-none"
+                style={{
+                  backgroundColor: activeTheme.bgSub,
+                  borderColor: activeTheme.border,
+                  color: activeTheme.textPrimary,
+                }}
+              />
+            </div>
+
+            <div className="flex items-center justify-between gap-2 pt-2 border-t" style={{ borderColor: activeTheme.border }}>
+              {reminderTargetNote.remindAt ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleSetNoteReminder(reminderTargetNote.id, undefined);
+                    setReminderTargetNote(null);
+                  }}
+                  className="px-3 py-2 rounded-xl text-xs font-medium text-[#b85448] hover:opacity-80"
+                >
+                  解除する
+                </button>
+              ) : (
+                <span />
+              )}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setReminderTargetNote(null)}
+                  className="px-3.5 py-2 rounded-xl text-xs font-medium hover:opacity-80"
+                  style={{ color: activeTheme.textSecondary }}
+                >
+                  キャンセル
+                </button>
+                <button
+                  type="button"
+                  disabled={!reminderDateInput}
+                  onClick={() => {
+                    if (!reminderDateInput) return;
+                    handleSetNoteReminder(reminderTargetNote.id, reminderDateInput);
+                    setReminderTargetNote(null);
+                  }}
+                  className="px-4 py-2 rounded-xl text-xs font-bold shadow-xs hover:opacity-90 disabled:opacity-50"
+                  style={{ backgroundColor: activeTheme.accent, color: activeTheme.accentText }}
+                >
+                  保存する
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 運営からのお知らせモーダル */}
+      {isAnnouncementsOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4"
+          onClick={() => setIsAnnouncementsOpen(false)}
+        >
+          <div
+            className="rounded-2xl p-6 sm:p-7 max-w-lg w-full max-h-[85vh] flex flex-col border shadow-2xl transition-all"
+            style={{ backgroundColor: activeTheme.bgCard, borderColor: activeTheme.border }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              className="shrink-0 flex items-center justify-between pb-3 mb-3 border-b"
+              style={{ borderColor: activeTheme.border }}
+            >
+              <div>
+                <h2
+                  className="text-base font-bold flex items-center gap-1.5"
+                  style={{ color: activeTheme.textPrimary }}
+                >
+                  <span>📢</span>
+                  <span>運営からのお知らせ</span>
+                </h2>
+                <span className="text-[11px]" style={{ color: activeTheme.textSecondary }}>
+                  アップデート情報や大切なお知らせをお届けします
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    fetchAnnouncements();
+                  }}
+                  disabled={isLoadingAnnouncements}
+                  className="px-2.5 py-1 rounded-full text-[11px] font-medium border transition-opacity hover:opacity-75 disabled:opacity-50"
+                  style={{
+                    backgroundColor: activeTheme.bgSub,
+                    borderColor: activeTheme.border,
+                    color: activeTheme.textSecondary,
+                  }}
+                >
+                  {isLoadingAnnouncements ? "読込中..." : "更新"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsAnnouncementsOpen(false)}
+                  className="w-7 h-7 rounded-full text-xs font-bold transition-opacity hover:opacity-75 flex items-center justify-center shrink-0 border"
+                  style={{
+                    backgroundColor: activeTheme.bgSub,
+                    borderColor: activeTheme.border,
+                    color: activeTheme.textSecondary,
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 min-h-0 overflow-y-auto pr-1 flex flex-col gap-3">
+              {isLoadingAnnouncements && announcements.length === 0 ? (
+                <div className="py-10 text-center text-xs" style={{ color: activeTheme.textSecondary }}>
+                  お知らせを読み込んでいます...
+                </div>
+              ) : announcementsFetchError && announcements.length === 0 ? (
+                <div
+                  className="p-4 rounded-xl border text-center flex flex-col items-center gap-2.5"
+                  style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border }}
+                >
+                  <p className="text-xs leading-relaxed" style={{ color: activeTheme.textSecondary }}>
+                    お知らせを読み込めませんでした。通信環境をご確認のうえ、再度お試しください。
+                  </p>
+                  <button
+                    type="button"
+                    onClick={fetchAnnouncements}
+                    className="px-3.5 py-1.5 rounded-lg text-xs font-medium border transition-opacity hover:opacity-80"
+                    style={{
+                      backgroundColor: activeTheme.bgCard,
+                      borderColor: activeTheme.border,
+                      color: activeTheme.textPrimary,
+                    }}
+                  >
+                    再読み込み
+                  </button>
+                </div>
+              ) : announcements.length === 0 ? (
+                <div
+                  className="py-10 px-4 rounded-xl border text-center text-xs leading-relaxed"
+                  style={{
+                    backgroundColor: activeTheme.bgSub,
+                    borderColor: activeTheme.border,
+                    color: activeTheme.textSecondary,
+                  }}
+                >
+                  現在、新しいお知らせはありません。
+                </div>
+              ) : (
+                announcements.map((item) => {
+                  const categoryMeta = getAnnouncementCategoryLabel(item.category);
+                  const isNewlyOpened = newlyOpenedAnnouncementIds.includes(item.id);
+                  const dateLabel = (() => {
+                    const parsed = new Date(item.published_at);
+                    if (Number.isNaN(parsed.getTime())) return item.published_at;
+                    return parsed.toLocaleDateString("ja-JP", {
+                      year: "numeric",
+                      month: "numeric",
+                      day: "numeric",
+                    });
+                  })();
+
+                  return (
+                    <article
+                      key={item.id}
+                      className="p-4 rounded-xl border flex flex-col gap-1.5"
+                      style={{
+                        backgroundColor: activeTheme.bgSub,
+                        borderColor: categoryMeta.isImportant ? "#c96256" : activeTheme.border,
+                      }}
+                    >
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span
+                            className="text-[10px] font-bold px-2 py-0.5 rounded-md border"
+                            style={
+                              categoryMeta.isImportant
+                                ? {
+                                    backgroundColor: "rgba(201, 98, 86, 0.14)",
+                                    borderColor: "rgba(201, 98, 86, 0.45)",
+                                    color: "#c96256",
+                                  }
+                                : {
+                                    backgroundColor: activeTheme.bgCard,
+                                    borderColor: activeTheme.border,
+                                    color: activeTheme.textSecondary,
+                                  }
+                            }
+                          >
+                            {categoryMeta.label}
+                          </span>
+                          {isNewlyOpened && (
+                            <span
+                              className="text-[10px] font-bold px-1.5 py-0.5 rounded-md"
+                              style={{ backgroundColor: "#c96256", color: "#ffffff" }}
+                            >
+                              NEW
+                            </span>
+                          )}
+                        </div>
+                        <time className="text-[11px]" style={{ color: activeTheme.textSecondary }}>
+                          {dateLabel}
+                        </time>
+                      </div>
+                      <h3 className="text-sm font-bold leading-snug" style={{ color: activeTheme.textPrimary }}>
+                        {item.title}
+                      </h3>
+                      <p
+                        className="text-xs leading-relaxed whitespace-pre-wrap break-words"
+                        style={{ color: activeTheme.textSecondary }}
+                      >
+                        {item.content}
+                      </p>
+                    </article>
+                  );
+                })
+              )}
             </div>
           </div>
         </div>
@@ -7963,7 +9823,7 @@ export default function Home() {
                     {tutorialStep === 5 && "🔍 検索・絞り込み"}
                     {tutorialStep === 6 && "📝 メモの追記・訂正・整理"}
                     {tutorialStep === 7 && "⚙️ メニューとアカウント"}
-                    {tutorialStep === 8 && "🎉 準備完了！"}
+                    {tutorialStep === 8 && "🎉 チュートリアル完了！"}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -7990,7 +9850,7 @@ export default function Home() {
                 {tutorialStep === 1 && (
                   <>
                     <p className="font-bold text-sm mb-1">ライトNoteへようこそ！</p>
-                    <p>ライトNoteは、思いついたアイデアや思考を<strong>忘れる前に光のように即メモする</strong>ための自分専用ノートです。</p>
+                    <p>ライトNoteは、思いついたアイデアや思考を<strong>忘れる前に光のように即メモする</strong>ためのメモアプリです。</p>
                     <p>基本の操作を、実際に使いながら理解しましょう！</p>
                   </>
                 )}
@@ -8069,7 +9929,7 @@ export default function Home() {
                 )}
                 {tutorialStep === 8 && (
                   <>
-                    <p className="font-bold text-sm mb-1">準備完了です！</p>
+                    <p className="font-bold text-sm mb-1">チュートリアル完了です！</p>
                     <p>これで基本操作はバッチリです！より詳しい使い方や再度チュートリアルを行いたい場合は、右上の「？」（ガイド・ヘルプ）からいつでも確認できます。</p>
                   </>
                 )}
