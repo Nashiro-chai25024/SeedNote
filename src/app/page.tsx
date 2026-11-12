@@ -620,7 +620,7 @@ interface DbUserSettingsRow {
 const HELP_ITEMS = [
   {
     id: "about",
-    title: "SeedNoteとは",
+    title: "ライトNoteとは",
     content: (
       <div className="space-y-1.5">
         <p>自分のアイデアや思いついたことを素早く記録し、あとから簡単に探し出せる自分専用のアプリです。</p>
@@ -631,10 +631,10 @@ const HELP_ITEMS = [
   },
   {
     id: "concept",
-    title: "SeedNoteの考え方",
+    title: "ライトNoteの考え方",
     content: (
       <div className="space-y-1.5">
-        <p>SeedNoteは、<strong>「書くこと」よりも「思い出すこと」</strong>を一番大切にしています。</p>
+        <p>ライトNoteは、<strong>「書くこと」よりも「思い出すこと」</strong>を一番大切にしています。</p>
         <p>アイデアは、書いた直後よりも数か月後や数年後に思いがけない価値を持つことがあります。</p>
         <p>そのため、「まずはパッと記録する」「整理は後からでOK」「過去の記録をなるべく残す」という考え方で作られています。</p>
       </div>
@@ -650,7 +650,7 @@ const HELP_ITEMS = [
           <li>「保存」を押す</li>
           <li>必要であれば、後からカテゴリを設定する</li>
         </ol>
-        <p className="text-xs text-[#786f66] pt-1">
+        <p className="text-xs opacity-75 pt-1">
           ※最初は細かい整理を気にせず、思いついたことをどんどん記録してみてください。
         </p>
       </div>
@@ -663,14 +663,19 @@ const HELP_ITEMS = [
       <div className="space-y-2">
         <p>
           書いた内容は「保存」ボタンを押すだけで記録されます。キーボードの{" "}
-          <code className="bg-[#e8e0d3] px-1 py-0.5 rounded text-xs">Ctrl + Enter</code>
-          （Macは <code className="bg-[#e8e0d3] px-1 py-0.5 rounded text-xs">Cmd + Enter</code>）
-          でも素早く保存できます。
+          <code className="px-1 py-0.5 rounded text-xs" style={{ backgroundColor: "rgba(128, 128, 128, 0.14)" }}>
+            Ctrl + Enter
+          </code>
+          （Macは{" "}
+          <code className="px-1 py-0.5 rounded text-xs" style={{ backgroundColor: "rgba(128, 128, 128, 0.14)" }}>
+            Cmd + Enter
+          </code>
+          ）でも素早く保存できます。
         </p>
-        <div className="pt-1 border-t border-[#e5ded2]">
-          <strong className="block mb-1 text-[#3d3731]">保存通知について：</strong>
+        <div className="pt-1.5 border-t" style={{ borderColor: "rgba(128, 128, 128, 0.22)" }}>
+          <strong className="block mb-1">保存通知について：</strong>
           <p>
-            メモを保存した時に、画面の上に「保存しました」という小さな通知を表示できます。「ちゃんと保存されたかな？」と安心したい時におすすめです。通知が不要な場合は、メニューの「設定」からOFFにすることもできます。
+            メモを保存した時に、画面の下に「保存しました」という小さな通知を表示できます。「ちゃんと保存されたかな？」と安心したい時におすすめです。通知が不要な場合は、メニューの「設定」からOFFにすることもできます。
           </p>
         </div>
       </div>
@@ -682,11 +687,11 @@ const HELP_ITEMS = [
     content: (
       <div className="space-y-2.5">
         <div>
-          <strong className="block mb-0.5 text-[#3d3731]">カテゴリの作成：</strong>
+          <strong className="block mb-0.5">カテゴリの作成：</strong>
           <p>「日記」「仕事」「勉強」など、自分の好きなカテゴリを自由に作れます。一度使ったカテゴリは候補として表示されるので、次からはワンタップで選べます。</p>
         </div>
-        <div className="pt-1.5 border-t border-[#e5ded2]">
-          <strong className="block mb-0.5 text-[#3d3731]">”未分類”での保存：</strong>
+        <div className="pt-1.5 border-t" style={{ borderColor: "rgba(128, 128, 128, 0.22)" }}>
+          <strong className="block mb-0.5">”未分類”での保存：</strong>
           <p>
             カテゴリで迷ったときは、何も選ばず<strong>「”未分類”」のまま保存して大丈夫</strong>です。「アイデアが浮かんだ瞬間にすぐ書くこと」を一番優先してほしいので、カテゴリは後からいつでも設定・変更できます。
           </p>
@@ -704,7 +709,7 @@ const HELP_ITEMS = [
           <li><strong>✏️ 書く：</strong> 思考を逃さず即メモできる入力画面（ホーム）に戻ります。</li>
           <li><strong>📋 見る：</strong> 保存した過去のメモを振り返る一覧画面へ移動します。</li>
         </ul>
-        <p className="text-[11px] text-[#786f66] pt-1">
+        <p className="text-[11px] opacity-75 pt-1">
           ※ゴミ箱やカテゴリ管理、文字サイズなどの設定は、左上の「≡」メニューから開けます。
         </p>
       </div>
@@ -717,11 +722,12 @@ const HELP_ITEMS = [
       <div className="space-y-2">
         <p>メモ一覧の「🔍 検索機能」ボタンから、見返したいメモを素早く探せます。</p>
         <ul className="list-disc pl-5 space-y-1.5 text-xs">
-          <li><strong>🔤 キーワードで探す：</strong> タイトル、本文、追記に含まれる言葉で一発検索できます。</li>
-          <li><strong>⭐ お気に入りのみ表示：</strong> メモカード右上にある星マーク（☆/★）で登録した大切なお気に入りを絞り込みます。</li>
-          <li><strong>🏷️ タグからさがす：</strong> 指定したカテゴリや「”未分類”」に絞って探せます（複数選んでのAND検索に対応）。</li>
-          <li><strong>⏰ 時間帯からさがす：</strong> 朝、昼、夕方、夜、深夜など、書いた時間帯で絞り込めます（複数選択可）。</li>
-          <li><strong>🗑️ ゴミ箱の検索：</strong> 「ゴミ箱のメモも含めて探す」を使えば、ゴミ箱内のメモも一緒に探してその場で元に戻せます。</li>
+          <li><strong>🔤 キーワード検索：</strong> タイトル、本文、追記に含まれる言葉で一発検索できます。</li>
+          <li><strong>☆/★ お気に入りのみ：</strong> メモカード右上にある星マーク（☆/★）で登録した大切なお気に入りを絞り込みます。</li>
+          <li><strong>🏷️ カテゴリからさがす：</strong> 指定したカテゴリや「”未分類”」に絞って探せます（複数選んでのAND検索に対応）。</li>
+          <li><strong>⏰ 時間帯から探す：</strong> 朝、昼、夕方、夜、深夜など、書いた時間帯で絞り込めます（複数選択可）。</li>
+          <li><strong>📅 日付・カレンダーから探す：</strong> カレンダーで日付を選んで、その日に書いたメモをすぐに見返せます。</li>
+          <li><strong>🗑️ ゴミ箱も含める：</strong> ONにすると、ゴミ箱内のメモも一緒に探して元の場所へ戻せます。</li>
         </ul>
       </div>
     ),
@@ -742,22 +748,22 @@ const HELP_ITEMS = [
   },
   {
     id: "edit_metadata",
-    title: "タイトル・カテゴリの変更",
+    title: "本文の訂正・タイトルやカテゴリの変更",
     content: (
       <div className="space-y-2 text-xs">
         <p>
-          メモカード右上の「…」メニューから「🏷️ タイトル・カテゴリの変更」を選ぶと、見出しやタグを後から整理できます。
+          メモカード右上の「…」メニューから「🏷️ タイトル・カテゴリの変更」を選ぶと、見出しやカテゴリを後から整理できます。
         </p>
-        <div className="pt-1.5 border-t border-[#e5ded2]">
-          <strong className="block mb-0.5 text-[#3d3731]">本文の編集について：</strong>
+        <div className="pt-1.5 border-t" style={{ borderColor: "rgba(128, 128, 128, 0.22)" }}>
+          <strong className="block mb-0.5">本文の訂正について：</strong>
           <p>
-            ライトNoteでは、過去の思考をありのまま残すため、<strong>本文の編集や削除はできない</strong>仕組みになっています（続きを書き足したい時は「追記」をご利用ください）。
+            ライトNoteでは、過去の思考をありのまま残す設計のため、本文を直接消して完全削除や上書きすることはできませんが、「<strong>✏️ 本文を訂正する</strong>」から過去の文を履歴として残したまま内容を訂正できます（続きを書き足したい時は「💬 追記する」をご利用ください）。
           </p>
         </div>
-        <div className="pt-1.5 border-t border-[#e5ded2]">
-          <strong className="block mb-0.5 text-[#3d3731]">変更途中で閉じる場合：</strong>
+        <div className="pt-1.5 border-t" style={{ borderColor: "rgba(128, 128, 128, 0.22)" }}>
+          <strong className="block mb-0.5">変更途中で閉じる場合：</strong>
           <p>
-            タイトルやカテゴリの変更中に保存せずキャンセルしようとした場合、変更があれば「破棄しますか？」と確認画面が出ます（設定からON/OFF可能）。
+            訂正や変更の途中で保存せずキャンセルしようとした場合、変更があれば「破棄しますか？」と確認画面が出ます（設定からON/OFF可能）。
           </p>
         </div>
       </div>
@@ -769,13 +775,13 @@ const HELP_ITEMS = [
     content: (
       <div className="space-y-2">
         <div>
-          <strong className="block mb-0.5 text-[#3d3731]">ゴミ箱への移動手順：</strong>
+          <strong className="block mb-0.5">ゴミ箱への移動手順：</strong>
           <p>
-            メモカード右上の「…」ボタンを押すと、「ゴミ箱へ移動」が表示されます。誤タップを防ぐため、2段階で移動する仕組みになっています。
+            メモカード右上の「…」メニューを開き、「🗑️ ゴミ箱へ移動」を選ぶとゴミ箱へ移動します（一覧画面から誤タップで消えてしまわないようメニュー内に配置しています）。
           </p>
         </div>
-        <div className="pt-1.5 border-t border-[#e5ded2]">
-          <strong className="block mb-0.5 text-[#3d3731]">データの保持と復元：</strong>
+        <div className="pt-1.5 border-t" style={{ borderColor: "rgba(128, 128, 128, 0.22)" }}>
+          <strong className="block mb-0.5">データの保持と復元：</strong>
           <p>
             ゴミ箱に入れたメモは一覧からは見えなくなりますが、<strong>データが消えるわけではありません</strong>。
           </p>
@@ -802,26 +808,82 @@ const HELP_ITEMS = [
     title: "よくある質問（FAQ）",
     content: (
       <div className="space-y-3">
-        <div className="p-2.5 bg-[#eae4d9] rounded-xl">
-          <p className="font-bold text-[#3d3731] text-xs">Q. カテゴリが決まりません</p>
-          <p className="mt-1 text-xs text-[#5c5348]">A. 「”未分類”」のまま保存してください。後からいつでも変更できます。</p>
+        <div className="p-2.5 rounded-xl" style={{ backgroundColor: "rgba(128, 128, 128, 0.08)" }}>
+          <p className="font-bold text-xs">Q. カテゴリが決まりません</p>
+          <p className="mt-1 text-xs opacity-85">A. 「”未分類”」のまま保存してください。後からいつでも変更できます。</p>
         </div>
-        <div className="p-2.5 bg-[#eae4d9] rounded-xl">
-          <p className="font-bold text-[#3d3731] text-xs">Q. ゴミ箱に入れたメモは消えてしまいますか？</p>
-          <p className="mt-1 text-xs text-[#5c5348]">A. 勝手に消えることはありません。安全に保管されています（※容量が限界になった時だけ、ゴミ箱内の古いものから整理の対象になります）。</p>
+        <div className="p-2.5 rounded-xl" style={{ backgroundColor: "rgba(128, 128, 128, 0.08)" }}>
+          <p className="font-bold text-xs">Q. ゴミ箱に入れたメモは消えてしまいますか？</p>
+          <p className="mt-1 text-xs opacity-85">A. 勝手に消えることはありません。ゴミ箱の中にもデータは安全に残っており、いつでも「↩️ 元に戻す」で一覧へ戻せます（本アプリにはメモを1件ずつ完全に削除する機能はありません）。</p>
         </div>
-        <div className="p-2.5 bg-[#eae4d9] rounded-xl">
-          <p className="font-bold text-[#3d3731] text-xs">Q. 容量がいっぱいになったらどうなりますか？</p>
-          <p className="mt-1 text-xs text-[#5c5348]">A. まずゴミ箱の中の古いメモから整理されます。ゴミ箱が空の場合は整理の提案を表示します。普段のメモが勝手に消えることはありません。</p>
+        <div className="p-2.5 rounded-xl" style={{ backgroundColor: "rgba(128, 128, 128, 0.08)" }}>
+          <p className="font-bold text-xs">Q. 保存容量の上限はありますか？</p>
+          <p className="mt-1 text-xs opacity-85">A. 現在は自動で古いメモを消去する仕組みはなく、入力したメモが勝手に消えることはありません。保存容量の目安はメニューの「設定」から確認できます（将来の運用ルール変更については利用規約第4条をご確認ください）。</p>
         </div>
-        <div className="p-2.5 bg-[#eae4d9] rounded-xl">
-          <p className="font-bold text-[#3d3731] text-xs">Q. なぜアプリを開いた瞬間に入力画面が出るのですか？</p>
-          <p className="mt-1 text-xs text-[#5c5348]">A. アイデアを忘れてしまわないよう、アプリを開いてから書き留めるまでの操作を最小限にするためです。</p>
+        <div className="p-2.5 rounded-xl" style={{ backgroundColor: "rgba(128, 128, 128, 0.08)" }}>
+          <p className="font-bold text-xs">Q. なぜアプリを開いた瞬間に入力画面が出るのですか？</p>
+          <p className="mt-1 text-xs opacity-85">A. アイデアを忘れてしまわないよう、アプリを開いてから書き留めるまでの操作を最小限にするためです。</p>
         </div>
       </div>
     ),
   },
 ];
+
+// 認証モーダル共通のユーザー名（ID）入力欄
+function AuthUsernameField({
+  value,
+  onChange,
+  placeholder,
+  theme,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  placeholder: string;
+  theme: ThemePalette;
+}) {
+  const trimmed = value.trim();
+  const isInvalid = trimmed.length > 0 && !/^[a-zA-Z0-9._-]+$/.test(trimmed);
+
+  return (
+    <div>
+      <label
+        className="flex items-baseline gap-2 text-xs font-bold mb-1 flex-wrap"
+        style={{ color: theme.textPrimary }}
+      >
+        <span>ユーザー名（ID）</span>
+        <span
+          className="text-[10px] font-normal"
+          style={{ color: theme.textSecondary }}
+        >
+          ※半角英数字のみ
+        </span>
+      </label>
+      <input
+        type="text"
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        autoCapitalize="none"
+        autoCorrect="off"
+        required
+        className="w-full px-3 py-2 text-sm rounded-xl border focus:outline-none transition-colors"
+        style={{
+          backgroundColor: theme.bgSub,
+          borderColor: theme.border,
+          color: theme.textPrimary,
+        }}
+      />
+      {isInvalid && (
+        <span
+          className="text-[10px] font-bold block mt-0.5"
+          style={{ color: theme.isDark ? "#f5a398" : "#b85448" }}
+        >
+          ⚠️ ユーザー名は半角英数字（a-z, 0-9）と記号（._-）のみ使用できます
+        </span>
+      )}
+    </div>
+  );
+}
 
 export default function Home() {
   const [notes, setNotes] = useState<Note[]>([]);
@@ -831,6 +893,7 @@ export default function Home() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [openHelpSection, setOpenHelpSection] = useState<string | null>(null);
+  const [copiedContactEmail, setCopiedContactEmail] = useState(false);
   const [activeMenuNoteId, setActiveMenuNoteId] = useState<string | null>(null);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState("🌱 保存しました");
@@ -853,6 +916,29 @@ export default function Home() {
     () => getThemePalette(selectedHue, themeBrightness),
     [selectedHue, themeBrightness]
   );
+
+  // ガイド・ヘルプ末尾のお問い合わせメールアドレスをコピー
+  const handleCopyContactEmail = async () => {
+    const email = "app746.tahry@gmail.com";
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(email);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = email;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      }
+      setCopiedContactEmail(true);
+      setTimeout(() => setCopiedContactEmail(false), 2000);
+    } catch (e) {
+      console.error("メールアドレスのコピーに失敗しました", e);
+    }
+  };
 
   // テーマ変更時にPWAのステータスバー・ナビバー色（meta theme-color）とbody背景色をリアルタイム連動
   useEffect(() => {
@@ -941,15 +1027,27 @@ export default function Home() {
   const [recoveryKey, setRecoveryKey] = useState<string>("");
   const [showRecoveryKeyInSettings, setShowRecoveryKeyInSettings] = useState(false);
   const [newlyRegisteredKey, setNewlyRegisteredKey] = useState<string | null>(null);
+  const [copiedBothToast, setCopiedBothToast] = useState(false);
   const [copiedKeyToast, setCopiedKeyToast] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [authSuccessMsg, setAuthSuccessMsg] = useState<string | null>(null);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [isAuthLoading, setIsAuthLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // メモ入力テキストエリアの参照（チュートリアル時の自動フォーカス用）
+  // アカウント削除確認モーダルのState
+  const [isDeleteAccountModalOpen, setIsDeleteAccountModalOpen] = useState(false);
+  const [deleteAccountStep, setDeleteAccountStep] = useState<"auth" | "confirm">("auth");
+  const [deleteUsernameInput, setDeleteUsernameInput] = useState("");
+  const [deletePasswordInput, setDeletePasswordInput] = useState("");
+  const [showDeletePassword, setShowDeletePassword] = useState(false);
+  const [deleteLocalDataToo, setDeleteLocalDataToo] = useState(true);
+  const [deleteAccountError, setDeleteAccountError] = useState<string | null>(null);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+
+  // メモ入力テキストエリアの参照（チュートリアル時のフォーカス制御用）
   const noteTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   // インタラクティブ・ウォークスルーチュートリアルのState
@@ -960,15 +1058,15 @@ export default function Home() {
     width: number;
     height: number;
   } | null>(null);
-  const [showInitialTutorialPrompt, setShowInitialTutorialPrompt] = useState(false);
+  const [isTutorialPromptDismissed, setIsTutorialPromptDismissed] = useState(false);
 
-  // Step 2（入力体験）の時に自動でテキストエリアにフォーカスを当てる
+  // チュートリアルStep 1（開始直後）やStep 3（タグ・タイトル・保存の全体確認）では自動でキーボードを閉じる
   useEffect(() => {
-    if (tutorialStep === 2) {
-      const timer = setTimeout(() => {
-        noteTextareaRef.current?.focus();
-      }, 150);
-      return () => clearTimeout(timer);
+    if (tutorialStep === 1 || tutorialStep === 3 || (tutorialStep !== null && tutorialStep >= 4)) {
+      noteTextareaRef.current?.blur();
+      if (typeof document !== "undefined" && document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
     }
   }, [tutorialStep]);
 
@@ -1039,14 +1137,6 @@ export default function Home() {
       const savedNoteFont = localStorage.getItem("seednote_note_font") as NoteFontFamily | null;
       if (savedNoteFont && ["sans", "klee", "yomogi", "mincho", "mono"].includes(savedNoteFont)) {
         setNoteFont(savedNoteFont);
-      }
-
-      // メモが0件かつ初回の場合のみ、控えめなチュートリアル案内を表示
-      const tutorialShown = localStorage.getItem("seednote_tutorial_shown");
-      if (!savedNotes || JSON.parse(savedNotes).length === 0) {
-        if (tutorialShown !== "true") {
-          setShowInitialTutorialPrompt(true);
-        }
       }
     } catch (e) {
       console.error("データの読み込みに失敗しました", e);
@@ -1268,11 +1358,15 @@ export default function Home() {
 
   // チュートリアル操作ハンドラ
   const handleStartTutorial = () => {
+    noteTextareaRef.current?.blur();
+    if (typeof document !== "undefined" && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    setActiveMenuNoteId(null);
     setActiveTab("home");
     setTutorialStep(1);
     setIsMenuOpen(false);
-    setShowInitialTutorialPrompt(false);
-    localStorage.setItem("seednote_tutorial_shown", "true");
+    setIsHelpOpen(false);
   };
 
   const handleNextTutorialStep = () => {
@@ -1281,6 +1375,7 @@ export default function Home() {
       handleCloseTutorial();
       return;
     }
+    setActiveMenuNoteId(null);
     const nextStep = tutorialStep + 1;
     if (nextStep === 4) {
       setActiveTab("home");
@@ -1298,6 +1393,7 @@ export default function Home() {
 
   const handlePrevTutorialStep = () => {
     if (tutorialStep === null || tutorialStep <= 1) return;
+    setActiveMenuNoteId(null);
     const prevStep = tutorialStep - 1;
     if (prevStep <= 4) {
       setActiveTab("home");
@@ -1314,11 +1410,10 @@ export default function Home() {
   };
 
   const handleCloseTutorial = () => {
+    setActiveMenuNoteId(null);
     setTutorialStep(null);
     setTutorialTargetRect(null);
     setIsMenuOpen(false);
-    setShowInitialTutorialPrompt(false);
-    localStorage.setItem("seednote_tutorial_shown", "true");
   };
 
   // カテゴリの並び順変更
@@ -1424,6 +1519,8 @@ export default function Home() {
 
   // 設定のクラウド保存用デバウンスタイマー
   const cloudSettingsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // 新規登録処理中のonAuthStateChange競合を防止するフラグ
+  const isSigningUpRef = useRef(false);
 
   // ユーザー設定・カテゴリの変更をクラウドへ保存（デバウンス対応）
   const saveCloudSettings = (
@@ -1705,13 +1802,12 @@ export default function Home() {
           });
         }
       } else {
-        // クラウドにまだ設定がない場合：現在のローカル設定をクラウドに初回保存
+        if (isSigningUpRef.current) return;
+        // クラウドにまだ設定がない場合：現在のローカル設定をクラウドに初回保存（競合による復旧キー上書きを防ぐためinsertを使用）
         const cur = latestSettingsRef.current;
         const initialCats = Array.from(new Set([...localCats, ...(extraCategories || [])]));
         const generated = generateRecoveryKey();
-        setRecoveryKey(generated);
-        localStorage.setItem("seednote_recovery_key", generated);
-        await supabase.from("user_settings").upsert({
+        const { error: insertErr } = await supabase.from("user_settings").insert({
           user_id: userId,
           categories: initialCats,
           time_slots: cur.timeSlots,
@@ -1726,6 +1822,20 @@ export default function Home() {
           theme_brightness: cur.themeBrightness,
           updated_at: new Date().toISOString(),
         });
+        if (insertErr) {
+          const { data: existingRow } = await supabase
+            .from("user_settings")
+            .select("recovery_key")
+            .eq("user_id", userId)
+            .maybeSingle();
+          if (existingRow && typeof existingRow.recovery_key === "string" && existingRow.recovery_key) {
+            setRecoveryKey(existingRow.recovery_key);
+            localStorage.setItem("seednote_recovery_key", existingRow.recovery_key);
+          }
+          return;
+        }
+        setRecoveryKey(generated);
+        localStorage.setItem("seednote_recovery_key", generated);
       }
     } catch (e) {
       console.error("設定同期中にエラーが発生しました", e);
@@ -1748,6 +1858,7 @@ export default function Home() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (isSigningUpRef.current) return;
       const u = session?.user ?? null;
       setCurrentUser(u);
       if (u) {
@@ -1768,6 +1879,28 @@ export default function Home() {
   // ユーザー名から内部メールアドレスを生成
   const getInternalEmail = (username: string) => {
     return `${username.trim().toLowerCase()}@seednote.local`;
+  };
+
+  // 認証モーダルのモード切り替え・閉じる時の共通リセット処理
+  const handleSwitchAuthMode = (nextMode: "login" | "signup" | "reset") => {
+    if (nextMode === "reset" || authMode === "reset") {
+      setAuthPasswordInput("");
+    }
+    setAuthMode(nextMode);
+    setAuthError(null);
+    setAuthSuccessMsg(null);
+    setAuthPasswordConfirmInput("");
+    setResetRecoveryKeyInput("");
+    setShowPassword(false);
+    setShowPasswordConfirm(false);
+    setAgreedToTerms(false);
+  };
+
+  const handleCloseAuthModal = () => {
+    setIsAuthModalOpen(false);
+    setAuthUsernameInput("");
+    setAuthPasswordInput("");
+    handleSwitchAuthMode("login");
   };
 
   // ログイン／新規登録の送信処理
@@ -1792,7 +1925,11 @@ export default function Home() {
       return;
     }
     if (password.length < 6) {
-      setAuthError("パスワードは6文字以上で設定してください");
+      setAuthError(
+        authMode === "login"
+          ? "パスワードは6文字以上です"
+          : "パスワードは6文字以上で設定してください"
+      );
       return;
     }
     if (authMode === "signup") {
@@ -1803,6 +1940,10 @@ export default function Home() {
       }
       if (password !== confirmPass) {
         setAuthError("パスワードと確認用パスワードが一致しません");
+        return;
+      }
+      if (!agreedToTerms) {
+        setAuthError("利用規約とプライバシーへの同意が必要です");
         return;
       }
     }
@@ -1838,10 +1979,12 @@ export default function Home() {
             setShowPassword(false);
             setShowPasswordConfirm(false);
             setAuthSuccessMsg(null);
+            setAgreedToTerms(false);
           }, 800);
         }
       } else {
-        // 新規登録
+        // 新規登録（onAuthStateChangeとの競合による復旧キー上書きを防止）
+        isSigningUpRef.current = true;
         const { data, error } = await supabase.auth.signUp({
           email: internalEmail,
           password: password,
@@ -1864,23 +2007,33 @@ export default function Home() {
         }
         if (data.user) {
           const generatedKey = generateRecoveryKey();
-          setRecoveryKey(generatedKey);
-          localStorage.setItem("seednote_recovery_key", generatedKey);
 
-          // user_settingsに復旧キーを保存
+          // user_settingsに復旧キーを確実に保存
           const cur = latestSettingsRef.current;
-          await supabase.from("user_settings").upsert({
+          const { error: settingsUpsertErr } = await supabase.from("user_settings").upsert({
             user_id: data.user.id,
             recovery_key: generatedKey,
             categories: cur.categoriesList,
             time_slots: cur.timeSlots,
             font_size: cur.fontSize,
             button_size: cur.buttonSize,
+            font_family: cur.fontFamily,
+            note_font: cur.noteFont,
             enable_toast: cur.enableToast,
             confirm_discard: cur.confirmDiscardOnEdit,
+            theme_hue: cur.selectedHue,
+            theme_brightness: cur.themeBrightness,
             updated_at: new Date().toISOString(),
           });
 
+          if (settingsUpsertErr) {
+            console.error("新規登録時のuser_settings保存に失敗:", settingsUpsertErr);
+            setAuthError("アカウントの初期設定保存に失敗しました。通信環境をご確認のうえ再度お試しください。");
+            return;
+          }
+
+          setRecoveryKey(generatedKey);
+          localStorage.setItem("seednote_recovery_key", generatedKey);
           setCurrentUser(data.user);
           setCurrentUsername(username);
           await fetchCloudNotes(data.user.id, notes);
@@ -1893,12 +2046,14 @@ export default function Home() {
           setShowPassword(false);
           setShowPasswordConfirm(false);
           setAuthSuccessMsg(null);
+          setAgreedToTerms(false);
           setNewlyRegisteredKey(generatedKey);
         }
       }
     } catch {
       setAuthError("通信エラーが発生しました。接続を確認してください。");
     } finally {
+      isSigningUpRef.current = false;
       setIsAuthLoading(false);
     }
   };
@@ -2007,6 +2162,179 @@ export default function Home() {
     await supabase.auth.signOut();
     setCurrentUser(null);
     setCurrentUsername("");
+  };
+
+  // アカウント削除時にローカル保存データと画面状態を初期化するヘルパー
+  const resetLocalAppData = () => {
+    const storageKeys = [
+      "seednote_items",
+      "seednote_enable_toast",
+      "seednote_font_size",
+      "seednote_button_size",
+      "seednote_categories",
+      "seednote_confirm_discard",
+      "seednote_time_slots",
+      "seednote_category_sort_order",
+      "seednote_recovery_key",
+      "seednote_theme_hue",
+      "seednote_theme_brightness",
+      "seednote_font_family",
+      "seednote_note_font",
+      "seednote_tutorial_shown",
+    ];
+    storageKeys.forEach((key) => localStorage.removeItem(key));
+
+    setNotes([]);
+    setTitle("");
+    setContent("");
+    setSelectedCategories([]);
+    setCategoriesList([]);
+    setFilterCategories([]);
+    setFilterOnlyFavorite(false);
+    setIncludeTrashInSearch(false);
+    setSearchQuery("");
+    setFilterTimeSlots([]);
+    setFilterDate("");
+    setTrashFilterOnlyFavorite(false);
+    setTrashFilterCategories([]);
+    setTrashSearchQuery("");
+    setReplyingNoteId(null);
+    setReplyContent("");
+    setExpandedReplyNoteIds([]);
+    setExpandedHistoryNoteIds([]);
+    setSelectedHue("cream");
+    setThemeBrightness("pastel");
+    setFontSize("normal");
+    setButtonSize("normal");
+    setFontFamily("sans");
+    setNoteFont("sans");
+    setEnableToast(true);
+    setConfirmDiscardOnEdit(true);
+    setTimeSlots(DEFAULT_TIME_SLOTS);
+    setCategorySortOrder("usage");
+    setIsTutorialPromptDismissed(false);
+  };
+
+  // アカウント削除モーダルを開く（ログイン中のみ）
+  const handleOpenDeleteAccountModal = () => {
+    if (!currentUser) return;
+    setDeleteAccountStep("auth");
+    setDeleteUsernameInput("");
+    setDeletePasswordInput("");
+    setShowDeletePassword(false);
+    setDeleteLocalDataToo(true);
+    setDeleteAccountError(null);
+    setIsDeleteAccountModalOpen(true);
+  };
+
+  // アカウント削除モーダルを閉じる
+  const handleCloseDeleteAccountModal = () => {
+    if (isDeletingAccount) return;
+    setIsDeleteAccountModalOpen(false);
+    setDeleteAccountStep("auth");
+    setDeleteUsernameInput("");
+    setDeletePasswordInput("");
+    setShowDeletePassword(false);
+    setDeleteAccountError(null);
+  };
+
+  // アカウント削除前の第1段階：ログイン中IDとの一致＋パスワード本人確認
+  const handleVerifyDeleteAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser || !currentUsername || isDeletingAccount) return;
+    setDeleteAccountError(null);
+
+    const username = deleteUsernameInput.trim();
+    const password = deletePasswordInput.trim();
+
+    if (!username) {
+      setDeleteAccountError("ユーザー名（ID）を入力してください");
+      return;
+    }
+    if (!password) {
+      setDeleteAccountError("パスワードを入力してください");
+      return;
+    }
+    if (username.toLowerCase() !== currentUsername.toLowerCase()) {
+      setDeleteAccountError("現在ログイン中のユーザー名（ID）と一致しません");
+      return;
+    }
+
+    setIsDeletingAccount(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: getInternalEmail(username),
+        password,
+      });
+
+      if (error || !data.user) {
+        setDeleteAccountError("パスワードが正しくありません");
+        return;
+      }
+      if (data.user.id !== currentUser.id) {
+        setDeleteAccountError("現在ログイン中のアカウントと一致しません");
+        return;
+      }
+
+      setDeletePasswordInput("");
+      setShowDeletePassword(false);
+      setDeleteAccountStep("confirm");
+    } catch {
+      setDeleteAccountError("通信エラーが発生しました。接続を確認してください。");
+    } finally {
+      setIsDeletingAccount(false);
+    }
+  };
+
+  // アカウント削除の第2段階：最終確認後の完全削除実行
+  const handleExecuteDeleteAccount = async () => {
+    if (!currentUser || isDeletingAccount) return;
+    setDeleteAccountError(null);
+    setIsDeletingAccount(true);
+
+    if (cloudSettingsTimeoutRef.current) {
+      clearTimeout(cloudSettingsTimeoutRef.current);
+      cloudSettingsTimeoutRef.current = null;
+    }
+
+    try {
+      const { error } = await supabase.rpc("delete_own_account");
+      if (error) {
+        setDeleteAccountError(`アカウントの削除に失敗しました: ${error.message}`);
+        return;
+      }
+
+      await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+      setCurrentUser(null);
+      setCurrentUsername("");
+      setRecoveryKey("");
+      setShowRecoveryKeyInSettings(false);
+      localStorage.removeItem("seednote_recovery_key");
+
+      const removedLocal = deleteLocalDataToo;
+      if (removedLocal) {
+        resetLocalAppData();
+        setActiveTab("home");
+      }
+
+      setIsDeleteAccountModalOpen(false);
+      setDeleteAccountStep("auth");
+      setDeleteUsernameInput("");
+      setDeletePasswordInput("");
+      setShowDeletePassword(false);
+
+      setToastMessage(
+        removedLocal
+          ? "アカウントと端末内のデータを削除しました"
+          : "クラウドアカウントを削除しました（端末内のデータは残っています）"
+      );
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
+    } catch {
+      setDeleteAccountError("通信エラーが発生しました。接続を確認してください。");
+    } finally {
+      setIsDeletingAccount(false);
+    }
   };
 
   // カテゴリの選択・解除切り替え
@@ -2812,8 +3140,9 @@ export default function Home() {
         <div>
           <div className="flex items-center justify-between mb-6 pb-3 border-b" style={{ borderColor: activeTheme.border }}>
             <div>
-              <h2 className="font-bold text-base flex items-center gap-1.5" style={{ color: activeTheme.textPrimary }}>
-                <span>💡</span> ライトNote
+              <h2 className="font-bold text-base flex items-center gap-2" style={{ color: activeTheme.textPrimary }}>
+                <img src="/icon.svg" alt="ライトNote" className="w-6 h-6 rounded-md shadow-2xs shrink-0" />
+                <span>ライトNote</span>
               </h2>
               <span className="text-[11px]" style={{ color: activeTheme.textSecondary }}>メニュー</span>
             </div>
@@ -3014,20 +3343,6 @@ export default function Home() {
 
             <button
               type="button"
-              onClick={handleStartTutorial}
-              className={`w-full flex items-center gap-3 ${
-                buttonSize === "large" ? "px-4 py-3 text-base" : "px-3.5 py-2.5 text-sm"
-              } rounded-xl font-medium transition-colors text-left hover:opacity-80`}
-              style={{
-                backgroundColor: "transparent",
-                color: activeTheme.textSecondary,
-              }}
-            >
-              <span>📖</span> チュートリアルを見る
-            </button>
-
-            <button
-              type="button"
               onClick={() => {
                 setIsHelpOpen(true);
                 setIsMenuOpen(false);
@@ -3088,7 +3403,7 @@ export default function Home() {
             className="text-[11px] text-center pt-1"
             style={{ color: activeTheme.textSecondary }}
           >
-            SeedNote v0.2
+            ライトNote v0.2
           </div>
         </div>
       </aside>
@@ -3098,40 +3413,45 @@ export default function Home() {
         {/* ① ホーム（メモ入力：ノイズゼロのメイン空間） */}
         {activeTab === "home" && (
           <div className="relative pt-3.5" id="tutorial-target-input">
-            {/* 上部に通る真円スパイラルリング（アイコンと同じ決定版真円ループ） */}
+            {/* 上部に通る真円スパイラルリング（ピタゴラス真円・穴のど真ん中に完全一致） */}
             <svg
               className="absolute top-0 left-1/2 -translate-x-1/2 w-4/5 max-w-[280px] h-7 z-10 pointer-events-none"
-              viewBox="0 0 200 24"
+              viewBox="0 0 200 28"
               fill="none"
               aria-hidden="true"
             >
-              {/* カード上部のパンチ穴（6箇所） */}
-              <circle cx="20" cy="14" r="2.8" fill={activeTheme.bgApp} stroke={activeTheme.border} strokeWidth="0.8" />
-              <circle cx="50" cy="14" r="2.8" fill={activeTheme.bgApp} stroke={activeTheme.border} strokeWidth="0.8" />
-              <circle cx="80" cy="14" r="2.8" fill={activeTheme.bgApp} stroke={activeTheme.border} strokeWidth="0.8" />
-              <circle cx="110" cy="14" r="2.8" fill={activeTheme.bgApp} stroke={activeTheme.border} strokeWidth="0.8" />
-              <circle cx="140" cy="14" r="2.8" fill={activeTheme.bgApp} stroke={activeTheme.border} strokeWidth="0.8" />
-              <circle cx="170" cy="14" r="2.8" fill={activeTheme.bgApp} stroke={activeTheme.border} strokeWidth="0.8" />
-
-              {/* 真円スパイラルループ（半径6の真円円弧、右下がカード穴に抜ける） */}
-              <g stroke={activeTheme.accent} strokeWidth="2.2" strokeLinecap="round">
-                <path d="M 17.5 17 A 6 6 0 0 1 14 11 A 6 6 0 0 1 25.5 8" />
-                <path d="M 47.5 17 A 6 6 0 0 1 44 11 A 6 6 0 0 1 55.5 8" />
-                <path d="M 77.5 17 A 6 6 0 0 1 74 11 A 6 6 0 0 1 85.5 8" />
-                <path d="M 107.5 17 A 6 6 0 0 1 104 11 A 6 6 0 0 1 115.5 8" />
-                <path d="M 137.5 17 A 6 6 0 0 1 134 11 A 6 6 0 0 1 145.5 8" />
-                <path d="M 167.5 17 A 6 6 0 0 1 164 11 A 6 6 0 0 1 175.5 8" />
-              </g>
+              {[25, 55, 85, 115, 145, 175].map((hx) => (
+                <g key={hx}>
+                  {/* カード上部のパンチ穴（上辺y=14から6px内側、完全左右対称） */}
+                  <circle
+                    cx={hx}
+                    cy={20}
+                    r={2.6}
+                    fill={activeTheme.bgApp}
+                    stroke={activeTheme.border}
+                    strokeWidth="0.9"
+                  />
+                  {/* 真円スパイラルループ（半径6.5、中心(hx+2.5, 14) → 始点(hx, 20)が穴の中心に100%一致） */}
+                  <path
+                    d={`M ${hx} 20 A 6.5 6.5 0 0 1 ${hx - 4} 14 A 6.5 6.5 0 0 1 ${hx + 8.5} 11.5`}
+                    stroke={activeTheme.accent}
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                  />
+                </g>
+              ))}
             </svg>
 
             <div
               className="relative rounded-2xl p-6 sm:p-8 pt-7 sm:pt-8 shadow-sm border transition-all"
               style={{ backgroundColor: activeTheme.bgCard, borderColor: activeTheme.border }}
             >
-            {/* 本文に文字が入った時だけ現れるタイトル欄 */}
+            {/* 本文に文字が入った時（またはチュートリアルStep 3）だけ現れるタイトル欄 */}
             <div
               className={`overflow-hidden transition-all duration-300 ease-out ${
-                hasContent ? "max-h-16 opacity-100 mb-3" : "max-h-0 opacity-0 mb-0 pointer-events-none"
+                hasContent || tutorialStep === 3
+                  ? "max-h-16 opacity-100 mb-3"
+                  : "max-h-0 opacity-0 mb-0 pointer-events-none"
               }`}
             >
               <input
@@ -3151,7 +3471,7 @@ export default function Home() {
             </div>
 
             {/* 本文入力欄（文字はゼロ、薄い鉛筆マークのみ） */}
-            <div className="relative min-h-[160px]">
+            <div className={`relative transition-all ${tutorialStep === 3 ? "min-h-[85px]" : "min-h-[160px]"}`}>
               {!content && (
                 <div
                   className="absolute top-2 left-2 pointer-events-none select-none text-2xl sm:text-3xl transition-opacity opacity-40"
@@ -3162,12 +3482,12 @@ export default function Home() {
               )}
               <textarea
                 ref={noteTextareaRef}
-                rows={6}
+                rows={tutorialStep === 3 ? 3 : 6}
                 placeholder=""
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 onKeyDown={handleKeyDown}
-                autoFocus
+                autoFocus={tutorialStep === null}
                 className={`w-full ${
                   fontSize === "large" ? "text-lg sm:text-xl" : "text-base"
                 } bg-transparent border-0 focus:outline-none resize-none leading-relaxed relative z-10`}
@@ -3296,14 +3616,14 @@ export default function Home() {
             </div>
           </div>
 
-          {/* 初回訪問時かつメモ0件の時の控えめなチュートリアル案内カード（Rule 3 厳守） */}
-          {showInitialTutorialPrompt && notes.length === 0 && (
+          {/* メモが0件の時は常に表示される控えめなチュートリアル案内カード（Rule 3 厳守） */}
+          {isLoaded && notes.length === 0 && !isTutorialPromptDismissed && tutorialStep === null && (
             <div
               className="mt-4 p-4 rounded-xl border flex items-center justify-between gap-3 animate-fadeIn"
               style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border }}
             >
               <div className="flex items-center gap-2.5 min-w-0">
-                <span className="text-xl shrink-0">🌱</span>
+                <img src="/icon.svg" alt="ライトNote" className="w-7 h-7 rounded-md shadow-2xs shrink-0" />
                 <div className="text-xs min-w-0">
                   <span className="font-bold block truncate" style={{ color: activeTheme.textPrimary }}>
                     初めてご利用の方へ
@@ -3316,10 +3636,7 @@ export default function Home() {
               <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowInitialTutorialPrompt(false);
-                    localStorage.setItem("seednote_tutorial_shown", "true");
-                  }}
+                  onClick={() => setIsTutorialPromptDismissed(true)}
                   className="px-2.5 py-1 text-xs rounded-lg transition-colors hover:opacity-80"
                   style={{ color: activeTheme.textSecondary }}
                 >
@@ -5968,8 +6285,19 @@ export default function Home() {
                         style={{ borderColor: activeTheme.border, color: activeTheme.textSecondary }}
                       >
                         <span>⚠️ <strong>誰にも教えてはいけません</strong>（パスワード再設定用の重要キーです）</span>
-                        <span>⚠️ <strong>SeedNote内にはメモせず</strong>、スクショや別メモ等に保存してください</span>
+                        <span>⚠️ <strong>ライトNote内にはメモせず</strong>、スクショや別メモ等に保存してください</span>
                       </div>
+                    </div>
+
+                    {/* アカウント削除ボタン（ログイン中のみ表示） */}
+                    <div className="pt-2 border-t flex justify-end" style={{ borderColor: activeTheme.border }}>
+                      <button
+                        type="button"
+                        onClick={handleOpenDeleteAccountModal}
+                        className="text-[11px] font-medium text-[#b85448] hover:text-[#9e3a2f] underline transition-colors cursor-pointer"
+                      >
+                        アカウントを削除する
+                      </button>
                     </div>
                   </div>
                 ) : (
@@ -5985,7 +6313,7 @@ export default function Home() {
 
       {/* フッター */}
       <footer className="text-center py-2 text-xs text-transparent select-none">
-        SeedNote
+        ライトNote
       </footer>
 
       {/* ガイド・ヘルプモーダル（右上の？を押した時に表示：アコーディオン形式） */}
@@ -6003,7 +6331,8 @@ export default function Home() {
             <div className="shrink-0 flex items-center justify-between pb-3 mb-3 border-b" style={{ borderColor: activeTheme.border }}>
               <div>
                 <h2 className="text-base font-bold flex items-center gap-1.5" style={{ color: activeTheme.textPrimary }}>
-                  <span>🌱</span> SeedNote ガイド・ヘルプ
+                  <img src="/icon.svg" alt="ライトNote" className="w-5 h-5 rounded-md shadow-2xs shrink-0" />
+                  <span>ライトNote ガイド・ヘルプ</span>
                 </h2>
                 <span className="text-[11px]" style={{ color: activeTheme.textSecondary }}>
                   気になる項目をタップして詳細をご覧ください
@@ -6023,8 +6352,37 @@ export default function Home() {
               </button>
             </div>
 
-            {/* アコーディオンリスト（全11項目：高さが縮んでも潰れずスクロールする） */}
+            {/* チュートリアル＆アコーディオンリスト（全11項目：高さが縮んでも潰れずスクロールする） */}
             <div className="flex-1 min-h-0 overflow-y-auto pr-1.5 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={handleStartTutorial}
+                className="w-full text-left px-4 py-3 rounded-xl border transition-opacity hover:opacity-85 flex items-center justify-between gap-3 shrink-0"
+                style={{
+                  backgroundColor: activeTheme.bgSub,
+                  borderColor: activeTheme.accent,
+                  color: activeTheme.textPrimary,
+                }}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="text-base shrink-0">📖</span>
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold">チュートリアルを見る</div>
+                    <div className="text-[11px]" style={{ color: activeTheme.textSecondary }}>
+                      基本の使い方を実際に触って体験（約1分）
+                    </div>
+                  </div>
+                </div>
+                <span
+                  className="text-xs font-bold px-2.5 py-1 rounded-lg shrink-0"
+                  style={{
+                    backgroundColor: activeTheme.accent,
+                    color: activeTheme.accentText,
+                  }}
+                >
+                  開始 →
+                </span>
+              </button>
               {HELP_ITEMS.map((item) => {
                 const isOpen = openHelpSection === item.id;
                 return (
@@ -6070,6 +6428,35 @@ export default function Home() {
                   </div>
                 );
               })}
+
+              {/* お問い合わせ案内（枠なしのプレーンテキスト＋コピーボタン） */}
+              <div
+                className="shrink-0 mt-2 pt-3 border-t flex flex-col gap-1.5"
+                style={{ borderColor: activeTheme.border, color: activeTheme.textPrimary }}
+              >
+                <p className="text-xs leading-relaxed">
+                  ガイドヘルプでも解決できないご質問、またはご意見のある方は、こちらのメールアドレスにご連絡ください。
+                </p>
+                <div className="flex items-center justify-between gap-2 pl-2 flex-wrap">
+                  <span className="text-xs sm:text-sm font-medium select-all break-all">
+                    app746.tahry@gmail.com
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleCopyContactEmail}
+                    className="px-2.5 py-1 rounded-lg border text-xs font-medium transition-opacity hover:opacity-80 flex items-center gap-1 shrink-0 cursor-pointer"
+                    style={{
+                      backgroundColor: activeTheme.bgSub,
+                      borderColor: activeTheme.border,
+                      color: activeTheme.textPrimary,
+                    }}
+                    aria-label="お問い合わせメールアドレスをコピー"
+                  >
+                    <CopyIcon className="w-3.5 h-3.5" />
+                    <span>{copiedContactEmail ? "コピー完了!" : "コピー"}</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -6491,19 +6878,10 @@ export default function Home() {
       {isAuthModalOpen && (
         <div
           className="fixed inset-0 bg-black/40 backdrop-blur-xs z-60 flex items-center justify-center p-4"
-          onClick={() => {
-            setIsAuthModalOpen(false);
-            setAuthError(null);
-            setAuthSuccessMsg(null);
-            setAuthPasswordConfirmInput("");
-            setResetRecoveryKeyInput("");
-            setShowPassword(false);
-            setShowPasswordConfirm(false);
-            setAuthMode("login");
-          }}
+          onClick={handleCloseAuthModal}
         >
           <div
-            className="rounded-2xl p-6 sm:p-7 max-w-sm w-full border shadow-2xl transition-all"
+            className="rounded-2xl p-6 sm:p-7 max-w-sm w-full max-h-[90vh] overflow-y-auto border shadow-2xl transition-all"
             style={{ backgroundColor: activeTheme.bgCard, borderColor: activeTheme.border }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -6518,16 +6896,7 @@ export default function Home() {
               </h2>
               <button
                 type="button"
-                onClick={() => {
-                  setIsAuthModalOpen(false);
-                  setAuthError(null);
-                  setAuthSuccessMsg(null);
-                  setAuthPasswordConfirmInput("");
-                  setResetRecoveryKeyInput("");
-                  setShowPassword(false);
-                  setShowPasswordConfirm(false);
-                  setAuthMode("login");
-                }}
+                onClick={handleCloseAuthModal}
                 className="text-xs px-2 py-1 transition-opacity hover:opacity-75"
                 style={{ color: activeTheme.textSecondary }}
               >
@@ -6543,14 +6912,7 @@ export default function Home() {
               >
                 <button
                   type="button"
-                  onClick={() => {
-                    setAuthMode("login");
-                    setAuthError(null);
-                    setAuthSuccessMsg(null);
-                    setAuthPasswordConfirmInput("");
-                    setShowPassword(false);
-                    setShowPasswordConfirm(false);
-                  }}
+                  onClick={() => handleSwitchAuthMode("login")}
                   className="flex-1 py-1.5 text-xs font-bold rounded-lg transition-all"
                   style={{
                     backgroundColor: authMode === "login" ? activeTheme.accent : "transparent",
@@ -6561,14 +6923,7 @@ export default function Home() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setAuthMode("signup");
-                    setAuthError(null);
-                    setAuthSuccessMsg(null);
-                    setAuthPasswordConfirmInput("");
-                    setShowPassword(false);
-                    setShowPasswordConfirm(false);
-                  }}
+                  onClick={() => handleSwitchAuthMode("signup")}
                   className="flex-1 py-1.5 text-xs font-bold rounded-lg transition-all"
                   style={{
                     backgroundColor: authMode === "signup" ? activeTheme.accent : "transparent",
@@ -6582,14 +6937,7 @@ export default function Home() {
               <div className="mb-3">
                 <button
                   type="button"
-                  onClick={() => {
-                    setAuthMode("login");
-                    setAuthError(null);
-                    setAuthSuccessMsg(null);
-                    setResetRecoveryKeyInput("");
-                    setAuthPasswordInput("");
-                    setAuthPasswordConfirmInput("");
-                  }}
+                  onClick={() => handleSwitchAuthMode("login")}
                   className="text-xs flex items-center gap-1 font-medium cursor-pointer transition-opacity hover:opacity-80"
                   style={{ color: activeTheme.textSecondary }}
                 >
@@ -6601,40 +6949,19 @@ export default function Home() {
             {authMode === "reset" ? (
               <form onSubmit={handleResetPasswordSubmit} className="space-y-3.5">
                 <p
-                  className="text-xs leading-relaxed p-2.5 rounded-xl border"
-                  style={{
-                    backgroundColor: activeTheme.bgSub,
-                    borderColor: activeTheme.border,
-                    color: activeTheme.textSecondary,
-                  }}
+                  className="text-xs leading-relaxed"
+                  style={{ color: activeTheme.textSecondary }}
                 >
                   登録時に保存した【復旧キー】を入力して、新しいパスワードを設定します。
                 </p>
 
                 {/* ユーザー名入力 */}
-                <div>
-                  <label
-                    className="block text-xs font-bold mb-1"
-                    style={{ color: activeTheme.textPrimary }}
-                  >
-                    ユーザー名（ID）
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="登録時のユーザー名"
-                    value={authUsernameInput}
-                    onChange={(e) => setAuthUsernameInput(e.target.value)}
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    required
-                    className="w-full px-3 py-2 text-sm rounded-xl border focus:outline-none transition-colors"
-                    style={{
-                      backgroundColor: activeTheme.bgSub,
-                      borderColor: activeTheme.border,
-                      color: activeTheme.textPrimary,
-                    }}
-                  />
-                </div>
+                <AuthUsernameField
+                  value={authUsernameInput}
+                  onChange={setAuthUsernameInput}
+                  placeholder="登録時のユーザー名"
+                  theme={activeTheme}
+                />
 
                 {/* 復旧キー入力 */}
                 <div>
@@ -6763,42 +7090,12 @@ export default function Home() {
             ) : (
               <form onSubmit={handleAuthSubmit} className="space-y-3.5">
                 {/* ユーザー名入力 */}
-                <div>
-                  <label
-                    className="block text-xs font-bold mb-1"
-                    style={{ color: activeTheme.textPrimary }}
-                  >
-                    ユーザー名（ID）
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="例: nickname"
-                    value={authUsernameInput}
-                    onChange={(e) => setAuthUsernameInput(e.target.value)}
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    required
-                    className="w-full px-3 py-2 text-sm rounded-xl border focus:outline-none transition-colors"
-                    style={{
-                      backgroundColor: activeTheme.bgSub,
-                      borderColor: activeTheme.border,
-                      color: activeTheme.textPrimary,
-                    }}
-                  />
-                  {authMode === "signup" && (
-                    <span
-                      className="text-[10px] block mt-1"
-                      style={{ color: activeTheme.textSecondary }}
-                    >
-                      ※半角英数字（a-z, 0-9）のみ使用できます
-                    </span>
-                  )}
-                  {authMode === "signup" && authUsernameInput && !/^[a-zA-Z0-9_-]+$/.test(authUsernameInput) && (
-                    <span className="text-[10px] text-[#b85448] font-bold block mt-0.5">
-                      ⚠️ ユーザー名は半角英数字（a-z, 0-9）とハイフン・アンダースコアのみ使用できます
-                    </span>
-                  )}
-                </div>
+                <AuthUsernameField
+                  value={authUsernameInput}
+                  onChange={setAuthUsernameInput}
+                  placeholder="例: nickname"
+                  theme={activeTheme}
+                />
 
                 {/* パスワード入力 */}
                 <div>
@@ -6872,17 +7169,42 @@ export default function Home() {
                   </div>
                 )}
 
-                {/* プライバシー安心注釈 */}
-                <div
-                  className="p-2.5 rounded-lg border text-[11px] leading-relaxed"
-                  style={{
-                    backgroundColor: activeTheme.bgSub,
-                    borderColor: activeTheme.border,
-                    color: activeTheme.textSecondary,
-                  }}
-                >
-                  🛡️ <strong>メールアドレスは不要です</strong>。個人情報は一切収集せず、IDとパスワードのみで安全に端末間同期を行います。
-                </div>
+                {/* 新規登録時のみ：利用規約・プライバシーへの同意 */}
+                {authMode === "signup" && (
+                  <div
+                    className="p-3 rounded-xl border space-y-2 text-[11px] leading-relaxed"
+                    style={{
+                      backgroundColor: activeTheme.bgSub,
+                      borderColor: activeTheme.border,
+                      color: activeTheme.textSecondary,
+                    }}
+                  >
+                    <p>
+                      アカウントを作成した際には、本ウェブアプリの利用規約とプライバシーに同意したものとします。
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setIsTermsOpen(true)}
+                      className="underline font-bold cursor-pointer hover:opacity-80 inline-flex items-center gap-1"
+                      style={{ color: activeTheme.textPrimary }}
+                    >
+                      <span>📜</span> 利用規約とプライバシーを開く →
+                    </button>
+                    <label
+                      className="flex items-center gap-2 pt-2 border-t cursor-pointer select-none"
+                      style={{ borderColor: activeTheme.border, color: activeTheme.textPrimary }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={agreedToTerms}
+                        onChange={(e) => setAgreedToTerms(e.target.checked)}
+                        className="w-4 h-4 rounded shrink-0 cursor-pointer"
+                        style={{ accentColor: activeTheme.accent }}
+                      />
+                      <span className="text-xs font-bold">利用規約とプライバシーに同意する</span>
+                    </label>
+                  </div>
+                )}
 
                 {/* エラーメッセージ */}
                 {authError && (
@@ -6902,8 +7224,8 @@ export default function Home() {
                 <div className="pt-2">
                   <button
                     type="submit"
-                    disabled={isAuthLoading}
-                    className="w-full py-2.5 rounded-xl text-sm font-bold active:scale-[0.99] transition-all disabled:opacity-50 shadow-xs cursor-pointer hover:opacity-85"
+                    disabled={isAuthLoading || (authMode === "signup" && !agreedToTerms)}
+                    className="w-full py-2.5 rounded-xl text-sm font-bold active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:opacity-50 shadow-xs cursor-pointer hover:opacity-85"
                     style={{
                       backgroundColor: activeTheme.accent,
                       color: activeTheme.accentText,
@@ -6922,16 +7244,7 @@ export default function Home() {
                   <div className="text-center pt-1">
                     <button
                       type="button"
-                      onClick={() => {
-                        setAuthMode("reset");
-                        setAuthError(null);
-                        setAuthSuccessMsg(null);
-                        setResetRecoveryKeyInput("");
-                        setAuthPasswordInput("");
-                        setAuthPasswordConfirmInput("");
-                        setShowPassword(false);
-                        setShowPasswordConfirm(false);
-                      }}
+                      onClick={() => handleSwitchAuthMode("reset")}
                       className="text-xs underline font-medium cursor-pointer hover:opacity-80"
                       style={{ color: activeTheme.textSecondary }}
                     >
@@ -6954,7 +7267,7 @@ export default function Home() {
           }}
         >
           <div
-            className="rounded-2xl p-6 sm:p-7 max-w-sm w-full border shadow-2xl transition-all flex flex-col gap-4 text-center"
+            className="rounded-2xl p-6 sm:p-7 max-w-sm w-full max-h-[90vh] overflow-y-auto border shadow-2xl transition-all flex flex-col gap-4 text-center"
             style={{ backgroundColor: activeTheme.bgCard, borderColor: activeTheme.border }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -6970,49 +7283,78 @@ export default function Home() {
                 className="text-xs"
                 style={{ color: activeTheme.textSecondary }}
               >
-                万が一パスワードを忘れたときの【復旧キー】です
+                ログインやパスワード再設定に必要な【ID】と【復旧キー】です
               </span>
             </div>
 
-            {/* 復旧キー枠 */}
+            {/* ユーザー名（ID）と復旧キー枠 */}
             <div
-              className="p-3.5 rounded-xl border-2 shadow-xs flex flex-col items-center gap-2"
+              className="p-3.5 rounded-xl border-2 shadow-xs flex flex-col items-center gap-2.5"
               style={{
                 backgroundColor: activeTheme.bgSub,
                 borderColor: activeTheme.accent,
               }}
             >
-              <span
-                className="text-[11px] font-bold"
-                style={{ color: activeTheme.textSecondary }}
-              >
-                あなたの復旧キー
-              </span>
-              <code
-                className="text-lg font-mono font-bold tracking-widest select-all px-3 py-1 rounded-lg border"
-                style={{
-                  backgroundColor: activeTheme.bgCard,
-                  borderColor: activeTheme.border,
-                  color: activeTheme.textPrimary,
-                }}
-              >
-                {newlyRegisteredKey}
-              </code>
+              {/* ユーザー名（ID） */}
+              <div className="w-full flex flex-col items-center gap-1">
+                <span
+                  className="text-[11px] font-bold"
+                  style={{ color: activeTheme.textSecondary }}
+                >
+                  あなたのユーザー名（ID）
+                </span>
+                <code
+                  className="text-sm font-mono font-bold select-all px-3 py-1 rounded-lg border"
+                  style={{
+                    backgroundColor: activeTheme.bgCard,
+                    borderColor: activeTheme.border,
+                    color: activeTheme.textPrimary,
+                  }}
+                >
+                  {currentUsername || "—"}
+                </code>
+              </div>
+
+              <div className="w-full border-t" style={{ borderColor: activeTheme.border }} />
+
+              {/* 復旧キー */}
+              <div className="w-full flex flex-col items-center gap-1">
+                <span
+                  className="text-[11px] font-bold"
+                  style={{ color: activeTheme.textSecondary }}
+                >
+                  あなたの復旧キー
+                </span>
+                <code
+                  className="text-lg font-mono font-bold tracking-widest select-all px-3 py-1 rounded-lg border"
+                  style={{
+                    backgroundColor: activeTheme.bgCard,
+                    borderColor: activeTheme.border,
+                    color: activeTheme.textPrimary,
+                  }}
+                >
+                  {newlyRegisteredKey}
+                </code>
+              </div>
+
+              {/* まとめてコピーボタン */}
               <button
                 type="button"
                 onClick={() => {
-                  navigator.clipboard.writeText(newlyRegisteredKey);
-                  setCopiedKeyToast(true);
-                  setTimeout(() => setCopiedKeyToast(false), 2000);
+                  const bundleText = `【ライトNote】アカウント情報\nユーザー名（ID）：${currentUsername || "未設定"}\n復旧キー：${newlyRegisteredKey}`;
+                  navigator.clipboard.writeText(bundleText);
+                  setCopiedBothToast(true);
+                  setTimeout(() => setCopiedBothToast(false), 2000);
                 }}
-                className="px-3.5 py-1 text-xs font-bold rounded-lg border transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer hover:opacity-85"
+                className="w-full mt-0.5 py-2 px-3 text-xs font-bold rounded-lg border transition-colors flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer hover:opacity-85"
                 style={{
                   backgroundColor: activeTheme.bgCard,
                   borderColor: activeTheme.border,
                   color: activeTheme.textPrimary,
                 }}
               >
-                <span>📋</span> {copiedKeyToast ? "コピーしました！" : "キーをコピー"}
+                <CopyIcon className="w-3.5 h-3.5" />
+                <span>{copiedBothToast ? "まとめてコピーしました！" : "IDと復旧キーをまとめてコピー"}</span>
               </button>
             </div>
 
@@ -7022,7 +7364,7 @@ export default function Home() {
               style={{
                 backgroundColor: activeTheme.bgSub,
                 borderColor: activeTheme.border,
-                color: activeTheme.textSecondary,
+                color: activeTheme.textPrimary,
               }}
             >
               <span
@@ -7033,8 +7375,8 @@ export default function Home() {
               </span>
               <ol className="list-decimal pl-4 space-y-1 text-[11px]">
                 <li><strong>誰にも教えないでください</strong>（パスワードと同じ機密情報です）。</li>
-                <li><strong>ライトNoteの中にメモしないでください</strong>（ログインできないと見られなくなります）。</li>
-                <li><strong>スクリーンショットを撮る</strong>か、別の安全な場所に大切に保管してください。</li>
+                <li><strong>ライトNoteの中にメモしないでください</strong>（ログインできなくなると確認できなくなります）。</li>
+                <li><strong>スクリーンショットを撮る</strong>か、別の安全な場所にIDと復旧キーを大切に保管してください。</li>
               </ol>
             </div>
 
@@ -7043,7 +7385,7 @@ export default function Home() {
               type="button"
               onClick={() => {
                 setNewlyRegisteredKey(null);
-                setCopiedKeyToast(false);
+                setCopiedBothToast(false);
               }}
               className="w-full py-2.5 rounded-xl text-sm font-bold active:scale-[0.99] transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer hover:opacity-85"
               style={{
@@ -7051,7 +7393,7 @@ export default function Home() {
                 color: activeTheme.accentText,
               }}
             >
-              <span>📸</span> スクショを保存したので始める
+              IDと復旧キーをメモしたので始める
             </button>
           </div>
         </div>
@@ -7060,11 +7402,11 @@ export default function Home() {
       {/* ⑧ 利用規約・プライバシーポリシーモーダル */}
       {isTermsOpen && (
         <div
-          className="fixed inset-0 bg-black/45 backdrop-blur-xs z-60 flex items-center justify-center p-4"
+          className="fixed inset-0 bg-black/45 backdrop-blur-xs z-70 flex items-center justify-center p-4"
           onClick={() => setIsTermsOpen(false)}
         >
           <div
-            className="rounded-2xl p-6 sm:p-7 max-w-md w-full border shadow-2xl transition-all max-h-[88vh] flex flex-col"
+            className="rounded-2xl p-6 sm:p-7 max-w-lg w-full border shadow-2xl transition-all max-h-[88vh] flex flex-col"
             style={{ backgroundColor: activeTheme.bgCard, borderColor: activeTheme.border }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -7072,10 +7414,10 @@ export default function Home() {
             <div className="flex items-center justify-between pb-3 mb-3 border-b shrink-0" style={{ borderColor: activeTheme.border }}>
               <div>
                 <h2 className="text-base font-bold flex items-center gap-1.5" style={{ color: activeTheme.textPrimary }}>
-                  <span>📜</span> 利用規約・プライバシー
+                  <span>📜</span> 利用規約・プライバシーポリシー
                 </h2>
                 <span className="text-[11px]" style={{ color: activeTheme.textSecondary }}>
-                  ライトNoteをご利用いただく上での重要事項
+                  ライトNoteをご利用いただく上でのルールと情報の取り扱い
                 </span>
               </div>
               <button
@@ -7088,67 +7430,203 @@ export default function Home() {
               </button>
             </div>
 
-            {/* 本文スクロールエリア */}
-            <div className="flex-1 overflow-y-auto pr-1 space-y-4 text-xs leading-relaxed" style={{ color: activeTheme.textPrimary }}>
-              {/* 1. 基本思想と不可逆性 */}
-              <section className="space-y-1">
-                <h3 className="font-bold text-xs flex items-center gap-1" style={{ color: activeTheme.accent }}>
-                  <span>🌱</span> 1. 基本思想と不可逆性（編集・削除について）
-                </h3>
-                <p className="text-[11px] leading-relaxed">
-                  ライトNoteは「書くこと」よりも「後から思い出すこと（再発見）」を最優先にした、自分専用の思考アーカイブです。
-                </p>
-                <p className="text-[11px] leading-relaxed">
-                  過去の思考の残骸や間違いも未来のアイデアの種となるため、<strong>メモの完全削除や本文の直接上書き編集はできない設計</strong>になっています。
-                  書き足したい時は「追記」、誤字脱字を直したい時は過去の記録も残る「本文訂正（履歴付き）」をご利用ください。
-                </p>
-              </section>
+            {/* 本文スクロールエリア（縦スクロールで全体を確認） */}
+            <div className="flex-1 overflow-y-auto pr-1.5 space-y-4 text-xs leading-relaxed" style={{ color: activeTheme.textPrimary }}>
+              {/* 利用規約ブロック */}
+              <div className="space-y-3.5">
+                <div className="text-sm font-bold pb-1.5 border-b flex items-center gap-1.5" style={{ borderColor: activeTheme.border }}>
+                  <span>📜</span> 利用規約
+                </div>
 
-              {/* 2. プライバシーとデータの保護 */}
-              <section className="space-y-1">
-                <h3 className="font-bold text-xs flex items-center gap-1" style={{ color: activeTheme.accent }}>
-                  <span>🔒</span> 2. プライバシーとデータ保護
-                </h3>
-                <p className="text-[11px] leading-relaxed">
-                  ライトNoteに記録されたすべてのメモ・追記・設定は、<strong>あなただけの完全なプライベートデータ</strong>です。
-                  SNSのように他人に公開されることは一切ありません。
-                </p>
-                <p className="text-[11px] leading-relaxed">
-                  クラウド同期をご利用の場合も、データベースの行レベルセキュリティ（RLS）によって厳格に保護され、他の利用者があなたのメモを閲覧することはできません。
-                </p>
-              </section>
+                {/* 第1条 */}
+                <section className="space-y-1">
+                  <h3 className="font-bold text-xs" style={{ color: activeTheme.accent }}>
+                    第1条（目的・適用範囲）
+                  </h3>
+                  <p className="text-[11px] leading-relaxed">
+                    本規約は、ライトNote運営者（以下「運営者」）が提供するWebアプリ「ライトNote」（以下「本サービス」）の利用条件を定めるものです。利用者は、本規約およびプライバシーポリシーに同意のうえ本サービスを利用するものとします。
+                  </p>
+                </section>
 
-              {/* 3. 復旧キーに関する最重要事項 */}
-              <section className="space-y-1.5 p-3 rounded-xl border" style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border }}>
-                <h3 className="font-bold text-xs text-[#b85448] flex items-center gap-1">
-                  <span>⚠️</span> 3. 【最重要】パスワード復旧キーの管理について
-                </h3>
-                <p className="text-[11px] font-bold leading-relaxed text-[#b85448]">
-                  ライトNoteはメールアドレスを収集しない安心設計のため、パスワード再設定にはアカウント作成時に発行される「復旧キー（SEED-XXXX-XXXX）」が唯一の手段となります。
-                </p>
-                <ul className="list-disc pl-4 space-y-1 text-[11px]">
-                  <li>
-                    <strong>復旧キーは絶対にライトNote内にメモしないでください。</strong>（ログインできなくなった際に見られなくなります）
-                  </li>
-                  <li>
-                    必ず<strong>スクリーンショットを撮影して保存する</strong>か、別の安全なメモ帳などに保管してください。
-                  </li>
-                  <li>
-                    <strong>復旧キーとパスワードの両方を紛失された場合、セキュリティの観点から開発者・管理者であってもパスワードの再設定やアカウントの復旧は一切行えません。</strong>あらかじめご了承ください。
-                  </li>
-                </ul>
-              </section>
+                {/* 第2条 */}
+                <section className="space-y-1">
+                  <h3 className="font-bold text-xs" style={{ color: activeTheme.accent }}>
+                    第2条（基本思想・データの不可逆性）
+                  </h3>
+                  <p className="text-[11px] leading-relaxed">
+                    本サービスは「書くこと」よりも「後から思い出すこと（再発見）」を最優先にした思考アーカイブです。過去の思考の残骸や間違いも未来のアイデアの種となるため、メモの完全削除や直接上書き編集機能は設けておらず、「追記」「本文訂正（履歴保存）」「ゴミ箱への移動」によって記録を管理する設計となっています。
+                  </p>
+                </section>
 
-              {/* 4. 完全無料の永続提供 */}
-              <section className="space-y-1">
-                <h3 className="font-bold text-xs flex items-center gap-1" style={{ color: activeTheme.accent }}>
-                  <span>🎁</span> 4. 完全無料での運用
-                </h3>
-                <p className="text-[11px] leading-relaxed">
-                  本アプリは画像添付などの大容量データをあえて扱わず、テキスト思考に特化した超軽量設計を採用しています。
-                  そのため、将来にわたって有料化することなく、完全無料の範囲で安心して永続的にご利用いただけます。
-                </p>
-              </section>
+                {/* 第3条 */}
+                <section className="space-y-1.5">
+                  <h3 className="font-bold text-xs" style={{ color: activeTheme.isDark ? "#f5a398" : "#b85448" }}>
+                    第3条（アカウント登録・復旧キーの管理）
+                  </h3>
+                  <ul className="list-disc pl-4 space-y-1.5 text-[11px] leading-relaxed">
+                    <li>
+                      利用者は、任意のユーザー名（ID）およびパスワードを設定してクラウド同期用アカウントを作成できます。なりすましや不正目的での登録は禁止します。
+                    </li>
+                    <li>
+                      本サービスはメールアドレスを収集しない設計のため、パスワード再設定には登録時に発行される「復旧キー（SEED-XXXX-XXXX）」が唯一の手段となります。復旧キーは本サービス内にメモせず、スクリーンショット等で別の安全な場所に保管してください。
+                    </li>
+                    <li className="font-bold" style={{ color: activeTheme.isDark ? "#f5a398" : "#b85448" }}>
+                      パスワードと復旧キーの両方を紛失された場合、本人確認手段がないため、運営者であってもパスワードの再設定やアカウントの復旧は一切行えません。
+                    </li>
+                  </ul>
+                </section>
+
+                {/* 第4条 */}
+                <section className="space-y-1">
+                  <h3 className="font-bold text-xs" style={{ color: activeTheme.accent }}>
+                    第4条（利用料金・完全無料での運用）
+                  </h3>
+                  <p className="text-[11px] leading-relaxed">
+                    本サービスはテキスト思考に特化した軽量設計により、完全無料で提供します。なお、無料インフラの維持やサービス継続の観点から、将来的に保存容量の上限設定や、一定期間利用されていないゴミ箱データの整理ルール等を導入する場合があります（重要な変更を行う場合は、アプリ内でのお知らせ等により事前に周知します）。
+                  </p>
+                </section>
+
+                {/* 第5条 */}
+                <section className="space-y-1">
+                  <h3 className="font-bold text-xs" style={{ color: activeTheme.accent }}>
+                    第5条（禁止事項）
+                  </h3>
+                  <p className="text-[11px] leading-relaxed">
+                    利用者は、本サービスの利用にあたり以下の行為をしてはなりません。
+                  </p>
+                  <ul className="list-disc pl-4 space-y-1 text-[11px] leading-relaxed">
+                    <li>法令または公序良俗に違反する行為</li>
+                    <li>本サービスのサーバーやネットワークに過度な負荷をかける行為（自動ツールによる大量アクセス等）、不正アクセス、プログラムの改ざん・解析行為</li>
+                    <li>他の利用者のアカウントを不正に使用する行為、または本サービスの運営を妨害する行為</li>
+                  </ul>
+                </section>
+
+                {/* 第6条 */}
+                <section className="space-y-1">
+                  <h3 className="font-bold text-xs" style={{ color: activeTheme.accent }}>
+                    第6条（退会・アカウント削除および利用停止）
+                  </h3>
+                  <ul className="list-disc pl-4 space-y-1 text-[11px] leading-relaxed">
+                    <li>
+                      利用者は、設定画面内の「アカウントを削除する」機能から所定の手続きを行うことで、いつでもアカウントを削除できます。削除されたアカウントおよびクラウド上のデータは復旧できません。
+                    </li>
+                    <li>
+                      運営者は、利用者が第5条に違反した場合、事前の通知なく当該アカウントの利用停止または削除等の措置を取ることができるものとします。
+                    </li>
+                  </ul>
+                </section>
+
+                {/* 第7条 */}
+                <section className="space-y-1">
+                  <h3 className="font-bold text-xs" style={{ color: activeTheme.accent }}>
+                    第7条（サービスの変更・中断・終了）
+                  </h3>
+                  <p className="text-[11px] leading-relaxed">
+                    運営者は、メンテナンス、通信障害、利用している外部基盤（Vercel・Supabase等）の障害や仕様変更、その他運営上の理由により、事前の予告なく本サービスの内容変更、一時中断、または終了を行う場合があります。
+                  </p>
+                </section>
+
+                {/* 第8条 */}
+                <section className="space-y-1">
+                  <h3 className="font-bold text-xs" style={{ color: activeTheme.accent }}>
+                    第8条（免責事項）
+                  </h3>
+                  <ul className="list-disc pl-4 space-y-1 text-[11px] leading-relaxed">
+                    <li>
+                      運営者は、本サービスに事実上または法律上の瑕疵（安全性、信頼性、正確性、特定目的への適合性等）がないことを明示的にも黙示的にも保証しません。
+                    </li>
+                    <li>
+                      運営者の故意または重大な過失による場合を除き、本サービスの利用、停止、変更、終了、またはアカウント削除・データ消失等によって利用者に生じた損害について、運営者は責任を負いません。大切な記録は利用者ご自身でもコピー等で控えを保管することを推奨します。
+                    </li>
+                  </ul>
+                </section>
+
+                {/* 第9条 */}
+                <section className="space-y-1">
+                  <h3 className="font-bold text-xs" style={{ color: activeTheme.accent }}>
+                    第9条（知的財産権）
+                  </h3>
+                  <p className="text-[11px] leading-relaxed">
+                    本サービスのデザイン・プログラム・ロゴ等に関する権利は運営者または正当な権利者に帰属します。利用者が本サービスに記録したメモ内容の権利は、利用者本人に帰属します。
+                  </p>
+                </section>
+
+                {/* 第10条 */}
+                <section className="space-y-1">
+                  <h3 className="font-bold text-xs" style={{ color: activeTheme.accent }}>
+                    第10条（規約の変更・準拠法・管轄）
+                  </h3>
+                  <ul className="list-disc pl-4 space-y-1 text-[11px] leading-relaxed">
+                    <li>
+                      運営者は、必要と判断した場合には本規約を変更できます。変更後の規約は本サービス上に表示された時点で効力を生じるものとします。
+                    </li>
+                    <li>
+                      本規約の解釈にあたっては日本法を準拠法とし、本サービスに関して紛争が生じた場合には、東京地方裁判所を第一審の専属的合意管轄裁判所とします。
+                    </li>
+                  </ul>
+                </section>
+              </div>
+
+              {/* プライバシーポリシーブロック */}
+              <div
+                className="space-y-3.5 mt-6 pt-5 border-t-4 border-double"
+                style={{ borderColor: activeTheme.border }}
+              >
+                <div className="text-sm font-bold pb-1.5 border-b flex items-center gap-1.5" style={{ borderColor: activeTheme.border }}>
+                  <span>🔒</span> プライバシーポリシー
+                </div>
+
+                {/* 1. 取得・保存する情報と利用目的 */}
+                <section className="space-y-1">
+                  <h3 className="font-bold text-xs" style={{ color: activeTheme.accent }}>
+                    1. 取得・保存する情報と利用目的
+                  </h3>
+                  <ul className="list-disc pl-4 space-y-1 text-[11px] leading-relaxed">
+                    <li>
+                      <strong>ログインせず利用する場合：</strong>メモ・追記・テーマ設定等はすべてご利用端末のブラウザ内（localStorage）にのみ保存され、外部サーバーへ送信されません。
+                    </li>
+                    <li>
+                      <strong>クラウド同期を利用する場合：</strong>端末間同期および本人認証のため、登録されたユーザー名（ID）、パスワード、および保存されたメモ・各種設定をクラウドデータベースに保存します。
+                    </li>
+                    <li>
+                      <strong>個人情報の非収集：</strong>氏名、メールアドレス、電話番号、住所、位置情報などの個人情報は収集しません（お問い合わせ時にメールでご連絡いただいた情報のみ、返信・対応の目的に限って利用します）。
+                    </li>
+                  </ul>
+                </section>
+
+                {/* 2. データの保護と第三者提供 */}
+                <section className="space-y-1">
+                  <h3 className="font-bold text-xs" style={{ color: activeTheme.accent }}>
+                    2. データの保護と第三者提供
+                  </h3>
+                  <p className="text-[11px] leading-relaxed">
+                    保存されたメモはあなただけの完全なプライベートデータであり、公開や販売、広告トラッキングには一切利用せず、法令に基づく場合を除き第三者に提供しません。クラウド上のデータは行レベルセキュリティ（RLS）等により、他の利用者から閲覧できない形で保護されます。
+                  </p>
+                </section>
+
+                {/* 3. 外部サービスの利用 */}
+                <section className="space-y-1">
+                  <h3 className="font-bold text-xs" style={{ color: activeTheme.accent }}>
+                    3. 外部サービスの利用
+                  </h3>
+                  <p className="text-[11px] leading-relaxed">
+                    本サービスの提供・データ保存のため、外部クラウド基盤（Vercel / Supabase）を利用しています。
+                  </p>
+                </section>
+
+                {/* 制定日・お問い合わせ */}
+                <section
+                  className="mt-5 pt-3 border-t text-[11px] leading-relaxed space-y-0.5"
+                  style={{
+                    borderColor: activeTheme.border,
+                    color: activeTheme.textSecondary,
+                  }}
+                >
+                  <div>制定日：2026年11月12日</div>
+                  <div>運営者：ライトNote運営者</div>
+                  <div>お問い合わせ：app746.tahry@gmail.com</div>
+                </section>
+              </div>
             </div>
 
             {/* フッター */}
@@ -7162,6 +7640,202 @@ export default function Home() {
                 とじる
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ⑧-2 アカウント削除（本人確認＋最終警告）モーダル */}
+      {isDeleteAccountModalOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-xs z-70 flex items-center justify-center p-4"
+          onClick={handleCloseDeleteAccountModal}
+        >
+          <div
+            className="rounded-2xl p-6 sm:p-7 max-w-sm w-full max-h-[90vh] overflow-y-auto border shadow-2xl transition-all"
+            style={{ backgroundColor: activeTheme.bgCard, borderColor: activeTheme.border }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* ヘッダー */}
+            <div className="flex items-center justify-between mb-4 pb-2 border-b" style={{ borderColor: activeTheme.border }}>
+              <h2
+                className="text-base font-bold flex items-center gap-1.5"
+                style={{ color: activeTheme.isDark ? "#f5a398" : "#b85448" }}
+              >
+                <span>⚠️</span>{" "}
+                {deleteAccountStep === "auth" ? "アカウントの削除（本人確認）" : "アカウント削除の最終確認"}
+              </h2>
+              <button
+                type="button"
+                onClick={handleCloseDeleteAccountModal}
+                disabled={isDeletingAccount}
+                className="text-xs px-2 py-1 transition-opacity hover:opacity-75 disabled:opacity-40"
+                style={{ color: activeTheme.textSecondary }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {deleteAccountStep === "auth" ? (
+              <form onSubmit={handleVerifyDeleteAccount} className="space-y-3.5">
+                <p className="text-xs leading-relaxed" style={{ color: activeTheme.textSecondary }}>
+                  アカウント削除へ進むため、現在ログイン中のユーザー名（ID）とパスワードを入力して本人確認を行ってください。
+                </p>
+
+                <div>
+                  <label
+                    className="block text-xs font-bold mb-1"
+                    style={{ color: activeTheme.textPrimary }}
+                  >
+                    ユーザー名（ID）
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="現在ログイン中のユーザー名"
+                    value={deleteUsernameInput}
+                    onChange={(e) => setDeleteUsernameInput(e.target.value)}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    required
+                    className="w-full px-3 py-2 text-sm rounded-xl border focus:outline-none transition-colors"
+                    style={{
+                      backgroundColor: activeTheme.bgSub,
+                      borderColor: activeTheme.border,
+                      color: activeTheme.textPrimary,
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label
+                    className="block text-xs font-bold mb-1"
+                    style={{ color: activeTheme.textPrimary }}
+                  >
+                    パスワード
+                  </label>
+                  <div className="relative flex items-center">
+                    <input
+                      type={showDeletePassword ? "text" : "password"}
+                      placeholder="パスワードを入力"
+                      value={deletePasswordInput}
+                      onChange={(e) => setDeletePasswordInput(e.target.value)}
+                      required
+                      className="w-full px-3 py-2 pr-10 text-sm rounded-xl border focus:outline-none transition-colors"
+                      style={{
+                        backgroundColor: activeTheme.bgSub,
+                        borderColor: activeTheme.border,
+                        color: activeTheme.textPrimary,
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowDeletePassword(!showDeletePassword)}
+                      className="absolute right-2.5 text-sm p-1 transition-opacity hover:opacity-80"
+                      style={{ color: activeTheme.textSecondary }}
+                      title={showDeletePassword ? "パスワードを隠す" : "パスワードを表示する"}
+                      aria-label={showDeletePassword ? "パスワードを隠す" : "パスワードを表示する"}
+                    >
+                      {showDeletePassword ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {deleteAccountError && (
+                  <div className="p-2 rounded-lg bg-[#fdeeed] border border-[#f5c6cb] text-xs text-[#b85448]">
+                    {deleteAccountError}
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={handleCloseDeleteAccountModal}
+                    disabled={isDeletingAccount}
+                    className="px-4 py-2 rounded-xl text-xs font-medium transition-colors hover:opacity-80 disabled:opacity-40"
+                    style={{ color: activeTheme.textSecondary }}
+                  >
+                    キャンセル
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isDeletingAccount}
+                    className="px-4 py-2 rounded-xl text-xs font-bold bg-[#b85448] text-white hover:bg-[#a34438] transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
+                  >
+                    {isDeletingAccount ? "確認中..." : "次へ進む"}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="space-y-4">
+                <div
+                  className="p-3 rounded-xl border text-xs leading-relaxed space-y-1.5"
+                  style={{
+                    backgroundColor: activeTheme.isDark ? "rgba(184, 84, 72, 0.14)" : "#fdeeed",
+                    borderColor: activeTheme.isDark ? "rgba(245, 163, 152, 0.4)" : "#f5c6cb",
+                    color: activeTheme.isDark ? "#f5a398" : "#9e3a2f",
+                  }}
+                >
+                  <p className="font-bold">
+                    アカウントの削除を行った場合は、アカウントに関するすべての情報が削除されます。
+                  </p>
+                  <p>
+                    運営者の故意または重大な過失による場合を除き、これによって損害が生じた場合、運営は責任を負いません。また、削除後のアカウントの復旧は不可能です。
+                  </p>
+                  <p className="font-bold pt-0.5">
+                    本当にアカウントを削除しますか？
+                  </p>
+                </div>
+
+                <div
+                  className="p-3 rounded-xl border space-y-2"
+                  style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border }}
+                >
+                  <label
+                    className="flex items-start gap-2 cursor-pointer select-none"
+                    style={{ color: activeTheme.textPrimary }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={deleteLocalDataToo}
+                      onChange={(e) => setDeleteLocalDataToo(e.target.checked)}
+                      className="w-4 h-4 mt-0.5 rounded shrink-0 cursor-pointer"
+                      style={{ accentColor: activeTheme.accent }}
+                    />
+                    <span className="text-xs font-bold leading-snug">
+                      この端末（ブラウザ）に保存されているメモ・設定もすべて消去する
+                    </span>
+                  </label>
+                  <p className="text-[11px] leading-relaxed pl-6" style={{ color: activeTheme.textSecondary }}>
+                    ※チェックを外すとローカル内にデータが残り、ローカル内でのみ使い続けることができます。また、この場合は再度アカウントを作成した際に、他端末と情報を共有できるようになります。
+                  </p>
+                </div>
+
+                {deleteAccountError && (
+                  <div className="p-2 rounded-lg bg-[#fdeeed] border border-[#f5c6cb] text-xs text-[#b85448]">
+                    {deleteAccountError}
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleCloseDeleteAccountModal}
+                    disabled={isDeletingAccount}
+                    className="px-4 py-2 rounded-xl text-xs font-medium transition-colors hover:opacity-80 disabled:opacity-40"
+                    style={{ color: activeTheme.textSecondary }}
+                  >
+                    キャンセル
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleExecuteDeleteAccount}
+                    disabled={isDeletingAccount}
+                    className="px-4 py-2 rounded-xl text-xs font-bold bg-[#b85448] text-white hover:bg-[#a34438] transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
+                  >
+                    {isDeletingAccount ? "削除中..." : "アカウントを完全に削除する"}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -7217,7 +7891,7 @@ export default function Home() {
             style={getGuideCardStyle()}
           >
             <div
-              className="w-full rounded-2xl p-4 sm:p-5 border shadow-2xl transition-all duration-300 flex flex-col gap-2.5 animate-fadeIn"
+              className="w-full max-h-[42vh] overflow-y-auto rounded-2xl p-3.5 sm:p-5 border shadow-2xl transition-all duration-300 flex flex-col gap-2 sm:gap-2.5 animate-fadeIn"
               style={{
                 backgroundColor: activeTheme.bgCard,
                 borderColor: activeTheme.border,
@@ -7233,7 +7907,7 @@ export default function Home() {
                     {tutorialStep === 3 && "🏷️ タイトルとタグ"}
                     {tutorialStep === 4 && "🔄 書く・見るの切り替え"}
                     {tutorialStep === 5 && "🔍 検索・絞り込み"}
-                    {tutorialStep === 6 && "📜 思考の不可逆性"}
+                    {tutorialStep === 6 && "📝 メモの追記・訂正・整理"}
                     {tutorialStep === 7 && "⚙️ メニューとアカウント"}
                     {tutorialStep === 8 && "🎉 準備完了！"}
                   </span>
@@ -7271,14 +7945,14 @@ export default function Home() {
                 {tutorialStep === 2 && (
                   <>
                     <p className="font-bold text-sm mb-1">思考を逃さず即メモ</p>
-                    <p>枠で光っている部分がメモ入力エリアです。認知的ノイズをなくすため、起動直後は入力欄だけが表示されます。</p>
+                    <p>枠で光っている部分がメモ入力エリアです。開いてすぐ書けるように、起動直後は入力欄だけが表示されます。</p>
                     {content.trim().length > 0 ? (
-                      <p className="text-[11px] font-bold p-2 rounded-lg border mt-1 text-[#2e6e3c] bg-[#eef7f0] border-[#b8dfc4] animate-fadeIn">
-                        ✨ 入力できましたね！右下の「次へ →」を押して進みましょう。
+                      <p className="text-[11px] p-2 rounded-lg border mt-1 animate-fadeIn" style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border }}>
+                        ✨ 入力できましたね！右下の<strong>「次へ →」</strong>を押して進みましょう。
                       </p>
                     ) : (
                       <p className="text-[11px] font-bold p-2 rounded-lg border mt-1" style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border }}>
-                        💡 光っている枠をタップして、実際に何か文字を入力してみてください！
+                        💡 枠内の鉛筆マーク（✏️）のあたりをタップして、実際に何か文字を入力してみてください！
                       </p>
                     )}
                   </>
@@ -7290,7 +7964,7 @@ export default function Home() {
                     <p className="text-[11px]" style={{ color: activeTheme.textSecondary }}>
                       急いでいるときは<strong>「無題」「”未分類”」のままでOK！</strong>
                     </p>
-                    <p className="text-[11px] font-bold p-2.5 rounded-lg border mt-1 text-[#2e6e3c] bg-[#eef7f0] border-[#b8dfc4] animate-fadeIn">
+                    <p className="text-[11px] p-2 rounded-lg border mt-1" style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border }}>
                       💡 右下の<strong>「保存」ボタン</strong>を押してメモを保存してみましょう！（※自動で次の画面へ進みます）
                     </p>
                   </>
@@ -7307,15 +7981,14 @@ export default function Home() {
                 {tutorialStep === 5 && (
                   <>
                     <p className="font-bold text-sm mb-1">探したい思考を素早く検索</p>
-                    <p>一覧画面の「🔍 検索機能」から、キーワード検索はもちろん、タグ、お気に入り（⭐）、書いた時間帯（朝・昼・夜など）で目的のメモを絞り込めます。</p>
+                    <p>一覧画面の「🔍 検索機能」から、キーワード、カテゴリタグ、お気に入り（⭐）、書いた時間帯や日付（カレンダー）で目的のメモを絞り込めます。</p>
                   </>
                 )}
                 {tutorialStep === 6 && (
                   <>
-                    <p className="font-bold text-sm mb-1">過去の思考を消さない「不可逆性」</p>
-                    <p>ライトNoteでは過去の思考の残骸もアイデアの種となるため、メモの完全削除や上書き編集はありません。</p>
-                    <p className="text-[11px]" style={{ color: activeTheme.textSecondary }}>
-                      書き足したい時は<strong>「💬 追記」</strong>、誤字を直したい時は過去ログが残る<strong>「✏️ 本文訂正」</strong>を使います。
+                    <p className="font-bold text-sm mb-1">右上の「…」メニューからいろいろできます</p>
+                    <p>
+                      書き足したい時は<strong>「💬 追記する」</strong>、誤字や内容を直したい時は元の文章を履歴に残したまま直せる<strong>「✏️ 本文を訂正する」</strong>を使えます。そのほか<strong>「🏷️ タイトル・カテゴリの変更」</strong>や<strong>「🗑️ ゴミ箱へ移動」</strong>もここから行えます。
                     </p>
                   </>
                 )}
@@ -7324,16 +7997,16 @@ export default function Home() {
                     <p className="font-bold text-sm mb-1">メニューとアカウント</p>
                     {!isMenuOpen ? (
                       <>
-                        <p>左上の「≡」メニューから、文字サイズ変更やテーマカラー（全22色）、ゴミ箱の確認ができます。</p>
-                        <p className="text-[11px] font-bold p-2.5 rounded-lg border mt-1 text-[#2e6e3c] bg-[#eef7f0] border-[#b8dfc4] animate-fadeIn">
+                        <p>左上の「≡」メニューから、アカウント設定や各種管理・見た目設定などが開けます。</p>
+                        <p className="text-[11px] p-2 rounded-lg border mt-1 animate-fadeIn" style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border }}>
                           💡 左上の<strong>「≡」ボタンをタップ</strong>して、メニューを開いてみましょう！
                         </p>
                       </>
                     ) : (
                       <>
-                        <p>メニューが開きました！テーマカラー（全22色）の変更や、複数端末でメモを同期できるアカウント設定がここから行えます。</p>
-                        <p className="text-[11px] font-bold p-2.5 rounded-lg border mt-1 text-[#2e6e3c] bg-[#eef7f0] border-[#b8dfc4] animate-fadeIn">
-                          🎉 開けましたね！右下の「次へ →」を押して最後のステップへ進みましょう。
+                        <p>メニューが開きました！複数端末でメモを同期できるアカウント設定や、タグ管理、ゴミ箱の確認、各種設定などがここから行えます！</p>
+                        <p className="text-[11px] p-2 rounded-lg border mt-1 animate-fadeIn" style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border }}>
+                          🎉 開けましたね！右下の<strong>「次へ →」</strong>を押して最後のステップへ進みましょう。
                         </p>
                       </>
                     )}
@@ -7342,18 +8015,17 @@ export default function Home() {
                 {tutorialStep === 8 && (
                   <>
                     <p className="font-bold text-sm mb-1">準備完了です！</p>
-                    <p>これで基本操作はバッチリです！より詳しい使い方は、右上の「？」ボタン（ガイド・ヘルプ）からいつでも確認できます。</p>
-                    <p className="text-[11px] font-bold p-2 rounded-lg border mt-1" style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border }}>
-                      💡 このチュートリアルも、左上メニュー（≡）の「📖 チュートリアルを見る」から何度でも見直せます。
-                    </p>
+                    <p>これで基本操作はバッチリです！より詳しい使い方や再度チュートリアルを行いたい場合は、右上の「？」（ガイド・ヘルプ）からいつでも確認できます。</p>
                   </>
                 )}
               </div>
 
               {/* 注意書き */}
-              <div className="text-[10px] text-center" style={{ color: activeTheme.textSecondary }}>
-                ※途中で閉じても、左上メニュー（≡）からいつでも再開できます
-              </div>
+              {tutorialStep === 1 && (
+                <div className="text-[10px] text-center" style={{ color: activeTheme.textSecondary }}>
+                  ※途中で閉じても、右上の「？」（ガイド・ヘルプ）からいつでも再開できます
+                </div>
+              )}
 
               {/* ボタン操作 */}
               <div className="flex items-center justify-between gap-2 pt-2 border-t" style={{ borderColor: activeTheme.border }}>
@@ -7422,25 +8094,6 @@ export default function Home() {
               </div>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* ローカル検証用：チュートリアルデモ開始フローティングボタン */}
-      {tutorialStep === null && (
-        <div className="fixed bottom-4 right-4 z-30">
-          <button
-            type="button"
-            onClick={handleStartTutorial}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-bold shadow-lg border transition-all hover:scale-105 active:scale-95"
-            style={{
-              backgroundColor: activeTheme.accent,
-              color: activeTheme.accentText,
-              borderColor: activeTheme.border,
-            }}
-            title="チュートリアルデモを体験する"
-          >
-            <span>🌟</span> チュートリアルデモ
-          </button>
         </div>
       )}
     </div>
