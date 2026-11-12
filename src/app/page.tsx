@@ -1283,13 +1283,23 @@ export default function Home() {
     const windowHeight = window.innerHeight;
     const cardWidth = 360;
 
-    // Step 7でメニューが開いている場合はメニューの右横に配置
+    // Step 7でメニューが開いている場合：PC/タブレットは右横、スマホはメニュー上部と被らないよう下側に配置
     if (tutorialStep === 7 && isMenuOpen) {
+      if (windowWidth >= 700) {
+        return {
+          position: "fixed",
+          top: "80px",
+          left: "276px",
+          maxWidth: "380px",
+          width: "92%",
+          zIndex: 50,
+        };
+      }
       return {
         position: "fixed",
-        top: "80px",
-        left: windowWidth >= 700 ? "276px" : "50%",
-        transform: windowWidth >= 700 ? "none" : "translateX(-50%)",
+        bottom: "16px",
+        left: "50%",
+        transform: "translateX(-50%)",
         maxWidth: "380px",
         width: "92%",
         zIndex: 50,
@@ -3409,7 +3419,13 @@ export default function Home() {
       </aside>
 
       {/* メイン画面コンテンツ（タブによって切り替え） */}
-      <main className="max-w-xl w-full mx-auto flex-1 flex flex-col justify-center py-3 sm:py-5 min-h-0">
+      <main
+        className={`max-w-xl w-full mx-auto flex-1 flex flex-col ${
+          tutorialStep === 2 || tutorialStep === 3
+            ? "justify-start pt-2 pb-72 sm:pb-6"
+            : "justify-center py-3 sm:py-5"
+        } min-h-0`}
+      >
         {/* ① ホーム（メモ入力：ノイズゼロのメイン空間） */}
         {activeTab === "home" && (
           <div className="relative pt-3.5" id="tutorial-target-input">
@@ -3471,7 +3487,7 @@ export default function Home() {
             </div>
 
             {/* 本文入力欄（文字はゼロ、薄い鉛筆マークのみ） */}
-            <div className={`relative transition-all ${tutorialStep === 3 ? "min-h-[85px]" : "min-h-[160px]"}`}>
+            <div className={`relative transition-all ${tutorialStep === 3 ? "min-h-[60px]" : "min-h-[160px]"}`}>
               {!content && (
                 <div
                   className="absolute top-2 left-2 pointer-events-none select-none text-2xl sm:text-3xl transition-opacity opacity-40"
@@ -3482,7 +3498,7 @@ export default function Home() {
               )}
               <textarea
                 ref={noteTextareaRef}
-                rows={tutorialStep === 3 ? 3 : 6}
+                rows={tutorialStep === 3 ? 2 : 6}
                 placeholder=""
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
@@ -4240,8 +4256,14 @@ export default function Home() {
                           {/* ワンタッチコピーボタン */}
                           <button
                             type="button"
-                            onClick={() => handleCopyNote(note)}
-                            className="w-7 h-7 flex items-center justify-center rounded-lg text-xs leading-none transition-colors hover:opacity-80"
+                            onClick={() => {
+                              if (tutorialStep !== null) return;
+                              handleCopyNote(note);
+                            }}
+                            aria-disabled={tutorialStep !== null}
+                            className={`w-7 h-7 flex items-center justify-center rounded-lg text-xs leading-none transition-colors ${
+                              tutorialStep !== null ? "opacity-55 cursor-default" : "hover:opacity-80"
+                            }`}
                             style={{ color: activeTheme.textSecondary }}
                             aria-label="メモをクリップボードにコピー"
                             title="メモをコピー"
@@ -4252,8 +4274,14 @@ export default function Home() {
                           {/* お気に入りボタン */}
                           <button
                             type="button"
-                            onClick={() => handleToggleFavorite(note.id)}
-                            className="w-7 h-7 flex items-center justify-center rounded-lg text-base leading-none transition-colors hover:opacity-80"
+                            onClick={() => {
+                              if (tutorialStep !== null) return;
+                              handleToggleFavorite(note.id);
+                            }}
+                            aria-disabled={tutorialStep !== null}
+                            className={`w-7 h-7 flex items-center justify-center rounded-lg text-base leading-none transition-colors ${
+                              tutorialStep !== null ? "opacity-55 cursor-default" : "hover:opacity-80"
+                            }`}
                             aria-label={note.isFavorite ? "お気に入りを解除" : "お気に入りに登録"}
                             title={note.isFavorite ? "お気に入り解除" : "お気に入り登録"}
                           >
@@ -4320,38 +4348,54 @@ export default function Home() {
                               <button
                                 type="button"
                                 onClick={() => {
+                                  if (tutorialStep !== null) return;
                                   handleCopyNote(note);
                                   setActiveMenuNoteId(null);
                                 }}
+                                aria-disabled={tutorialStep !== null}
                                 className={`w-full text-left ${
                                   buttonSize === "large"
                                     ? "px-3 py-2 text-sm"
                                     : "px-2.5 py-1.5 text-xs"
-                                } rounded-lg flex items-center gap-1.5 font-medium transition-colors hover:opacity-80`}
+                                } rounded-lg flex items-center gap-1.5 font-medium transition-colors ${
+                                  tutorialStep !== null ? "opacity-60 cursor-default" : "hover:opacity-80"
+                                }`}
                                 style={{ color: activeTheme.textPrimary }}
                               >
                                 <CopyIcon className="w-3.5 h-3.5 shrink-0" /> 本文をコピー
                               </button>
                               <button
                                 type="button"
-                                onClick={() => handleOpenContentEditModal(note)}
+                                onClick={() => {
+                                  if (tutorialStep !== null) return;
+                                  handleOpenContentEditModal(note);
+                                }}
+                                aria-disabled={tutorialStep !== null}
                                 className={`w-full text-left ${
                                   buttonSize === "large"
                                     ? "px-3 py-2 text-sm"
                                     : "px-2.5 py-1.5 text-xs"
-                                } rounded-lg flex items-center gap-1.5 font-medium transition-colors hover:opacity-80`}
+                                } rounded-lg flex items-center gap-1.5 font-medium transition-colors ${
+                                  tutorialStep !== null ? "opacity-60 cursor-default" : "hover:opacity-80"
+                                }`}
                                 style={{ color: activeTheme.textPrimary }}
                               >
                                 <span>✏️</span> 本文を訂正する
                               </button>
                               <button
                                 type="button"
-                                onClick={() => handleOpenEditModal(note)}
+                                onClick={() => {
+                                  if (tutorialStep !== null) return;
+                                  handleOpenEditModal(note);
+                                }}
+                                aria-disabled={tutorialStep !== null}
                                 className={`w-full text-left ${
                                   buttonSize === "large"
                                     ? "px-3 py-2 text-sm"
                                     : "px-2.5 py-1.5 text-xs"
-                                } rounded-lg flex items-center gap-1.5 font-medium transition-colors hover:opacity-80`}
+                                } rounded-lg flex items-center gap-1.5 font-medium transition-colors ${
+                                  tutorialStep !== null ? "opacity-60 cursor-default" : "hover:opacity-80"
+                                }`}
                                 style={{ color: activeTheme.textPrimary }}
                               >
                                 <span>🏷️</span> タイトル・カテゴリの変更
@@ -4359,6 +4403,7 @@ export default function Home() {
                               <button
                                 type="button"
                                 onClick={() => {
+                                  if (tutorialStep !== null) return;
                                   setReplyingNoteId(note.id);
                                   setReplyContent("");
                                   setActiveMenuNoteId(null);
@@ -4366,11 +4411,14 @@ export default function Home() {
                                     prev.includes(note.id) ? prev : [...prev, note.id]
                                   );
                                 }}
+                                aria-disabled={tutorialStep !== null}
                                 className={`w-full text-left ${
                                   buttonSize === "large"
                                     ? "px-3 py-2 text-sm"
                                     : "px-2.5 py-1.5 text-xs"
-                                } rounded-lg flex items-center gap-1.5 font-medium transition-colors hover:opacity-80`}
+                                } rounded-lg flex items-center gap-1.5 font-medium transition-colors ${
+                                  tutorialStep !== null ? "opacity-60 cursor-default" : "hover:opacity-80"
+                                }`}
                                 style={{ color: activeTheme.textPrimary }}
                               >
                                 <span>💬</span> 追記する
@@ -4378,12 +4426,18 @@ export default function Home() {
                               <div className="my-0.5 border-t" style={{ borderColor: activeTheme.border }} />
                               <button
                                 type="button"
-                                onClick={() => handleMoveToTrash(note.id)}
+                                onClick={() => {
+                                  if (tutorialStep !== null) return;
+                                  handleMoveToTrash(note.id);
+                                }}
+                                aria-disabled={tutorialStep !== null}
                                 className={`w-full text-left ${
                                   buttonSize === "large"
                                     ? "px-3 py-2 text-sm"
                                     : "px-2.5 py-1.5 text-xs"
-                                } text-[#b85448] hover:bg-[#fdf2f0] rounded-lg flex items-center gap-1.5 font-medium transition-colors`}
+                                } text-[#b85448] rounded-lg flex items-center gap-1.5 font-medium transition-colors ${
+                                  tutorialStep !== null ? "opacity-60 cursor-default" : "hover:bg-[#fdf2f0]"
+                                }`}
                               >
                                 <span>🗑️</span> ゴミ箱へ移動
                               </button>
@@ -7891,7 +7945,7 @@ export default function Home() {
             style={getGuideCardStyle()}
           >
             <div
-              className="w-full max-h-[42vh] overflow-y-auto rounded-2xl p-3.5 sm:p-5 border shadow-2xl transition-all duration-300 flex flex-col gap-2 sm:gap-2.5 animate-fadeIn"
+              className="w-full max-h-[38vh] sm:max-h-[42vh] overflow-y-auto rounded-2xl p-3 sm:p-5 border shadow-2xl transition-all duration-300 flex flex-col gap-1.5 sm:gap-2.5 animate-fadeIn"
               style={{
                 backgroundColor: activeTheme.bgCard,
                 borderColor: activeTheme.border,
@@ -7937,9 +7991,7 @@ export default function Home() {
                   <>
                     <p className="font-bold text-sm mb-1">ライトNoteへようこそ！</p>
                     <p>ライトNoteは、思いついたアイデアや思考を<strong>忘れる前に光のように即メモする</strong>ための自分専用ノートです。</p>
-                    <p className="text-[11px]" style={{ color: activeTheme.textSecondary }}>
-                      基本の操作を、画面を見ながら実際に触って体験してみましょう！
-                    </p>
+                    <p>基本の操作を、実際に使いながら理解しましょう！</p>
                   </>
                 )}
                 {tutorialStep === 2 && (
@@ -7948,7 +8000,7 @@ export default function Home() {
                     <p>枠で光っている部分がメモ入力エリアです。開いてすぐ書けるように、起動直後は入力欄だけが表示されます。</p>
                     {content.trim().length > 0 ? (
                       <p className="text-[11px] p-2 rounded-lg border mt-1 animate-fadeIn" style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border }}>
-                        ✨ 入力できましたね！右下の<strong>「次へ →」</strong>を押して進みましょう。
+                        ✨ 入力できましたね！<strong>「次へ →」</strong>を押して進みましょう。
                       </p>
                     ) : (
                       <p className="text-[11px] font-bold p-2 rounded-lg border mt-1" style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border }}>
@@ -7961,8 +8013,8 @@ export default function Home() {
                   <>
                     <p className="font-bold text-sm mb-1">タグとタイトル、そして保存</p>
                     <p>文字を入力すると、カテゴリタグやタイトル欄、保存ボタンが現れます。</p>
-                    <p className="text-[11px]" style={{ color: activeTheme.textSecondary }}>
-                      急いでいるときは<strong>「無題」「”未分類”」のままでOK！</strong>
+                    <p>
+                      急いでいる時は、<strong>タイトルやカテゴリを付けずに保存してOK！</strong>
                     </p>
                     <p className="text-[11px] p-2 rounded-lg border mt-1" style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border }}>
                       💡 右下の<strong>「保存」ボタン</strong>を押してメモを保存してみましょう！（※自動で次の画面へ進みます）
@@ -7989,6 +8041,9 @@ export default function Home() {
                     <p className="font-bold text-sm mb-1">右上の「…」メニューからいろいろできます</p>
                     <p>
                       書き足したい時は<strong>「💬 追記する」</strong>、誤字や内容を直したい時は元の文章を履歴に残したまま直せる<strong>「✏️ 本文を訂正する」</strong>を使えます。そのほか<strong>「🏷️ タイトル・カテゴリの変更」</strong>や<strong>「🗑️ ゴミ箱へ移動」</strong>もここから行えます。
+                    </p>
+                    <p className="text-[11px]" style={{ color: activeTheme.textSecondary }}>
+                      ※「…」の中身は開いて見られますが、ここの機能は後で試してみてください！
                     </p>
                   </>
                 )}
