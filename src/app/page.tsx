@@ -803,7 +803,7 @@ const HELP_ITEMS = [
   },
   {
     id: "save",
-    title: "メモの保存（保存通知について）",
+    title: "メモの保存 / 保存通知について",
     content: (
       <div className="space-y-2">
         <p>
@@ -828,7 +828,7 @@ const HELP_ITEMS = [
   },
   {
     id: "category",
-    title: "カテゴリ（”未分類”について）",
+    title: "カテゴリ / ”未分類”について",
     content: (
       <div className="space-y-2.5">
         <div className="space-y-1.5">
@@ -999,20 +999,10 @@ const HELP_ITEMS = [
           <li><strong>📏 文字・ボタンの大きさ：</strong> 「標準」「大きめ」から読みやすい・押しやすいサイズを選べます。</li>
           <li><strong>✒️ 文字フォント・メモ専用フォント：</strong> アプリ全体の書体と、メモ本文の書体（ゴシック・手書き風・明朝など）を別々に変更できます。</li>
           <li><strong>🔔 保存時通知・編集破棄の確認：</strong> 保存時のトースト表示や、変更途中で閉じる際の確認ダイアログをON/OFFできます。</li>
-          <li><strong>⏰ 時間帯の設定：</strong> 朝・昼・夕方・夜・深夜の区切り時刻を生活リズムに合わせて調整できます。</li>
+          <li><strong>⏰ 時間帯の設定：</strong> 朝・昼・夕方・夜・深夜といった時間帯の区切り時刻を、自分の生活リズムに合わせて自由に調整できます。</li>
           <li><strong>🔐 鍵付きメモ設定：</strong> 鍵メモ専用パスワードの設定・変更・再設定や、ロック中のタイトル表示、自動で隠すタイミングを設定できます。</li>
           <li><strong>☁️ アカウント・クラウド同期：</strong> ユーザー名（ID）とパスワードだけでスマホやPC間のメモ・設定を自動同期できます（復旧キーの確認も可能です）。</li>
         </ul>
-      </div>
-    ),
-  },
-  {
-    id: "timezone",
-    title: "時間帯の設定",
-    content: (
-      <div className="space-y-1.5">
-        <p>朝・昼・夕方・夜・深夜といった時間帯の感覚は、生活リズムによって人それぞれです。</p>
-        <p>設定からそれぞれの時間帯の区切りを自分の生活に合わせて自由に調整できます。</p>
       </div>
     ),
   },
@@ -4220,7 +4210,7 @@ export default function Home() {
 
       {/* メイン画面コンテンツ（タブによって切り替え） */}
       <main
-        className={`max-w-xl w-full mx-auto flex-1 flex flex-col ${
+        className={`max-w-xl w-full mx-auto flex-1 flex flex-col min-w-0 ${
           tutorialStep === 2 || tutorialStep === 3
             ? "justify-start pt-2 pb-72 sm:pb-6"
             : "justify-center py-3 sm:py-5"
@@ -4654,7 +4644,9 @@ export default function Home() {
                                             </div>
                                           )}
                                           <p
-                                            className="text-xs line-clamp-2 whitespace-pre-wrap leading-relaxed"
+                                            className={`text-xs line-clamp-2 whitespace-pre-wrap leading-relaxed break-words [overflow-wrap:anywhere] ${
+                                              !rVisible ? "break-all" : ""
+                                            }`}
                                             style={{ color: activeTheme.textSecondary }}
                                           >
                                             {rVisible ? rNote.content : maskLockedText(rNote.content)}
@@ -5240,7 +5232,7 @@ export default function Home() {
               </div>
 
               {/* メモ一覧カードリスト */}
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-3 min-w-0">
               {!isLoaded ? (
                 <div className="text-center py-8 text-sm text-[#b0a598]">
                   読み込み中...
@@ -5285,7 +5277,7 @@ export default function Home() {
                       key={note.id}
                       data-note-id={note.id}
                       id={index === 0 ? "tutorial-target-irreversible" : undefined}
-                      className={`p-4 rounded-xl shadow-2xs relative transition-colors border ${
+                      className={`w-full min-w-0 p-4 rounded-xl shadow-2xs relative transition-colors border ${
                         note.isTrash ? "border-dashed opacity-90" : ""
                       }`}
                       style={{
@@ -5295,11 +5287,11 @@ export default function Home() {
                       }}
                     >
                       <div className="flex items-start justify-between gap-2 mb-1.5">
-                        <div className="flex items-center gap-2 flex-wrap pr-2">
+                        <div className="flex items-center gap-2 flex-wrap pr-2 min-w-0 flex-1">
                           <h3
-                            className={`font-bold ${
+                            className={`font-bold break-words [overflow-wrap:anywhere] ${
                               fontSize === "large" ? "text-base" : "text-sm"
-                            }`}
+                            } ${!isContentVisible && maskLockedTitle ? "break-all" : ""}`}
                             style={{ color: activeTheme.textPrimary }}
                           >
                             {note.title ? (
@@ -5637,8 +5629,8 @@ export default function Home() {
                       <p
                         className={`${
                           fontSize === "large" ? "text-base" : "text-sm"
-                        } whitespace-pre-wrap leading-relaxed ${
-                          !isContentVisible ? "select-none opacity-80 tracking-wider" : ""
+                        } whitespace-pre-wrap leading-relaxed break-words [overflow-wrap:anywhere] ${
+                          !isContentVisible ? "break-all select-none opacity-80 tracking-wider" : ""
                         }`}
                         style={{
                           color: activeTheme.textPrimary,
@@ -5739,7 +5731,7 @@ export default function Home() {
                                     <time>{formatDate(history.editedAt)}</time>
                                   </div>
                                   <p
-                                    className="line-through opacity-80 whitespace-pre-wrap leading-relaxed"
+                                    className="line-through opacity-80 whitespace-pre-wrap leading-relaxed break-words [overflow-wrap:anywhere]"
                                     style={{
                                       color: activeTheme.textSecondary,
                                       fontFamily: getNoteFontFamilyStyle(noteFont),
@@ -5804,7 +5796,7 @@ export default function Home() {
                                   <p
                                     className={`${
                                       fontSize === "large" ? "text-sm" : "text-xs"
-                                    } whitespace-pre-wrap leading-relaxed`}
+                                    } whitespace-pre-wrap leading-relaxed break-words [overflow-wrap:anywhere]`}
                                     style={{
                                       color: activeTheme.textPrimary,
                                       fontFamily: getNoteFontFamilyStyle(noteFont),
@@ -6152,7 +6144,7 @@ export default function Home() {
             )}
 
               {/* メモ一覧カードリスト */}
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-3 min-w-0">
               {trashNotes.length === 0 ? (
                 <div className="text-center py-10 text-sm" style={{ color: activeTheme.textSecondary }}>
                   ゴミ箱は空です。
@@ -6182,7 +6174,7 @@ export default function Home() {
                   return (
                   <article
                     key={note.id}
-                    className="p-4 rounded-xl border opacity-90 transition-colors"
+                    className="w-full min-w-0 p-4 rounded-xl border opacity-90 transition-colors"
                     style={{
                       backgroundColor: activeTheme.bgCard,
                       borderColor: activeTheme.border,
@@ -6190,11 +6182,11 @@ export default function Home() {
                     }}
                   >
                     <div className="flex items-baseline justify-between gap-2 mb-1.5">
-                      <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-2 flex-wrap min-w-0 flex-1">
                         <h3
-                          className={`font-bold ${
+                          className={`font-bold break-words [overflow-wrap:anywhere] ${
                             fontSize === "large" ? "text-base" : "text-sm"
-                          }`}
+                          } ${!isTrashVisible && maskLockedTitle ? "break-all" : ""}`}
                           style={{ color: activeTheme.textPrimary }}
                         >
                           {note.title ? (
@@ -6252,8 +6244,8 @@ export default function Home() {
                     <p
                       className={`${
                         fontSize === "large" ? "text-base" : "text-sm"
-                      } whitespace-pre-wrap leading-relaxed mb-2 ${
-                        !isTrashVisible ? "select-none opacity-80 tracking-wider" : ""
+                      } whitespace-pre-wrap leading-relaxed mb-2 break-words [overflow-wrap:anywhere] ${
+                        !isTrashVisible ? "break-all select-none opacity-80 tracking-wider" : ""
                       }`}
                       style={{
                         color: activeTheme.textPrimary,
@@ -6351,7 +6343,7 @@ export default function Home() {
                                   <time>{formatDate(history.editedAt)}</time>
                                 </div>
                                 <p
-                                  className="line-through opacity-80 whitespace-pre-wrap leading-relaxed"
+                                  className="line-through opacity-80 whitespace-pre-wrap leading-relaxed break-words [overflow-wrap:anywhere]"
                                   style={{
                                     color: activeTheme.textSecondary,
                                     fontFamily: getNoteFontFamilyStyle(noteFont),
@@ -6411,7 +6403,7 @@ export default function Home() {
                                   </time>
                                 </div>
                                 <p
-                                  className="whitespace-pre-wrap leading-relaxed"
+                                  className="whitespace-pre-wrap leading-relaxed break-words [overflow-wrap:anywhere]"
                                   style={{ fontFamily: getNoteFontFamilyStyle(noteFont) }}
                                 >
                                   {reply.content}
@@ -8119,7 +8111,12 @@ export default function Home() {
               <h3 className="text-base font-bold flex items-center gap-1.5" style={{ color: activeTheme.textPrimary }}>
                 <span>🔔</span> 見返す日を設定
               </h3>
-              <p className="text-xs mt-1 line-clamp-2" style={{ color: activeTheme.textSecondary }}>
+              <p
+                className={`text-xs mt-1 line-clamp-2 break-words [overflow-wrap:anywhere] ${
+                  !isNoteContentVisible(reminderTargetNote) ? "break-all" : ""
+                }`}
+                style={{ color: activeTheme.textSecondary }}
+              >
                 {isNoteContentVisible(reminderTargetNote)
                   ? reminderTargetNote.title || reminderTargetNote.content
                   : reminderTargetNote.title && !maskLockedTitle
