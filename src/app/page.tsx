@@ -114,6 +114,155 @@ const mapNoteToDbRow = (note: Note, userId: string): DbNoteRow => {
   return row;
 };
 
+interface CategoryItem {
+  id: string;
+  name: string;
+  updatedAt: string;
+  deleted?: boolean;
+}
+
+const LEGACY_EPOCH = "1970-01-01T00:00:00.000Z";
+
+// 既存（文字列のみ）のカテゴリ名から全端末共通の決定論的IDを生成
+const legacyCategoryId = (name: string): string => {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < name.length; i++) {
+    h ^= name.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return `cid_leg_${(h >>> 0).toString(16).padStart(8, "0")}`;
+};
+
+const createCategoryId = (): string => {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `cid_${crypto.randomUUID().slice(0, 8)}`;
+  }
+  return `cid_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+};
+
+const parseCategoryItems = (raw: unknown): CategoryItem[] => {
+  if (!Array.isArray(raw)) return [];
+  const items: CategoryItem[] = [];
+  const seen = new Set<string>();
+  for (const entry of raw) {
+    let parsed: CategoryItem | null = null;
+    if (typeof entry === "string") {
+      const trimmed = entry.trim();
+      if (!trimmed) continue;
+      if (trimmed.startsWith("{")) {
+        try {
+          const obj = JSON.parse(trimmed) as Partial<CategoryItem>;
+          if (typeof obj.id === "string" && obj.id && typeof obj.name === "string" && obj.name) {
+            parsed = {
+              id: obj.id,
+              name: obj.name,
+              updatedAt: typeof obj.updatedAt === "string" ? obj.updatedAt : LEGACY_EPOCH,
+              ...(obj.deleted ? { deleted: true } : {}),
+            };
+          }
+        } catch {
+          // fallback to legacy plain string
+        }
+      }
+      if (!parsed) {
+        parsed = {
+          id: legacyCategoryId(trimmed),
+          name: trimmed,
+          updatedAt: LEGACY_EPOCH,
+        };
+      }
+    } else if (entry && typeof entry === "object") {
+      const obj = entry as Partial<CategoryItem>;
+      if (typeof obj.id === "string" && obj.id && typeof obj.name === "string" && obj.name) {
+        parsed = {
+          id: obj.id,
+          name: obj.name,
+          updatedAt: typeof obj.updatedAt === "string" ? obj.updatedAt : LEGACY_EPOCH,
+          ...(obj.deleted ? { deleted: true } : {}),
+        };
+      }
+    }
+    if (parsed && !seen.has(parsed.id)) {
+      seen.add(parsed.id);
+      items.push(parsed);
+    }
+  }
+  return items;
+};
+
+const serializeCategoryItems = (items: CategoryItem[]): string[] =>
+  items.map((item) =>
+    JSON.stringify(
+      item.deleted
+        ? { id: item.id, name: item.name, updatedAt: item.updatedAt, deleted: true }
+        : { id: item.id, name: item.name, updatedAt: item.updatedAt }
+    )
+  );
+
+const mergeCategoryItems = (primary: CategoryItem[], secondary: CategoryItem[]): CategoryItem[] => {
+  const byId = new Map<string, CategoryItem>();
+  const order: string[] = [];
+
+  const applyItem = (item: CategoryItem) => {
+    const existing = byId.get(item.id);
+    if (!existing) {
+      byId.set(item.id, item);
+      order.push(item.id);
+      return;
+    }
+    const existingTime = new Date(existing.updatedAt || LEGACY_EPOCH).getTime() || 0;
+    const incomingTime = new Date(item.updatedAt || LEGACY_EPOCH).getTime() || 0;
+    if (incomingTime > existingTime) {
+      byId.set(item.id, item);
+    }
+  };
+
+  primary.forEach(applyItem);
+  secondary.forEach(applyItem);
+  return order.map((id) => byId.get(id)!);
+};
+
+const migrateNotesCategories = (
+  inputNotes: Note[],
+  catalog: CategoryItem[]
+): {
+  migratedNotes: Note[];
+  updatedCatalog: CategoryItem[];
+  changedNoteIds: string[];
+  catalogChanged: boolean;
+} => {
+  let nextCatalog = [...catalog];
+  const knownIds = new Set(nextCatalog.map((c) => c.id));
+  const changedNoteIds: string[] = [];
+  let catalogChanged = false;
+
+  const migratedNotes = inputNotes.map((note) => {
+    if (!note.categories || note.categories.length === 0) return note;
+    let noteChanged = false;
+    const mapped = note.categories.map((cat) => {
+      if (knownIds.has(cat) || cat.startsWith("cid_")) {
+        return cat;
+      }
+      const id = legacyCategoryId(cat);
+      noteChanged = true;
+      if (!knownIds.has(id)) {
+        knownIds.add(id);
+        nextCatalog = [
+          ...nextCatalog,
+          { id, name: cat, updatedAt: LEGACY_EPOCH },
+        ];
+        catalogChanged = true;
+      }
+      return id;
+    });
+    if (!noteChanged) return note;
+    changedNoteIds.push(note.id);
+    return { ...note, categories: Array.from(new Set(mapped)) };
+  });
+
+  return { migratedNotes, updatedCatalog: nextCatalog, changedNoteIds, catalogChanged };
+};
+
 type AutoLockMode = "manual" | "5m" | "15m" | "background";
 
 // 鍵付きメモのテキストを改行を保ったまま文字数分の「・」でマスクする
@@ -1001,7 +1150,7 @@ const HELP_ITEMS = [
           <li><strong>🔔 保存時通知・編集破棄の確認：</strong> 保存時のトースト表示や、変更途中で閉じる際の確認ダイアログをON/OFFできます。</li>
           <li><strong>⏰ 時間帯の設定：</strong> 朝・昼・夕方・夜・深夜といった時間帯の区切り時刻を、自分の生活リズムに合わせて自由に調整できます。</li>
           <li><strong>🔐 鍵付きメモ設定：</strong> 鍵メモ専用パスワードの設定・変更・再設定や、ロック中のタイトル表示、自動で隠すタイミングを設定できます。</li>
-          <li><strong>☁️ アカウント・クラウド同期：</strong> ユーザー名（ID）とパスワードだけでスマホやPC間のメモ・設定を自動同期できます（復旧キーの確認も可能です）。</li>
+          <li><strong>👤 アカウント・クラウド同期：</strong> ユーザー名（ID）とパスワードだけでスマホやPC間のメモ・設定を自動同期できます（復旧キーの確認も可能です）。</li>
         </ul>
       </div>
     ),
@@ -1197,15 +1346,26 @@ export default function Home() {
   }, [activeTheme.bgApp]);
 
   // カテゴリ関連のState
-  const [categoriesList, setCategoriesList] = useState<string[]>([]);
+  const [categoriesList, setCategoriesList] = useState<CategoryItem[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [isAddingCategoryInline, setIsAddingCategoryInline] = useState(false);
   const [inlineNewCategoryName, setInlineNewCategoryName] = useState("");
   const [newCategoryInput, setNewCategoryInput] = useState("");
-  const [categoryToDelete, setCategoryToDelete] = useState<string | null>(null);
-  const [categoryToRename, setCategoryToRename] = useState<string | null>(null);
+  const [categoryToDelete, setCategoryToDelete] = useState<CategoryItem | null>(null);
+  const [categoryToRename, setCategoryToRename] = useState<CategoryItem | null>(null);
   const [renameCategoryInput, setRenameCategoryInput] = useState("");
   const [renameCategoryError, setRenameCategoryError] = useState<string | null>(null);
+
+  const activeCategories = useMemo(
+    () => categoriesList.filter((c) => !c.deleted),
+    [categoriesList]
+  );
+  const categoryNameById = useMemo(
+    () => new Map(categoriesList.map((c) => [c.id, c.name])),
+    [categoriesList]
+  );
+  const getCategoryName = (idOrName: string): string =>
+    categoryNameById.get(idOrName) ?? idOrName;
 
   // メモのタイトル・カテゴリ変更モーダル関連のState
   const [editingNote, setEditingNote] = useState<Note | null>(null);
@@ -1314,7 +1474,10 @@ export default function Home() {
   const [lockModalMode, setLockModalMode] = useState<null | "unlock" | "setup" | "change" | "forgot">(null);
   const [pendingUnlockNoteId, setPendingUnlockNoteId] = useState<string | null>(null);
   const [pendingLockAction, setPendingLockAction] = useState<
-    null | { type: "toggleComposeLock" } | { type: "lockExistingNote"; noteId: string }
+    | null
+    | { type: "toggleComposeLock" }
+    | { type: "lockExistingNote"; noteId: string }
+    | { type: "removeNoteLock"; noteId: string }
   >(null);
   const [lockInput1, setLockInput1] = useState("");
   const [lockInput2, setLockInput2] = useState("");
@@ -1354,8 +1517,32 @@ export default function Home() {
   useEffect(() => {
     try {
       const savedNotes = localStorage.getItem("seednote_items");
+      const parsedNotes: Note[] = savedNotes ? JSON.parse(savedNotes) : [];
+      const savedCategories = localStorage.getItem("seednote_categories");
+      const parsedCats: CategoryItem[] = savedCategories
+        ? parseCategoryItems(JSON.parse(savedCategories))
+        : [];
+      const {
+        migratedNotes,
+        updatedCatalog,
+        changedNoteIds,
+        catalogChanged,
+      } = migrateNotesCategories(parsedNotes, parsedCats);
+
       if (savedNotes) {
-        setNotes(JSON.parse(savedNotes));
+        setNotes(migratedNotes);
+        if (changedNoteIds.length > 0) {
+          localStorage.setItem("seednote_items", JSON.stringify(migratedNotes));
+        }
+      }
+      if (savedCategories || catalogChanged) {
+        setCategoriesList(updatedCatalog);
+        if (catalogChanged || (savedCategories && JSON.stringify(serializeCategoryItems(updatedCatalog)) !== savedCategories)) {
+          localStorage.setItem(
+            "seednote_categories",
+            JSON.stringify(serializeCategoryItems(updatedCatalog))
+          );
+        }
       }
       const savedToastPref = localStorage.getItem("seednote_enable_toast");
       if (savedToastPref !== null) {
@@ -1368,10 +1555,6 @@ export default function Home() {
       const savedButtonSize = localStorage.getItem("seednote_button_size");
       if (savedButtonSize === "large" || savedButtonSize === "normal") {
         setButtonSize(savedButtonSize as ButtonSize);
-      }
-      const savedCategories = localStorage.getItem("seednote_categories");
-      if (savedCategories) {
-        setCategoriesList(JSON.parse(savedCategories));
       }
       const savedConfirmDiscard = localStorage.getItem("seednote_confirm_discard");
       if (savedConfirmDiscard !== null) {
@@ -1839,7 +2022,7 @@ export default function Home() {
 
   // カテゴリ一覧を指定された並び順でソート（よく使う順 / 五十音順 / 登録順）
   const sortedCategories = useMemo(() => {
-    const list = [...categoriesList];
+    const list = [...activeCategories];
     if (categorySortOrder === "usage") {
       const counts = new Map<string, number>();
       notes.forEach((n) => {
@@ -1850,17 +2033,17 @@ export default function Home() {
         }
       });
       return list.sort((a, b) => {
-        const countA = counts.get(a) || 0;
-        const countB = counts.get(b) || 0;
+        const countA = counts.get(a.id) || 0;
+        const countB = counts.get(b.id) || 0;
         if (countB !== countA) return countB - countA;
-        return a.localeCompare(b, "ja");
+        return a.name.localeCompare(b.name, "ja");
       });
     } else if (categorySortOrder === "alphabetical") {
-      return list.sort((a, b) => a.localeCompare(b, "ja"));
+      return list.sort((a, b) => a.name.localeCompare(b.name, "ja"));
     } else {
       return list;
     }
-  }, [categoriesList, notes, categorySortOrder]);
+  }, [activeCategories, notes, categorySortOrder]);
 
   // メモが存在する日付と件数を集計（カレンダーでメモがある日を濃く表示するため）
   const noteDatesMap = useMemo(() => {
@@ -1960,7 +2143,7 @@ export default function Home() {
         const cur = latestSettingsRef.current;
         await supabase.from("user_settings").upsert({
           user_id: currentUser.id,
-          categories: partial.categories ?? cur.categoriesList,
+          categories: partial.categories ?? serializeCategoryItems(cur.categoriesList),
           time_slots: partial.time_slots ?? cur.timeSlots,
           font_size: partial.font_size ?? cur.fontSize,
           button_size: partial.button_size ?? cur.buttonSize,
@@ -2066,15 +2249,36 @@ export default function Home() {
           }
         }
 
-        // クラウドのメモで更新
-        setNotes(finalNotes);
-        localStorage.setItem("seednote_items", JSON.stringify(finalNotes));
+        // メモに付与されているカテゴリタグが旧文字列形式ならIDへ自動移行し、設定同期に連携
+        let localCatsForMigration: CategoryItem[] = [];
+        try {
+          const savedCats = localStorage.getItem("seednote_categories");
+          if (savedCats) localCatsForMigration = parseCategoryItems(JSON.parse(savedCats));
+        } catch {
+          localCatsForMigration = latestSettingsRef.current.categoriesList;
+        }
+        const {
+          migratedNotes,
+          updatedCatalog,
+          changedNoteIds,
+        } = migrateNotesCategories(finalNotes, localCatsForMigration);
 
-        // メモに付与されている全カテゴリタグを抽出して設定同期に連携
-        const noteCats = Array.from(
-          new Set(finalNotes.flatMap((n) => n.categories || []))
-        );
-        fetchUserSettings(userId, noteCats);
+        if (changedNoteIds.length > 0) {
+          changedNoteIds.forEach((id) => {
+            const mNote = migratedNotes.find((n) => n.id === id);
+            if (mNote) {
+              supabase.from("notes").update({ categories: mNote.categories || [] }).eq("id", mNote.id).then();
+            }
+          });
+        }
+
+        // クラウドのメモで更新
+        setNotes(migratedNotes);
+        localStorage.setItem("seednote_items", JSON.stringify(migratedNotes));
+
+        const noteCatIds = new Set(migratedNotes.flatMap((n) => n.categories || []));
+        const noteCatItems = updatedCatalog.filter((c) => noteCatIds.has(c.id));
+        fetchUserSettings(userId, noteCatItems);
       }
     } catch (e) {
       console.error("同期処理中にエラーが発生しました", e);
@@ -2084,7 +2288,7 @@ export default function Home() {
   };
 
   // クラウド（Supabase）からユーザー設定・カテゴリを取得＆ローカルと同期
-  const fetchUserSettings = async (userId: string, extraCategories?: string[]) => {
+  const fetchUserSettings = async (userId: string, extraCategories?: CategoryItem[]) => {
     try {
       const { data, error } = await supabase
         .from("user_settings")
@@ -2098,24 +2302,27 @@ export default function Home() {
       }
 
       // ローカル保存されている最新のカテゴリ一覧を取得
-      let localCats: string[] = [];
+      let localCats: CategoryItem[] = [];
       try {
         const savedCats = localStorage.getItem("seednote_categories");
-        if (savedCats) localCats = JSON.parse(savedCats);
+        if (savedCats) localCats = parseCategoryItems(JSON.parse(savedCats));
       } catch {
         localCats = latestSettingsRef.current.categoriesList;
       }
 
       if (data) {
         const row = data as DbUserSettingsRow;
-        const cloudCats: string[] = Array.isArray(row.categories) ? row.categories : [];
+        const cloudCats = parseCategoryItems(row.categories);
 
-        // クラウドカテゴリ + ローカルカテゴリ + メモに付与されているカテゴリを重複なく統合
-        const mergedCats = Array.from(
-          new Set([...cloudCats, ...localCats, ...(extraCategories || [])])
+        // クラウドカテゴリ + ローカルカテゴリ + メモ由来のカテゴリをID単位で統合（更新日時が新しい方を優先）
+        const mergedCats = mergeCategoryItems(
+          mergeCategoryItems(cloudCats, localCats),
+          extraCategories || []
         );
+        const serializedMergedCats = serializeCategoryItems(mergedCats);
         setCategoriesList(mergedCats);
-        localStorage.setItem("seednote_categories", JSON.stringify(mergedCats));
+        latestSettingsRef.current.categoriesList = mergedCats;
+        localStorage.setItem("seednote_categories", JSON.stringify(serializedMergedCats));
 
         // 時間帯設定の同期
         if (row.time_slots) {
@@ -2212,12 +2419,13 @@ export default function Home() {
           localStorage.setItem("seednote_auto_lock_mode", row.auto_lock_mode);
         }
 
-        // もしローカルやメモから新しいカテゴリが見つかった場合、クラウド側も最新化
-        if (mergedCats.length > cloudCats.length) {
+        // クラウド側と差分がある場合（旧文字列形式からの移行や端末間の最新化）はクラウド側も最新化
+        const rawCloudCats = Array.isArray(row.categories) ? row.categories : [];
+        if (JSON.stringify(serializedMergedCats) !== JSON.stringify(rawCloudCats)) {
           const cur = latestSettingsRef.current;
           await supabase.from("user_settings").upsert({
             user_id: userId,
-            categories: mergedCats,
+            categories: serializedMergedCats,
             time_slots: row.time_slots || cur.timeSlots,
             font_size: row.font_size || cur.fontSize,
             button_size: row.button_size || cur.buttonSize,
@@ -2234,7 +2442,9 @@ export default function Home() {
         if (isSigningUpRef.current) return;
         // クラウドにまだ設定がない場合：現在のローカル設定をクラウドに初回保存（競合による復旧キー上書きを防ぐためinsertを使用）
         const cur = latestSettingsRef.current;
-        const initialCats = Array.from(new Set([...localCats, ...(extraCategories || [])]));
+        const initialCats = serializeCategoryItems(
+          mergeCategoryItems(localCats, extraCategories || [])
+        );
         const generated = generateRecoveryKey();
         const { error: insertErr } = await supabase.from("user_settings").insert({
           user_id: userId,
@@ -2785,10 +2995,10 @@ export default function Home() {
     );
   };
 
-  // 新規カテゴリの追加処理
-  const handleAddCategory = (name: string) => {
+  // 新規カテゴリの追加処理（固有IDを返す）
+  const handleAddCategory = (name: string): string | null => {
     const trimmed = name.trim();
-    if (!trimmed) return;
+    if (!trimmed) return null;
 
     // 予約語のチェック（「すべてのメモ」「未分類」およびダブルクォーテーション付き）
     const reservedWords = [
@@ -2801,28 +3011,37 @@ export default function Home() {
     ];
     if (reservedWords.includes(trimmed)) {
       alert("「”すべてのメモ”」および「”未分類”」はシステム専用のため作成できません");
-      return;
+      return null;
     }
 
-    if (categoriesList.includes(trimmed)) return;
+    const existing = activeCategories.find((c) => c.name === trimmed);
+    if (existing) return existing.id;
 
-    const updated = [...categoriesList, trimmed];
+    const newItem: CategoryItem = {
+      id: createCategoryId(),
+      name: trimmed,
+      updatedAt: new Date().toISOString(),
+    };
+    const updated = [...categoriesList, newItem];
+    const serialized = serializeCategoryItems(updated);
     setCategoriesList(updated);
+    latestSettingsRef.current.categoriesList = updated;
     try {
-      localStorage.setItem("seednote_categories", JSON.stringify(updated));
+      localStorage.setItem("seednote_categories", JSON.stringify(serialized));
     } catch (e) {
       console.error("カテゴリの保存に失敗しました", e);
     }
-    saveCloudSettings({ categories: updated }, true);
+    saveCloudSettings({ categories: serialized }, true);
+    return newItem.id;
   };
 
   // メモ入力中のインライン新規カテゴリ追加
   const handleSaveInlineCategory = () => {
     const trimmed = inlineNewCategoryName.trim();
     if (trimmed) {
-      handleAddCategory(trimmed);
-      if (!selectedCategories.includes(trimmed)) {
-        setSelectedCategories((prev) => [...prev, trimmed]);
+      const catId = handleAddCategory(trimmed);
+      if (catId && !selectedCategories.includes(catId)) {
+        setSelectedCategories((prev) => [...prev, catId]);
       }
     }
     setInlineNewCategoryName("");
@@ -2841,22 +3060,30 @@ export default function Home() {
   // カテゴリ消去の確定処理（※過去のメモデータは消去せず、該当カテゴリタグのみ安全に除外）
   const handleConfirmDeleteCategory = () => {
     if (!categoryToDelete) return;
+    const targetId = categoryToDelete.id;
+    const now = new Date().toISOString();
 
-    // カテゴリリストから除外
-    const updatedCategories = categoriesList.filter((c) => c !== categoryToDelete);
+    // 同期時に復活しないよう削除フラグと更新日時を記録
+    const updatedCategories = categoriesList.map((c) =>
+      c.id === targetId ? { ...c, deleted: true, updatedAt: now } : c
+    );
+    const serialized = serializeCategoryItems(updatedCategories);
     setCategoriesList(updatedCategories);
-    localStorage.setItem("seednote_categories", JSON.stringify(updatedCategories));
-    saveCloudSettings({ categories: updatedCategories }, true);
+    latestSettingsRef.current.categoriesList = updatedCategories;
+    localStorage.setItem("seednote_categories", JSON.stringify(serialized));
+    saveCloudSettings({ categories: serialized }, true);
 
-    // 選択中カテゴリからも除外
-    setSelectedCategories((prev) => prev.filter((c) => c !== categoryToDelete));
+    // 選択中カテゴリ・検索フィルタからも除外
+    setSelectedCategories((prev) => prev.filter((c) => c !== targetId));
+    setFilterCategories((prev) => prev.filter((c) => c !== targetId));
+    setTrashFilterCategories((prev) => prev.filter((c) => c !== targetId));
 
     // 既存メモから該当カテゴリのみを除外
     const notesToUpdateInCloud: Note[] = [];
     const updatedNotes = notes.map((note) => {
       if (!note.categories) return note;
-      if (note.categories.includes(categoryToDelete)) {
-        const filtered = note.categories.filter((c) => c !== categoryToDelete);
+      if (note.categories.includes(targetId)) {
+        const filtered = note.categories.filter((c) => c !== targetId);
         const updated = {
           ...note,
           categories: filtered.length > 0 ? filtered : undefined,
@@ -2879,7 +3106,7 @@ export default function Home() {
     setCategoryToDelete(null);
   };
 
-  // カテゴリ名の変更確定処理（登録済みカテゴリ一覧と過去メモのタグを一括更新）
+  // カテゴリ名の変更確定処理（固有IDは維持したまま名前と更新日時だけを更新）
   const handleConfirmRenameCategory = () => {
     if (!categoryToRename) return;
     const trimmed = renameCategoryInput.trim();
@@ -2901,44 +3128,26 @@ export default function Home() {
       return;
     }
 
-    if (trimmed === categoryToRename) {
+    if (trimmed === categoryToRename.name) {
       setCategoryToRename(null);
       setRenameCategoryError(null);
       return;
     }
 
-    if (categoriesList.includes(trimmed)) {
+    if (activeCategories.some((c) => c.id !== categoryToRename.id && c.name === trimmed)) {
       setRenameCategoryError("同じ名前のカテゴリがすでに存在します");
       return;
     }
 
-    const updatedCategories = categoriesList.map((c) => (c === categoryToRename ? trimmed : c));
+    const now = new Date().toISOString();
+    const updatedCategories = categoriesList.map((c) =>
+      c.id === categoryToRename.id ? { ...c, name: trimmed, updatedAt: now } : c
+    );
+    const serialized = serializeCategoryItems(updatedCategories);
     setCategoriesList(updatedCategories);
-    localStorage.setItem("seednote_categories", JSON.stringify(updatedCategories));
-    saveCloudSettings({ categories: updatedCategories }, true);
-
-    setSelectedCategories((prev) => prev.map((c) => (c === categoryToRename ? trimmed : c)));
-    setFilterCategories((prev) => prev.map((c) => (c === categoryToRename ? trimmed : c)));
-    setTrashFilterCategories((prev) => prev.map((c) => (c === categoryToRename ? trimmed : c)));
-
-    const notesToUpdateInCloud: Note[] = [];
-    const updatedNotes = notes.map((note) => {
-      if (!note.categories || !note.categories.includes(categoryToRename)) return note;
-      const renamed = Array.from(
-        new Set(note.categories.map((c) => (c === categoryToRename ? trimmed : c)))
-      );
-      const updated = { ...note, categories: renamed };
-      notesToUpdateInCloud.push(updated);
-      return updated;
-    });
-    setNotes(updatedNotes);
-    localStorage.setItem("seednote_items", JSON.stringify(updatedNotes));
-
-    if (currentUser && notesToUpdateInCloud.length > 0) {
-      notesToUpdateInCloud.forEach((n) => {
-        supabase.from("notes").update({ categories: n.categories || [] }).eq("id", n.id).then();
-      });
-    }
+    latestSettingsRef.current.categoriesList = updatedCategories;
+    localStorage.setItem("seednote_categories", JSON.stringify(serialized));
+    saveCloudSettings({ categories: serialized }, true);
 
     setCategoryToRename(null);
     setRenameCategoryError(null);
@@ -2972,9 +3181,9 @@ export default function Home() {
   const handleSaveCategoryInEdit = () => {
     const trimmed = inlineNewCategoryInEdit.trim();
     if (trimmed) {
-      handleAddCategory(trimmed);
-      if (!editCategories.includes(trimmed)) {
-        setEditCategories((prev) => [...prev, trimmed]);
+      const catId = handleAddCategory(trimmed);
+      if (catId && !editCategories.includes(catId)) {
+        setEditCategories((prev) => [...prev, catId]);
       }
     }
     setInlineNewCategoryInEdit("");
@@ -3374,7 +3583,11 @@ export default function Home() {
     mode: "unlock" | "setup" | "change" | "forgot",
     options?: {
       unlockNoteId?: string | null;
-      action?: { type: "toggleComposeLock" } | { type: "lockExistingNote"; noteId: string } | null;
+      action?:
+        | { type: "toggleComposeLock" }
+        | { type: "lockExistingNote"; noteId: string }
+        | { type: "removeNoteLock"; noteId: string }
+        | null;
     }
   ) => {
     setLockModalMode(mode);
@@ -3465,9 +3678,11 @@ export default function Home() {
       return;
     }
     if (!isNoteContentVisible(note)) {
-      setToastMessage("🔒 鍵を外すには先にロック解除してください");
-      setShowToast(true);
-      setTimeout(() => setShowToast(false), 2000);
+      if (!lockPasswordHash) {
+        handleSetNoteLock(note.id, false);
+        return;
+      }
+      openLockModal("unlock", { action: { type: "removeNoteLock", noteId: note.id } });
       return;
     }
     handleSetNoteLock(note.id, false);
@@ -3518,7 +3733,11 @@ export default function Home() {
           prev.includes(pendingUnlockNoteId) ? prev : [...prev, pendingUnlockNoteId]
         );
       }
+      const pendingActionCopy = pendingLockAction;
       closeLockModal();
+      if (pendingActionCopy?.type === "removeNoteLock") {
+        handleSetNoteLock(pendingActionCopy.noteId, false);
+      }
       return;
     }
 
@@ -4443,12 +4662,12 @@ export default function Home() {
 
                   {/* 登録済みカテゴリチップ（並び順設定を反映） */}
                   {sortedCategories.map((cat) => {
-                    const isSelected = selectedCategories.includes(cat);
+                    const isSelected = selectedCategories.includes(cat.id);
                     return (
                       <button
-                        key={cat}
+                        key={cat.id}
                         type="button"
-                        onClick={() => handleToggleCategory(cat)}
+                        onClick={() => handleToggleCategory(cat.id)}
                         className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
                           isSelected ? "shadow-xs font-bold" : "border"
                         }`}
@@ -4458,7 +4677,7 @@ export default function Home() {
                           color: isSelected ? activeTheme.accentText : activeTheme.textSecondary,
                         }}
                       >
-                        {cat}
+                        {cat.name}
                       </button>
                     );
                   })}
@@ -5093,17 +5312,17 @@ export default function Home() {
 
                           {/* 各カテゴリボタン（ソート順反映） */}
                           {sortedCategories.map((cat) => {
-                            const isSelected = filterCategories.includes(cat);
+                            const isSelected = filterCategories.includes(cat.id);
                             return (
                               <button
-                                key={cat}
+                                key={cat.id}
                                 type="button"
                                 onClick={() =>
                                   setFilterCategories((prev) => {
                                     const withoutUncategorized = prev.filter((c) => c !== "uncategorized");
                                     return isSelected
-                                      ? withoutUncategorized.filter((c) => c !== cat)
-                                      : [...withoutUncategorized, cat];
+                                      ? withoutUncategorized.filter((c) => c !== cat.id)
+                                      : [...withoutUncategorized, cat.id];
                                   })
                                 }
                                 className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
@@ -5112,7 +5331,7 @@ export default function Home() {
                                     : "bg-[#f4f0e8] text-[#6b6257] hover:bg-[#eae3d7]"
                                 }`}
                               >
-                                {cat}
+                                {cat.name}
                               </button>
                             );
                           })}
@@ -5688,15 +5907,13 @@ export default function Home() {
                                   if (tutorialStep !== null) return;
                                   handleToggleNoteLock(note);
                                 }}
-                                aria-disabled={tutorialStep !== null || (Boolean(note.isLocked) && !isContentVisible)}
+                                aria-disabled={tutorialStep !== null}
                                 className={`w-full text-left ${
                                   buttonSize === "large"
                                     ? "px-3 py-2 text-sm"
                                     : "px-2.5 py-1.5 text-xs"
                                 } rounded-lg flex items-center gap-1.5 font-medium transition-colors ${
-                                  tutorialStep !== null || (Boolean(note.isLocked) && !isContentVisible)
-                                    ? "opacity-50 cursor-default"
-                                    : "hover:opacity-80"
+                                  tutorialStep !== null ? "opacity-60 cursor-default" : "hover:opacity-80"
                                 }`}
                                 style={{ color: activeTheme.textPrimary }}
                               >
@@ -5739,7 +5956,7 @@ export default function Home() {
                                 color: activeTheme.textSecondary,
                               }}
                             >
-                              🏷️ {cat}
+                              🏷️ {getCategoryName(cat)}
                             </span>
                           ))}
                           {note.remindAt && (() => {
@@ -6236,17 +6453,17 @@ export default function Home() {
 
                         {/* 各カテゴリボタン（トグル複数AND選択：並び順設定を反映） */}
                         {sortedCategories.map((cat) => {
-                          const isSelected = trashFilterCategories.includes(cat);
+                          const isSelected = trashFilterCategories.includes(cat.id);
                           return (
                             <button
-                              key={cat}
+                              key={cat.id}
                               type="button"
                               onClick={() =>
                                 setTrashFilterCategories((prev) => {
                                   const withoutUncategorized = prev.filter((c) => c !== "uncategorized");
                                   return isSelected
-                                    ? withoutUncategorized.filter((c) => c !== cat)
-                                    : [...withoutUncategorized, cat];
+                                    ? withoutUncategorized.filter((c) => c !== cat.id)
+                                    : [...withoutUncategorized, cat.id];
                                 })
                               }
                               className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all border ${
@@ -6260,7 +6477,7 @@ export default function Home() {
                                 color: isSelected ? activeTheme.accentText : activeTheme.textSecondary,
                               }}
                             >
-                              {cat}
+                              {cat.name}
                             </button>
                           );
                         })}
@@ -6382,7 +6599,7 @@ export default function Home() {
                               color: activeTheme.textSecondary,
                             }}
                           >
-                            🏷️ {cat}
+                            🏷️ {getCategoryName(cat)}
                           </span>
                         ))}
                       </div>
@@ -6599,7 +6816,7 @@ export default function Home() {
                   } font-bold`}
                   style={{ color: activeTheme.textPrimary }}
                 >
-                  カテゴリ管理 ({categoriesList.length}件)
+                  カテゴリ管理 ({activeCategories.length}件)
                 </h2>
                 <span className="text-[11px]" style={{ color: activeTheme.textSecondary }}>
                   メモを分類するカテゴリの作成・並び順設定ができます
@@ -6665,7 +6882,7 @@ export default function Home() {
             {/* 登録済みカテゴリ一覧ヘッダー & 並び順切り替え */}
             <div className="flex items-center justify-between mb-2 shrink-0 flex-wrap gap-2">
               <span className="text-xs font-bold" style={{ color: activeTheme.textPrimary }}>
-                登録済みカテゴリ ({categoriesList.length}件)
+                登録済みカテゴリ ({activeCategories.length}件)
               </span>
               <div
                 className="flex items-center gap-1 p-0.5 rounded-lg border transition-colors"
@@ -6724,7 +6941,7 @@ export default function Home() {
 
             {/* 登録済みカテゴリ一覧 */}
             <div className="flex-1 min-h-0 overflow-y-auto pr-1 pb-12 flex flex-col gap-2">
-              {categoriesList.length === 0 ? (
+              {activeCategories.length === 0 ? (
                 <div
                   className="text-center py-8 text-xs rounded-xl border border-dashed p-4"
                   style={{
@@ -6740,18 +6957,18 @@ export default function Home() {
                 <div className="flex flex-col gap-2">
                   {sortedCategories.map((cat) => {
                     const count = notes.filter(
-                      (n) => !n.isTrash && n.categories && n.categories.includes(cat)
+                      (n) => !n.isTrash && n.categories && n.categories.includes(cat.id)
                     ).length;
 
                     return (
                       <div
-                        key={cat}
+                        key={cat.id}
                         className="flex items-center justify-between p-3 rounded-xl border transition-colors"
                         style={{ backgroundColor: activeTheme.bgCard, borderColor: activeTheme.border }}
                       >
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-bold" style={{ color: activeTheme.textPrimary }}>
-                            🏷️ {cat}
+                            🏷️ {cat.name}
                           </span>
                           <span className="text-[11px] font-mono" style={{ color: activeTheme.textSecondary }}>
                             ({count}件のメモ)
@@ -6762,13 +6979,13 @@ export default function Home() {
                             type="button"
                             onClick={() => {
                               setCategoryToRename(cat);
-                              setRenameCategoryInput(cat);
+                              setRenameCategoryInput(cat.name);
                               setRenameCategoryError(null);
                             }}
                             className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors text-xs hover:opacity-80"
                             style={{ color: activeTheme.textSecondary }}
                             title="カテゴリ名を変更"
-                            aria-label={`${cat}の名前を変更`}
+                            aria-label={`${cat.name}の名前を変更`}
                           >
                             ✏️
                           </button>
@@ -6778,7 +6995,7 @@ export default function Home() {
                             className="w-7 h-7 flex items-center justify-center rounded-lg hover:text-[#b85448] transition-colors text-xs font-bold hover:opacity-80"
                             style={{ color: activeTheme.textSecondary }}
                             title="カテゴリを消去"
-                            aria-label={`${cat}を消去`}
+                            aria-label={`${cat.name}を消去`}
                           >
                             ✕
                           </button>
@@ -7817,7 +8034,7 @@ export default function Home() {
               >
                 <div className="flex items-center justify-between">
                   <span className="font-bold flex items-center gap-1.5" style={{ color: activeTheme.textPrimary }}>
-                    <span>🔐</span> クラウド同期・アカウント
+                    <span>👤</span> クラウド同期・アカウント
                   </span>
                   {currentUser ? (
                     <button
@@ -8560,7 +8777,7 @@ export default function Home() {
                 <span>✏️</span> カテゴリ名を変更
               </h3>
               <p className="text-xs mt-1" style={{ color: activeTheme.textSecondary }}>
-                「{categoryToRename}」がついている過去のメモも一括で更新されます。
+                「{categoryToRename.name}」がついている過去のメモも自動的に新しい名前で表示されます。
               </p>
             </div>
             <div>
@@ -8623,7 +8840,7 @@ export default function Home() {
               className="text-base font-bold mb-1"
               style={{ color: activeTheme.textPrimary }}
             >
-              「{categoryToDelete}」
+              「{categoryToDelete.name}」
             </h3>
             <p
               className="text-sm font-bold mb-3"
@@ -8727,12 +8944,12 @@ export default function Home() {
                   }}
                 >
                   {sortedCategories.map((cat) => {
-                    const isSelected = editCategories.includes(cat);
+                    const isSelected = editCategories.includes(cat.id);
                     return (
                       <button
-                        key={cat}
+                        key={cat.id}
                         type="button"
-                        onClick={() => handleToggleEditCategory(cat)}
+                        onClick={() => handleToggleEditCategory(cat.id)}
                         className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all border ${
                           isSelected ? "shadow-xs font-bold" : "hover:opacity-85"
                         }`}
@@ -8742,7 +8959,7 @@ export default function Home() {
                           color: isSelected ? activeTheme.accentText : activeTheme.textSecondary,
                         }}
                       >
-                        {cat}
+                        {cat.name}
                       </button>
                     );
                   })}
