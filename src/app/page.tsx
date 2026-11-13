@@ -448,7 +448,7 @@ const getNoteFontFamilyStyle = (font: NoteFontFamily): string => {
       return "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
     case "sans":
     default:
-      return "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Hiragino Sans', 'Noto Sans JP', sans-serif";
+      return "inherit";
   }
 };
 
@@ -1054,7 +1054,7 @@ const HELP_ITEMS = [
           <li><strong>✏️ メモを書く / 📋 メモを見る：</strong> 入力画面と一覧画面を切り替えます。</li>
           <li><strong>🏷️ カテゴリ管理：</strong> カテゴリの追加、並び順の変更、不要なカテゴリの整理ができます。</li>
           <li><strong>🗑️ ゴミ箱：</strong> 一覧から退避したメモの確認や復元ができます。</li>
-          <li><strong>📢 運営からのお知らせ：</strong> アップデート情報や大切なお知らせを確認できます（新着時はバッジでお知らせ）。</li>
+          <li><strong>📢 開発者からのお知らせ：</strong> アップデート情報や大切なお知らせを確認できます（新着時はバッジでお知らせ）。</li>
           <li><strong>❓ ガイド・ヘルプ / 📜 利用規約・プライバシー：</strong> 使い方やルールをいつでも確認できます。</li>
           <li><strong>⚙️ 設定：</strong> 見た目・フォント・操作感やクラウド同期の設定を行えます。</li>
         </ul>
@@ -1243,7 +1243,7 @@ const HELP_ITEMS = [
         </div>
         <div className="p-2.5 rounded-xl" style={{ backgroundColor: "rgba(128, 128, 128, 0.08)" }}>
           <p className="font-bold text-xs">Q. このアプリは使い続けられますか？</p>
-          <p className="mt-1 text-xs opacity-85">A. 現状しばらくは使い続けられると思います。しかし、運営側の都合でサービス終了する可能性もあります。その際は1ヶ月前から告知を行う予定です。ご了承ください（詳しくは利用規約をご覧ください）。</p>
+          <p className="mt-1 text-xs opacity-85">A. 現状しばらくは使い続けられると思います。しかし、開発者の都合でサービス終了する可能性もあります。その際は1ヶ月前から告知を行う予定です。ご了承ください（詳しくは利用規約をご覧ください）。</p>
         </div>
         <div className="p-2.5 rounded-xl" style={{ backgroundColor: "rgba(128, 128, 128, 0.08)" }}>
           <p className="font-bold text-xs">Q. このアプリはAIを使用していますか？</p>
@@ -1286,11 +1286,21 @@ function CollapsibleNoteBody({
   const shouldClamp = maxLines > 0 && !isMasked && !isExpanded;
 
   useEffect(() => {
-    if (maxLines === 0 || isMasked || isExpanded) return;
+    if (maxLines === 0 || isMasked) {
+      setNeedsCollapse(false);
+      return;
+    }
 
     const measure = () => {
       const el = pRef.current;
       if (!el) return;
+      if (isExpanded) {
+        const lh = parseFloat(getComputedStyle(el).lineHeight);
+        if (!Number.isNaN(lh) && lh > 0) {
+          setNeedsCollapse(el.scrollHeight > lh * maxLines + 2);
+        }
+        return;
+      }
       setNeedsCollapse(el.scrollHeight > el.clientHeight + 2);
     };
 
@@ -1300,7 +1310,7 @@ function CollapsibleNoteBody({
       cancelAnimationFrame(rafId);
       window.removeEventListener("resize", measure);
     };
-  }, [text, maxLines, isExpanded, isMasked]);
+  }, [text, maxLines, isExpanded, isMasked, className, style?.fontFamily, style?.fontSize]);
 
   const clampClass = shouldClamp
     ? COLLAPSE_LINE_CLASS[maxLines as Exclude<NoteCollapseLines, 0>]
@@ -1847,37 +1857,24 @@ export default function Home() {
     };
   }, [activeTab, autoLockMode, unlockedNoteIds.length, isLockSessionVerified, lockAllNotes]);
 
-  // 運営からのお知らせを取得（Supabase announcements テーブル）
-  const fetchAnnouncements = useCallback(async () => {
-    setIsLoadingAnnouncements(true);
-    setAnnouncementsFetchError(false);
-    try {
-      const { data, error } = await supabase
-        .from("announcements")
-        .select("id, title, content, category, published_at")
-        .eq("is_published", true)
-        .order("published_at", { ascending: false })
-        .limit(30);
-
-      if (error) {
-        console.warn("お知らせの取得に失敗しました:", error.message);
-        setAnnouncementsFetchError(true);
-        return;
-      }
-      if (Array.isArray(data)) {
-        setAnnouncements(data as AnnouncementItem[]);
-      }
-    } catch (e) {
-      console.warn("お知らせ取得中にエラーが発生しました:", e);
-      setAnnouncementsFetchError(true);
-    } finally {
-      setIsLoadingAnnouncements(false);
-    }
-  }, []);
-
+  // ロック状態に戻った鍵付きメモの編集モーダル・追記欄が開いたまま残らないよう閉じる
   useEffect(() => {
-    fetchAnnouncements();
-  }, [fetchAnnouncements]);
+    if (editingContentNote?.isLocked && !unlockedNoteIds.includes(editingContentNote.id)) {
+      setEditingContentNote(null);
+      setEditContentInput("");
+    }
+    if (editingNote?.isLocked && !unlockedNoteIds.includes(editingNote.id)) {
+      setEditingNote(null);
+      setEditTitleInput("");
+    }
+    if (replyingNoteId) {
+      const target = notes.find((n) => n.id === replyingNoteId);
+      if (target?.isLocked && !unlockedNoteIds.includes(target.id)) {
+        setReplyingNoteId(null);
+        setReplyContent("");
+      }
+    }
+  }, [unlockedNoteIds, editingContentNote, editingNote, replyingNoteId, notes]);
 
   const unreadAnnouncementsCount = useMemo(() => {
     if (!isLoaded) return 0;
@@ -1899,6 +1896,55 @@ export default function Home() {
     },
     []
   );
+
+  // 開発者からのお知らせを取得（Supabase announcements テーブル）
+  const fetchAnnouncements = useCallback(async (markReadOnSuccess: boolean = false) => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      setAnnouncementsFetchError(true);
+      setIsLoadingAnnouncements(false);
+      return;
+    }
+    setIsLoadingAnnouncements(true);
+    setAnnouncementsFetchError(false);
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    try {
+      const queryPromise = supabase
+        .from("announcements")
+        .select("id, title, content, category, published_at")
+        .eq("is_published", true)
+        .order("published_at", { ascending: false })
+        .limit(30);
+
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error("ANNOUNCEMENTS_TIMEOUT")), 10000);
+      });
+
+      const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
+
+      if (error) {
+        console.warn("お知らせの取得に失敗しました:", error.message);
+        setAnnouncementsFetchError(true);
+        return;
+      }
+      if (Array.isArray(data)) {
+        const items = data as AnnouncementItem[];
+        setAnnouncements(items);
+        if (markReadOnSuccess) {
+          markAllAnnouncementsRead(items);
+        }
+      }
+    } catch (e) {
+      console.warn("お知らせ取得中にエラーが発生しました:", e);
+      setAnnouncementsFetchError(true);
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+      setIsLoadingAnnouncements(false);
+    }
+  }, [markAllAnnouncementsRead]);
+
+  useEffect(() => {
+    fetchAnnouncements();
+  }, [fetchAnnouncements]);
 
   const handleOpenAnnouncements = useCallback(() => {
     const unreadIds = announcements
@@ -2265,6 +2311,9 @@ export default function Home() {
     fontFamily,
     noteFont,
     noteCollapseLines,
+    lockPasswordHash,
+    maskLockedTitle,
+    autoLockMode,
   });
 
   useEffect(() => {
@@ -2280,6 +2329,9 @@ export default function Home() {
       fontFamily,
       noteFont,
       noteCollapseLines,
+      lockPasswordHash,
+      maskLockedTitle,
+      autoLockMode,
     };
   }, [
     categoriesList,
@@ -2293,6 +2345,9 @@ export default function Home() {
     fontFamily,
     noteFont,
     noteCollapseLines,
+    lockPasswordHash,
+    maskLockedTitle,
+    autoLockMode,
   ]);
 
   // 設定のクラウド保存用デバウンスタイマー
@@ -2487,11 +2542,12 @@ export default function Home() {
         if (localOnlyNotes.length > 0) {
           const rowsToInsert = localOnlyNotes.map((n) => mapNoteToDbRow(n, userId));
           const { error: insertErr } = await supabase.from("notes").insert(rowsToInsert);
-          if (!insertErr) {
-            finalNotes = [...protectedCloudNotes, ...localOnlyNotes].sort(
-              (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-            );
+          if (insertErr) {
+            console.warn("ローカルメモのクラウド引き継ぎに失敗したためローカルに保持します:", insertErr.message);
           }
+          finalNotes = [...protectedCloudNotes, ...localOnlyNotes].sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
         }
 
         // メモに付与されているカテゴリタグが旧文字列形式ならIDへ自動移行し、設定同期に連携
@@ -2715,6 +2771,10 @@ export default function Home() {
           recovery_key: generated,
           theme_hue: cur.selectedHue,
           theme_brightness: cur.themeBrightness,
+          note_collapse_lines: cur.noteCollapseLines,
+          lock_password_hash: cur.lockPasswordHash,
+          mask_locked_title: cur.maskLockedTitle,
+          auto_lock_mode: cur.autoLockMode,
           updated_at: new Date().toISOString(),
         });
         if (insertErr) {
@@ -3874,11 +3934,14 @@ export default function Home() {
     if (!currentUser) return;
     supabase
       .from("user_settings")
-      .update({
-        ...partial,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("user_id", currentUser.id)
+      .upsert(
+        {
+          user_id: currentUser.id,
+          ...partial,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" }
+      )
       .then(({ error }) => {
         if (error) console.warn("鍵設定のクラウド保存エラー:", error.message);
       });
@@ -4061,6 +4124,10 @@ export default function Home() {
     if (lockModalMode === "setup") {
       const nextPass = lockInput1.trim();
       const confirmPass = lockInput2.trim();
+      if (!/^[a-zA-Z0-9._-]+$/.test(nextPass)) {
+        setLockModalError("半角英数字と記号（._-）のみで入力してください");
+        return;
+      }
       if (nextPass.length < 4 || nextPass.length > MAX_PASSWORD_LENGTH) {
         setLockModalError(`4〜${MAX_PASSWORD_LENGTH}文字で設定してください`);
         return;
@@ -4099,6 +4166,10 @@ export default function Home() {
         setLockModalError("現在のパスワードが正しくありません");
         return;
       }
+      if (!/^[a-zA-Z0-9._-]+$/.test(nextPass)) {
+        setLockModalError("新しいパスワードは半角英数字と記号（._-）のみで入力してください");
+        return;
+      }
       if (nextPass.length < 4 || nextPass.length > MAX_PASSWORD_LENGTH) {
         setLockModalError(`新しいパスワードは4〜${MAX_PASSWORD_LENGTH}文字で入力してください`);
         return;
@@ -4128,6 +4199,10 @@ export default function Home() {
       const confirmPass = lockInput3.trim();
       if (!accountPass) {
         setLockModalError("アカウントのパスワードを入力してください");
+        return;
+      }
+      if (!/^[a-zA-Z0-9._-]+$/.test(nextPass)) {
+        setLockModalError("新しい鍵パスワードは半角英数字と記号（._-）のみで入力してください");
         return;
       }
       if (nextPass.length < 4 || nextPass.length > MAX_PASSWORD_LENGTH) {
@@ -4780,7 +4855,7 @@ export default function Home() {
               }}
             >
               <div className="flex items-center gap-3">
-                <span>📢</span> 運営からのお知らせ
+                <span>📢</span> 開発者からのお知らせ
               </div>
               {unreadAnnouncementsCount > 0 && (
                 <span
@@ -7704,6 +7779,7 @@ export default function Home() {
                         style={{
                           backgroundColor: isSelected ? activeTheme.accent : "transparent",
                           color: isSelected ? activeTheme.accentText : activeTheme.textSecondary,
+                          fontFamily: getFontFamilyStyle(f.id),
                         }}
                       >
                         {f.label}
@@ -8387,7 +8463,7 @@ export default function Home() {
                     </button>
                   </div>
                   <div className="text-[11px] leading-relaxed" style={{ color: activeTheme.textSecondary }}>
-                    アカウントのログインパスワードとは別に管理されます（4〜{MAX_PASSWORD_LENGTH}文字）。
+                    アカウントのログインパスワードとは別に管理されます（半角英数字・._- / 4〜{MAX_PASSWORD_LENGTH}文字）。
                   </div>
                   {lockPasswordHash && currentUser && (
                     <div className="flex justify-end pt-1 border-t" style={{ borderColor: activeTheme.border }}>
@@ -8399,6 +8475,11 @@ export default function Home() {
                       >
                         鍵パスワードを忘れた場合（アカウントパスワードで再設定）
                       </button>
+                    </div>
+                  )}
+                  {lockPasswordHash && !currentUser && (
+                    <div className="pt-1 border-t text-[11px] leading-relaxed" style={{ borderColor: activeTheme.border, color: activeTheme.textSecondary }}>
+                      ※ 鍵パスワードを忘れた場合は、無料のアカウント登録・ログイン後にアカウントパスワードで再設定できます。
                     </div>
                   )}
                 </div>
@@ -8785,7 +8866,7 @@ export default function Home() {
                 {lockModalMode === "unlock" &&
                   "一度解除すると、他の鍵メモもタップだけで開けるようになります（「隠す」でロック）。"}
                 {lockModalMode === "setup" &&
-                  "すべての鍵付きメモに共通で使うパスワードを決めてください（4文字以上・アカウントパスワードと別でOK）。"}
+                  `すべての鍵付きメモに共通で使うパスワードを決めてください（半角英数字・._- / 4〜${MAX_PASSWORD_LENGTH}文字・アカウントパスワードと別でOK）。`}
                 {lockModalMode === "change" &&
                   "現在の鍵パスワードを確認したうえで、新しいパスワードに変更します。"}
                 {lockModalMode === "forgot" &&
@@ -8810,7 +8891,7 @@ export default function Home() {
               <div>
                 <label className="block text-xs font-bold mb-1" style={{ color: activeTheme.textPrimary }}>
                   {lockModalMode === "unlock" && "鍵メモ用パスワード"}
-                  {lockModalMode === "setup" && `新しい鍵パスワード（4〜${MAX_PASSWORD_LENGTH}文字）`}
+                  {lockModalMode === "setup" && `新しい鍵パスワード（半角英数字・._- / 4〜${MAX_PASSWORD_LENGTH}文字）`}
                   {lockModalMode === "change" && "現在の鍵パスワード"}
                   {lockModalMode === "forgot" && "アカウントのログインパスワード"}
                 </label>
@@ -8843,7 +8924,7 @@ export default function Home() {
               {(lockModalMode === "setup" || lockModalMode === "change" || lockModalMode === "forgot") && (
                 <div>
                   <label className="block text-xs font-bold mb-1" style={{ color: activeTheme.textPrimary }}>
-                    {lockModalMode === "setup" ? "確認用（もう一度入力）" : `新しい鍵パスワード（4〜${MAX_PASSWORD_LENGTH}文字）`}
+                    {lockModalMode === "setup" ? "確認用（もう一度入力）" : `新しい鍵パスワード（半角英数字・._- / 4〜${MAX_PASSWORD_LENGTH}文字）`}
                   </label>
                   <div className="relative flex items-center">
                     <input
@@ -8912,6 +8993,23 @@ export default function Home() {
                   style={{ color: activeTheme.textSecondary }}
                 >
                   パスワードを忘れた場合
+                </button>
+              </div>
+            )}
+            {lockModalMode === "unlock" && !currentUser && (
+              <div className="flex items-center justify-between gap-2 text-[11px]" style={{ color: activeTheme.textSecondary }}>
+                <span>忘れた場合はアカウント登録後に再設定できます</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeLockModal();
+                    handleSwitchAuthMode("signup");
+                    setIsAuthModalOpen(true);
+                  }}
+                  className="underline font-medium shrink-0 hover:opacity-80"
+                  style={{ color: activeTheme.textPrimary }}
+                >
+                  登録へ
                 </button>
               </div>
             )}
@@ -9071,7 +9169,7 @@ export default function Home() {
                   style={{ color: activeTheme.textPrimary }}
                 >
                   <span>📢</span>
-                  <span>運営からのお知らせ</span>
+                  <span>開発者からのお知らせ</span>
                 </h2>
                 <span className="text-[11px]" style={{ color: activeTheme.textSecondary }}>
                   アップデート情報や大切なお知らせをお届けします
@@ -9081,7 +9179,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => {
-                    fetchAnnouncements();
+                    fetchAnnouncements(true);
                   }}
                   disabled={isLoadingAnnouncements}
                   className="px-2.5 py-1 rounded-full text-[11px] font-medium border transition-opacity hover:opacity-75 disabled:opacity-50"
@@ -9123,7 +9221,9 @@ export default function Home() {
                   </p>
                   <button
                     type="button"
-                    onClick={fetchAnnouncements}
+                    onClick={() => {
+                      fetchAnnouncements(true);
+                    }}
                     className="px-3.5 py-1.5 rounded-lg text-xs font-medium border transition-opacity hover:opacity-80"
                     style={{
                       backgroundColor: activeTheme.bgCard,
@@ -10294,7 +10394,7 @@ export default function Home() {
                     第1条（目的・適用範囲）
                   </h3>
                   <p className="text-[11px] leading-relaxed">
-                    本規約は、ライトNote運営者（以下「運営者」）が提供するWebアプリ「ライトNote」（以下「本サービス」）の利用条件を定めるものです。利用者は、本規約およびプライバシーポリシーに同意のうえ本サービスを利用するものとします。
+                    本規約は、ライトNote開発者（以下「開発者」）が提供するWebアプリ「ライトNote」（以下「本サービス」）の利用条件を定めるものです。利用者は、本規約およびプライバシーポリシーに同意のうえ本サービスを利用するものとします。
                   </p>
                 </section>
 
@@ -10321,7 +10421,7 @@ export default function Home() {
                       本サービスはメールアドレスを収集しない設計のため、パスワード再設定には登録時に発行される「復旧キー（SEED-XXXX-XXXX）」が唯一の手段となります。復旧キーは本サービス内にメモせず、スクリーンショット等で別の安全な場所に保管してください。
                     </li>
                     <li className="font-bold" style={{ color: activeTheme.isDark ? "#f5a398" : "#b85448" }}>
-                      パスワードと復旧キーの両方を紛失された場合、本人確認手段がないため、運営者であってもパスワードの再設定やアカウントの復旧は一切行えません。
+                      パスワードと復旧キーの両方を紛失された場合、本人確認手段がないため、開発者であってもパスワードの再設定やアカウントの復旧は一切行えません。
                     </li>
                   </ul>
                 </section>
@@ -10361,7 +10461,7 @@ export default function Home() {
                       利用者は、設定画面内の「アカウントを削除する」機能から所定の手続きを行うことで、いつでもアカウントを削除できます。削除されたアカウントおよびクラウド上のデータは復旧できません。
                     </li>
                     <li>
-                      運営者は、利用者が第5条に違反した場合、事前の通知なく当該アカウントの利用停止または削除等の措置を取ることができるものとします。
+                      開発者は、利用者が第5条に違反した場合、事前の通知なく当該アカウントの利用停止または削除等の措置を取ることができるものとします。
                     </li>
                   </ul>
                 </section>
@@ -10372,7 +10472,7 @@ export default function Home() {
                     第7条（サービスの変更・中断・終了）
                   </h3>
                   <p className="text-[11px] leading-relaxed">
-                    運営者は、メンテナンス、通信障害、利用している外部基盤（Vercel・Supabase等）の障害や仕様変更、その他運営上の理由により、事前の予告なく本サービスの内容変更、一時中断、または終了を行う場合があります。
+                    開発者は、メンテナンス、通信障害、利用している外部基盤（Vercel・Supabase等）の障害や仕様変更、その他運用上の理由により、事前の予告なく本サービスの内容変更、一時中断、または終了を行う場合があります。
                   </p>
                 </section>
 
@@ -10383,10 +10483,10 @@ export default function Home() {
                   </h3>
                   <ul className="list-disc pl-4 space-y-1 text-[11px] leading-relaxed">
                     <li>
-                      運営者は、本サービスに事実上または法律上の瑕疵（安全性、信頼性、正確性、特定目的への適合性等）がないことを明示的にも黙示的にも保証しません。
+                      開発者は、本サービスに事実上または法律上の瑕疵（安全性、信頼性、正確性、特定目的への適合性等）がないことを明示的にも黙示的にも保証しません。
                     </li>
                     <li>
-                      運営者の故意または重大な過失による場合を除き、本サービスの利用、停止、変更、終了、またはアカウント削除・データ消失等によって利用者に生じた損害について、運営者は責任を負いません。大切な記録は利用者ご自身でもコピー等で控えを保管することを推奨します。
+                      開発者の故意または重大な過失による場合を除き、本サービスの利用、停止、変更、終了、またはアカウント削除・データ消失等によって利用者に生じた損害について、開発者は責任を負いません。大切な記録は利用者ご自身でもコピー等で控えを保管することを推奨します。
                     </li>
                   </ul>
                 </section>
@@ -10397,7 +10497,7 @@ export default function Home() {
                     第9条（知的財産権）
                   </h3>
                   <p className="text-[11px] leading-relaxed">
-                    本サービスのデザイン・プログラム・ロゴ等に関する権利は運営者または正当な権利者に帰属します。利用者が本サービスに記録したメモ内容の権利は、利用者本人に帰属します。
+                    本サービスのデザイン・プログラム・ロゴ等に関する権利は開発者または正当な権利者に帰属します。利用者が本サービスに記録したメモ内容の権利は、利用者本人に帰属します。
                   </p>
                 </section>
 
@@ -10408,7 +10508,7 @@ export default function Home() {
                   </h3>
                   <ul className="list-disc pl-4 space-y-1 text-[11px] leading-relaxed">
                     <li>
-                      運営者は、必要と判断した場合には本規約を変更できます。変更後の規約は本サービス上に表示された時点で効力を生じるものとします。
+                      開発者は、必要と判断した場合には本規約を変更できます。変更後の規約は本サービス上に表示された時点で効力を生じるものとします。
                     </li>
                     <li>
                       本規約の解釈にあたっては日本法を準拠法とし、本サービスに関して紛争が生じた場合には、東京地方裁判所を第一審の専属的合意管轄裁判所とします。
@@ -10473,7 +10573,7 @@ export default function Home() {
                   }}
                 >
                   <div>制定日：2026年11月12日</div>
-                  <div>運営者：ライトNote運営者</div>
+                  <div>開発者：ライトNote開発者</div>
                   <div>お問い合わせ：app746.tahry@gmail.com</div>
                 </section>
               </div>
@@ -10629,7 +10729,7 @@ export default function Home() {
                     アカウントの削除を行った場合は、アカウントに関するすべての情報が削除されます。
                   </p>
                   <p>
-                    運営者の故意または重大な過失による場合を除き、これによって損害が生じた場合、運営は責任を負いません。また、削除後のアカウントの復旧は不可能です。
+                    開発者の故意または重大な過失による場合を除き、これによって損害が生じた場合、開発者は責任を負いません。また、削除後のアカウントの復旧は不可能です。
                   </p>
                   <p className="font-bold pt-0.5">
                     本当にアカウントを削除しますか？
