@@ -890,6 +890,31 @@ const generateRecoveryKey = (): string => {
   return `SEED-${part1}-${part2}`;
 };
 
+const MAX_NOTE_TITLE_LENGTH = 100;
+const MAX_NOTE_CONTENT_LENGTH = 10000;
+const NOTE_LENGTH_WARN_THRESHOLD = 8000;
+const NOTE_TITLE_WARN_THRESHOLD = 80;
+const MAX_CATEGORY_NAME_LENGTH = 30;
+const MAX_USERNAME_LENGTH = 30;
+const MAX_PASSWORD_LENGTH = 64;
+
+// 絵文字（サロゲートペア）を途中で切断しない安全な文字数カット
+const truncateByCodePoints = (text: string, maxLength: number): string => {
+  const chars = Array.from(text);
+  return chars.length > maxLength ? chars.slice(0, maxLength).join("") : text;
+};
+
+// localStorage の容量超過等でも後続の画面更新・クラウド同期を止めない安全な保存ヘルパー
+const safeSetLocalStorage = (key: string, value: string): void => {
+  try {
+    localStorage.setItem(key, value);
+  } catch (e) {
+    console.warn(`localStorage保存スキップ (${key}):`, e);
+  }
+};
+type NoteCollapseLines = 0 | 5 | 8 | 12;
+type SyncStatus = "idle" | "syncing" | "offline" | "error";
+
 // Supabase DB用ユーザー設定・カテゴリ同期レコード定義
 interface DbUserSettingsRow {
   user_id: string;
@@ -899,6 +924,7 @@ interface DbUserSettingsRow {
   button_size: ButtonSize | null;
   font_family?: FontFamily | null;
   note_font?: NoteFontFamily | null;
+  note_collapse_lines?: NoteCollapseLines | null;
   enable_toast: boolean | null;
   confirm_discard: boolean | null;
   recovery_key?: string | null;
@@ -967,6 +993,12 @@ const HELP_ITEMS = [
           ）でも素早く保存できます。
         </p>
         <div className="pt-1.5 border-t" style={{ borderColor: "rgba(128, 128, 128, 0.22)" }}>
+          <strong className="block mb-1">文字数の目安：</strong>
+          <p className="text-xs">
+            1件あたりタイトルは100文字、本文・追記・訂正は各10,000文字まで保存できます。8,000文字を超えると入力欄に控えめな文字数カウンターが表示されます。
+          </p>
+        </div>
+        <div className="pt-1.5 border-t" style={{ borderColor: "rgba(128, 128, 128, 0.22)" }}>
           <strong className="block mb-1">保存通知について：</strong>
           <p>
             メモを保存した時に、画面の下に「保存しました」という小さな通知を表示できます。「ちゃんと保存されたかな？」と安心したい時におすすめです。通知が不要な場合は、メニューの「設定」からOFFにすることもできます。
@@ -982,12 +1014,12 @@ const HELP_ITEMS = [
       <div className="space-y-2.5">
         <div className="space-y-1.5">
           <strong className="block mb-0.5">カテゴリの作成：</strong>
-          <p>「日記」「仕事」「勉強」など、自分の好きなカテゴリを自由に作れます。一度使ったカテゴリは候補として表示されるので、次からはワンタップで選べます。</p>
+          <p>「日記」「仕事」「勉強」など、自分の好きなカテゴリを自由に作れます（30文字まで）。一度使ったカテゴリは候補として表示されるので、次からはワンタップで選べます。</p>
           <div
             className="px-2.5 py-1.5 rounded-lg text-xs leading-relaxed"
             style={{ backgroundColor: "rgba(128, 128, 128, 0.1)" }}
           >
-            💡 <strong>ヒント：</strong> カテゴリ名に「💼 仕事」「🌱 アイデア」のように絵文字をつけると、一覧でパッと見分けやすくなります！
+            💡 <strong>アドバイス：</strong> カテゴリ名に「💼 仕事」「🌱 アイデア」のように絵文字をつけると、一覧でパッと見分けやすくなります！
           </div>
         </div>
         <div className="pt-1.5 border-t" style={{ borderColor: "rgba(128, 128, 128, 0.22)" }}>
@@ -1055,7 +1087,7 @@ const HELP_ITEMS = [
           メモカード右上の「…」メニューから「💬 追記する」を選ぶと、過去のメモの下にタイムスタンプ付きで思考の続きを書き足せます。
         </p>
         <p>
-          追記は普段折りたたまれており、タップして開いたり閉じたりできます。
+          追記は普段折りたたまれており、タップして開いたり閉じたりできます。追記の文字数上限は10,000文字です。
         </p>
       </div>
     ),
@@ -1066,12 +1098,12 @@ const HELP_ITEMS = [
     content: (
       <div className="space-y-2 text-xs">
         <p>
-          メモカード右上の「…」メニューから「🏷️ タイトル・カテゴリの変更」を選ぶと、見出しやカテゴリを後から整理できます。
+          メモカード右上の「…」メニューから「🏷️ タイトル・カテゴリの変更」を選ぶと、タイトルとカテゴリを後から変更できます。タイトルの文字数上限は100文字です。
         </p>
         <div className="pt-1.5 border-t" style={{ borderColor: "rgba(128, 128, 128, 0.22)" }}>
           <strong className="block mb-0.5">本文の訂正について：</strong>
           <p>
-            ライトNoteでは、過去の思考をありのまま残す設計のため、本文を直接消して完全削除や上書きすることはできませんが、「<strong>✏️ 本文を訂正する</strong>」から過去の文を履歴として残したまま内容を訂正できます（続きを書き足したい時は「💬 追記する」をご利用ください）。
+            ライトNoteでは、過去の思考をありのまま残す設計のため、本文を直接消して完全削除や上書きすることはできませんが、「<strong>✏️ 本文を訂正する</strong>」から過去の文を履歴として残したまま内容を訂正できます。続きを書き足したい時は「💬 追記する」のご利用がおすすめです。本文の文字数上限は10,000文字です。
           </p>
         </div>
         <div className="pt-1.5 border-t" style={{ borderColor: "rgba(128, 128, 128, 0.22)" }}>
@@ -1103,7 +1135,7 @@ const HELP_ITEMS = [
     content: (
       <div className="space-y-2 text-xs">
         <p>
-          書いたメモに鍵をかけると、普段は文字数・改行どおりに「・」で伏せ字表示され、専用の鍵パスワード（4文字以上）を入力した時だけ読めるようになります。
+          書いたメモに鍵をかけると、普段は文字数・改行どおりに「・」で伏せ字表示され、専用の鍵パスワード（4〜64文字）を入力した時だけ読めるようになります。
         </p>
         <ul className="list-disc pl-5 space-y-1">
           <li><strong>かけ方・外し方：</strong> 新規入力欄下部の「🔒 鍵をつける」ボタン、または保存済みメモ右上の「…」メニューから「🔒 鍵をかける / 🔓 鍵を外す」で切り替えられます。</li>
@@ -1146,11 +1178,12 @@ const HELP_ITEMS = [
         <ul className="list-disc pl-5 space-y-1">
           <li><strong>🎨 テーマカラー・明るさ：</strong> クリーム系などのライトモード・目に優しいダークモードやアクセントカラーを変更できます。</li>
           <li><strong>📏 文字・ボタンの大きさ：</strong> 「標準」「大きめ」から読みやすい・押しやすいサイズを選べます。</li>
+          <li><strong>📄 長文メモの折りたたみ：</strong> 一覧やゴミ箱で長いメモを折りたたむ行数（なし / 5行 / 8行 / 12行）を設定できます。</li>
           <li><strong>✒️ 文字フォント・メモ専用フォント：</strong> アプリ全体の書体と、メモ本文の書体（ゴシック・手書き風・明朝など）を別々に変更できます。</li>
           <li><strong>🔔 保存時通知・編集破棄の確認：</strong> 保存時のトースト表示や、変更途中で閉じる際の確認ダイアログをON/OFFできます。</li>
           <li><strong>⏰ 時間帯の設定：</strong> 朝・昼・夕方・夜・深夜といった時間帯の区切り時刻を、自分の生活リズムに合わせて自由に調整できます。</li>
           <li><strong>🔐 鍵付きメモ設定：</strong> 鍵メモ専用パスワードの設定・変更・再設定や、ロック中のタイトル表示、自動で隠すタイミングを設定できます。</li>
-          <li><strong>👤 アカウント・クラウド同期：</strong> ユーザー名（ID）とパスワードだけでスマホやPC間のメモ・設定を自動同期できます（復旧キーの確認も可能です）。</li>
+          <li><strong>👤 アカウント・クラウド同期：</strong> ユーザー名（ID・半角英数字30文字まで）とパスワード（6〜64文字）だけでスマホやPC間のメモ・設定を自動同期できます（復旧キーの確認も可能です）。</li>
         </ul>
       </div>
     ),
@@ -1170,7 +1203,11 @@ const HELP_ITEMS = [
         </div>
         <div className="p-2.5 rounded-xl" style={{ backgroundColor: "rgba(128, 128, 128, 0.08)" }}>
           <p className="font-bold text-xs">Q. 保存容量の上限はありますか？</p>
-          <p className="mt-1 text-xs opacity-85">A. 現在は自動で古いメモを消去する仕組みはなく、入力したメモが勝手に消えることはありません。保存容量の目安はメニューの「設定」から確認できます（将来の運用ルール変更については利用規約第4条をご確認ください）。</p>
+          <p className="mt-1 text-xs opacity-85">A. 1件あたりタイトル100文字・本文（および追記・訂正）各10,000文字の上限があります。現在、合計件数による自動消去はなく、入力したメモが勝手に消えることはありません（将来の運用ルール変更については利用規約第4条をご確認ください）。</p>
+        </div>
+        <div className="p-2.5 rounded-xl" style={{ backgroundColor: "rgba(128, 128, 128, 0.08)" }}>
+          <p className="font-bold text-xs">Q. オフラインや電波が悪い場所でもメモを書けますか？</p>
+          <p className="mt-1 text-xs opacity-85">A. はい、書けます。書いたメモはまずお使いの端末内に安全に保存されるため、電波が不安定な場所でもメモが消える心配はありません。通信が回復するとクラウドへの同期を行えます。</p>
         </div>
         <div className="p-2.5 rounded-xl" style={{ backgroundColor: "rgba(128, 128, 128, 0.08)" }}>
           <p className="font-bold text-xs">Q. なぜアプリを開いた瞬間に入力画面が出るのですか？</p>
@@ -1217,6 +1254,122 @@ const HELP_ITEMS = [
   },
 ];
 
+const COLLAPSE_LINE_CLASS: Record<Exclude<NoteCollapseLines, 0>, string> = {
+  5: "line-clamp-5",
+  8: "line-clamp-8",
+  12: "line-clamp-12",
+};
+
+// 一覧・ゴミ箱共通の折りたたみ対応メモ本文表示
+function CollapsibleNoteBody({
+  text,
+  maxLines,
+  isExpanded,
+  onToggle,
+  className = "",
+  style,
+  accentColor,
+  isMasked = false,
+}: {
+  text: string;
+  maxLines: NoteCollapseLines;
+  isExpanded: boolean;
+  onToggle: () => void;
+  className?: string;
+  style?: React.CSSProperties;
+  accentColor: string;
+  isMasked?: boolean;
+}) {
+  const pRef = useRef<HTMLParagraphElement | null>(null);
+  const [needsCollapse, setNeedsCollapse] = useState(false);
+
+  const shouldClamp = maxLines > 0 && !isMasked && !isExpanded;
+
+  useEffect(() => {
+    if (maxLines === 0 || isMasked || isExpanded) return;
+
+    const measure = () => {
+      const el = pRef.current;
+      if (!el) return;
+      setNeedsCollapse(el.scrollHeight > el.clientHeight + 2);
+    };
+
+    const rafId = requestAnimationFrame(measure);
+    window.addEventListener("resize", measure);
+    return () => {
+      cancelAnimationFrame(rafId);
+      window.removeEventListener("resize", measure);
+    };
+  }, [text, maxLines, isExpanded, isMasked]);
+
+  const clampClass = shouldClamp
+    ? COLLAPSE_LINE_CLASS[maxLines as Exclude<NoteCollapseLines, 0>]
+    : "";
+
+  return (
+    <div>
+      <p ref={pRef} className={`${className} ${clampClass}`} style={style}>
+        {text}
+      </p>
+      {maxLines > 0 && !isMasked && needsCollapse && (
+        <button
+          type="button"
+          onClick={onToggle}
+          className="mt-1.5 text-xs font-bold hover:opacity-75 transition-opacity inline-flex items-center gap-1"
+          style={{ color: accentColor }}
+        >
+          {isExpanded ? "▲ 折りたたむ" : "▼ 続きを読む"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// 文字数カウンター＆上限到達時の控えめな警告表示
+function LengthLimitHint({
+  length,
+  maxLength,
+  warnThreshold,
+  kind,
+  theme,
+}: {
+  length: number;
+  maxLength: number;
+  warnThreshold: number;
+  kind: "title" | "body";
+  theme: ThemePalette;
+}) {
+  const isAtLimit = length >= maxLength;
+  const shouldShowCounter =
+    kind === "title" ? length >= warnThreshold : length > warnThreshold;
+
+  if (!isAtLimit && !shouldShowCounter) return null;
+
+  const warningColor = theme.isDark ? "#f0a868" : "#b45309";
+  const warningText =
+    kind === "title"
+      ? `⚠️ タイトルの文字制限の上限（${maxLength.toLocaleString()}文字）に達しました。`
+      : `⚠️ 一度のメモに記入できる文字制限の上限（${maxLength.toLocaleString()}文字）に達しました。`;
+
+  return (
+    <div className="mt-1 flex items-center justify-between gap-2 flex-wrap select-none">
+      {isAtLimit ? (
+        <span className="text-[11px] font-medium leading-snug" style={{ color: warningColor }}>
+          {warningText}
+        </span>
+      ) : (
+        <span />
+      )}
+      <span
+        className="text-[10px] font-mono ml-auto"
+        style={{ color: isAtLimit ? warningColor : theme.textSecondary }}
+      >
+        {length.toLocaleString()} / {maxLength.toLocaleString()}
+      </span>
+    </div>
+  );
+}
+
 // 認証モーダル共通のユーザー名（ID）入力欄
 function AuthUsernameField({
   value,
@@ -1243,12 +1396,13 @@ function AuthUsernameField({
           className="text-[10px] font-normal"
           style={{ color: theme.textSecondary }}
         >
-          ※半角英数字のみ
+          ※半角英数字のみ（{MAX_USERNAME_LENGTH}文字まで）
         </span>
       </label>
       <input
         type="text"
         placeholder={placeholder}
+        maxLength={MAX_USERNAME_LENGTH}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         autoCapitalize="none"
@@ -1380,6 +1534,8 @@ export default function Home() {
   const [editingContentNote, setEditingContentNote] = useState<Note | null>(null);
   const [editContentInput, setEditContentInput] = useState("");
   const [expandedHistoryNoteIds, setExpandedHistoryNoteIds] = useState<string[]>([]);
+  const [expandedBodyNoteIds, setExpandedBodyNoteIds] = useState<string[]>([]);
+  const [noteCollapseLines, setNoteCollapseLines] = useState<NoteCollapseLines>(8);
 
   // 検索・絞り込みパネルとお気に入りのState
   const [isSearchPanelOpen, setIsSearchPanelOpen] = useState(false);
@@ -1439,6 +1595,7 @@ export default function Home() {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [isAuthLoading, setIsAuthLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
 
   // アカウント削除確認モーダルのState
   const [isDeleteAccountModalOpen, setIsDeleteAccountModalOpen] = useState(false);
@@ -1598,6 +1755,13 @@ export default function Home() {
       const savedNoteFont = localStorage.getItem("seednote_note_font") as NoteFontFamily | null;
       if (savedNoteFont && ["sans", "klee", "yomogi", "mincho", "mono"].includes(savedNoteFont)) {
         setNoteFont(savedNoteFont);
+      }
+      const savedCollapseLines = localStorage.getItem("seednote_note_collapse_lines");
+      if (savedCollapseLines !== null) {
+        const parsedCollapse = Number(savedCollapseLines);
+        if (parsedCollapse === 0 || parsedCollapse === 5 || parsedCollapse === 8 || parsedCollapse === 12) {
+          setNoteCollapseLines(parsedCollapse);
+        }
       }
       const savedReadAnnouncementIds = localStorage.getItem("seednote_read_announcement_ids");
       if (savedReadAnnouncementIds) {
@@ -2087,6 +2251,7 @@ export default function Home() {
     themeBrightness,
     fontFamily,
     noteFont,
+    noteCollapseLines,
   });
 
   useEffect(() => {
@@ -2101,6 +2266,7 @@ export default function Home() {
       themeBrightness,
       fontFamily,
       noteFont,
+      noteCollapseLines,
     };
   }, [
     categoriesList,
@@ -2113,12 +2279,15 @@ export default function Home() {
     themeBrightness,
     fontFamily,
     noteFont,
+    noteCollapseLines,
   ]);
 
   // 設定のクラウド保存用デバウンスタイマー
   const cloudSettingsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // 新規登録処理中のonAuthStateChange競合を防止するフラグ
   const isSigningUpRef = useRef(false);
+  // ログイン処理中のonAuthStateChange二重同期を防止するフラグ
+  const isAuthSyncingRef = useRef(false);
 
   // ユーザー設定・カテゴリの変更をクラウドへ保存（デバウンス対応）
   const saveCloudSettings = (
@@ -2129,6 +2298,7 @@ export default function Home() {
       button_size: ButtonSize;
       font_family: FontFamily;
       note_font: NoteFontFamily;
+      note_collapse_lines: NoteCollapseLines;
       enable_toast: boolean;
       confirm_discard: boolean;
       theme_hue: ColorHue;
@@ -2141,7 +2311,7 @@ export default function Home() {
     const doSave = async () => {
       try {
         const cur = latestSettingsRef.current;
-        await supabase.from("user_settings").upsert({
+        const basePayload = {
           user_id: currentUser.id,
           categories: partial.categories ?? serializeCategoryItems(cur.categoriesList),
           time_slots: partial.time_slots ?? cur.timeSlots,
@@ -2154,7 +2324,15 @@ export default function Home() {
           theme_hue: partial.theme_hue ?? cur.selectedHue,
           theme_brightness: partial.theme_brightness ?? cur.themeBrightness,
           updated_at: new Date().toISOString(),
+        };
+        const { error } = await supabase.from("user_settings").upsert({
+          ...basePayload,
+          note_collapse_lines: partial.note_collapse_lines ?? cur.noteCollapseLines,
         });
+        if (error && error.message?.includes("note_collapse_lines")) {
+          // note_collapse_lines カラム未追加のDB環境でも他設定を確実に同期するフォールバック
+          await supabase.from("user_settings").upsert(basePayload);
+        }
       } catch (e) {
         console.error("設定のクラウド保存エラー", e);
       }
@@ -2189,47 +2367,101 @@ export default function Home() {
 
   // クラウド（Supabase）からメモを取得＆ローカルメモの自動引き継ぎ
   const fetchCloudNotes = async (userId: string, currentLocalNotes?: Note[]) => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      setSyncStatus("offline");
+      return;
+    }
     setIsSyncing(true);
+    setSyncStatus("syncing");
     try {
-      const { data, error } = await supabase
+      const fetchPromise = supabase
         .from("notes")
         .select("*")
         .order("created_at", { ascending: false });
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("SYNC_TIMEOUT")), 10000)
+      );
+      const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
 
       if (error) {
         console.error("クラウドメモの取得に失敗しました", error);
+        setSyncStatus(typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "error");
         return;
       }
 
       if (data) {
         const cloudNotes: Note[] = (data as DbNoteRow[]).map(mapDbRowToNote);
-        const baseLocalNotes = currentLocalNotes ?? notes;
+        // クロージャ内の古い state ではなく localStorage から最新のローカルメモを取得して引き継ぐ
+        let baseLocalNotes: Note[] = currentLocalNotes ?? [];
+        if (!currentLocalNotes) {
+          try {
+            const savedItems = localStorage.getItem("seednote_items");
+            if (savedItems) {
+              const parsed = JSON.parse(savedItems);
+              if (Array.isArray(parsed)) {
+                baseLocalNotes = parsed;
+              }
+            }
+          } catch {
+            baseLocalNotes = notes;
+          }
+        }
 
-        // クラウドノート側で、もしローカルに訂正履歴があってクラウド側が空または古い場合はローカル履歴を保護
+        // クラウドノート側で、オフライン中に行われた訂正（本文+履歴）や追記（replies）が未反映ならローカルを保護＆自己修復
+        const notesToRepairInCloud: { id: string; payload: Record<string, unknown> }[] = [];
         const protectedCloudNotes = cloudNotes.map((cn) => {
           const loc = baseLocalNotes.find((l) => l.id === cn.id);
-          if (loc?.editHistory && loc.editHistory.length > 0) {
-            const cloudCount = cn.editHistory?.length || 0;
-            if (cloudCount < loc.editHistory.length) {
-              return { ...cn, editHistory: loc.editHistory };
+          if (!loc) return cn;
+
+          let nextNote = cn;
+          const repairPayload: Record<string, unknown> = {};
+
+          // 1. 本文の訂正・履歴の保護
+          const locHistoryCount = loc.editHistory?.length || 0;
+          const cloudHistoryCount = cn.editHistory?.length || 0;
+          if (locHistoryCount > cloudHistoryCount && loc.editHistory) {
+            nextNote = {
+              ...nextNote,
+              content: loc.content,
+              editHistory: loc.editHistory,
+            };
+            repairPayload.content = loc.content;
+            repairPayload.edit_history = loc.editHistory;
+          }
+
+          // 2. 追記（replies）のID単位マージ＆保護
+          const locReplies = loc.replies || [];
+          const cloudReplies = cn.replies || [];
+          if (locReplies.length > 0) {
+            const cloudReplyIds = new Set(cloudReplies.map((r) => r.id));
+            const missingInCloud = locReplies.filter((r) => !cloudReplyIds.has(r.id));
+            if (missingInCloud.length > 0) {
+              const replyMap = new Map<string, NoteReply>();
+              [...cloudReplies, ...locReplies].forEach((r) => replyMap.set(r.id, r));
+              const mergedReplies = Array.from(replyMap.values()).sort(
+                (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+              );
+              nextNote = { ...nextNote, replies: mergedReplies };
+              repairPayload.replies = mergedReplies;
             }
           }
-          return cn;
+
+          if (Object.keys(repairPayload).length > 0) {
+            notesToRepairInCloud.push({ id: cn.id, payload: repairPayload });
+          }
+
+          return nextNote;
         });
 
-        // ローカルの履歴がクラウドに未反映だった場合はバックグラウンドでクラウド側も更新（自己修復）
-        protectedCloudNotes.forEach((cn) => {
-          const loc = baseLocalNotes.find((l) => l.id === cn.id);
-          if (loc?.editHistory && loc.editHistory.length > 0) {
-            const rawCloudCount = (cloudNotes.find((c) => c.id === cn.id)?.editHistory || []).length;
-            if (rawCloudCount < loc.editHistory.length) {
-              supabase
-                .from("notes")
-                .update({ edit_history: loc.editHistory })
-                .eq("id", cn.id)
-                .then();
-            }
-          }
+        // ローカルの未反映変更をバックグラウンドでクラウド側へ自己修復
+        notesToRepairInCloud.forEach(({ id, payload }) => {
+          supabase
+            .from("notes")
+            .update(payload)
+            .eq("id", id)
+            .then(({ error: repairErr }) => {
+              if (repairErr) console.warn("クラウド自己修復エラー:", repairErr.message);
+            });
         });
 
         // ローカルにしか存在しないメモがあれば、クラウドにアップロード（引き継ぎ）
@@ -2279,9 +2511,11 @@ export default function Home() {
         const noteCatIds = new Set(migratedNotes.flatMap((n) => n.categories || []));
         const noteCatItems = updatedCatalog.filter((c) => noteCatIds.has(c.id));
         fetchUserSettings(userId, noteCatItems);
+        setSyncStatus("idle");
       }
     } catch (e) {
       console.error("同期処理中にエラーが発生しました", e);
+      setSyncStatus(typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "error");
     } finally {
       setIsSyncing(false);
     }
@@ -2404,6 +2638,15 @@ export default function Home() {
           setNoteFont(row.note_font);
           localStorage.setItem("seednote_note_font", row.note_font);
         }
+        if (
+          row.note_collapse_lines === 0 ||
+          row.note_collapse_lines === 5 ||
+          row.note_collapse_lines === 8 ||
+          row.note_collapse_lines === 12
+        ) {
+          setNoteCollapseLines(row.note_collapse_lines);
+          localStorage.setItem("seednote_note_collapse_lines", String(row.note_collapse_lines));
+        }
 
         // 鍵付きメモ設定の同期
         if (typeof row.lock_password_hash === "string" && row.lock_password_hash) {
@@ -2481,8 +2724,12 @@ export default function Home() {
     }
   };
 
-  // 初回ロード時にSupabaseセッションを復元＆状態変化を監視
+  // 初回ロード時にSupabaseセッションを復元＆状態変化・オンライン復帰を監視
   useEffect(() => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      setSyncStatus("offline");
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       const u = session?.user ?? null;
       setCurrentUser(u);
@@ -2497,7 +2744,7 @@ export default function Home() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (isSigningUpRef.current) return;
+      if (isSigningUpRef.current || isAuthSyncingRef.current) return;
       const u = session?.user ?? null;
       setCurrentUser(u);
       if (u) {
@@ -2510,8 +2757,28 @@ export default function Home() {
       }
     });
 
+    const handleOnline = () => {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        const u = session?.user ?? null;
+        if (u) {
+          fetchCloudNotes(u.id);
+          fetchUserSettings(u.id);
+        } else {
+          setSyncStatus("idle");
+        }
+      });
+    };
+    const handleOffline = () => {
+      setSyncStatus("offline");
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
     return () => {
       subscription.unsubscribe();
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
     };
   }, []);
 
@@ -2559,8 +2826,16 @@ export default function Home() {
       setAuthError("ユーザー名は半角英数字（またはピリオド・ハイフン・アンダースコア）で入力してください");
       return;
     }
+    if (username.length > MAX_USERNAME_LENGTH) {
+      setAuthError(`ユーザー名は${MAX_USERNAME_LENGTH}文字以内で入力してください`);
+      return;
+    }
     if (!password) {
       setAuthError("パスワードを入力してください");
+      return;
+    }
+    if (password.length > MAX_PASSWORD_LENGTH) {
+      setAuthError(`パスワードは${MAX_PASSWORD_LENGTH}文字以内で入力してください`);
       return;
     }
     if (password.length < 6) {
@@ -2592,34 +2867,39 @@ export default function Home() {
 
     try {
       if (authMode === "login") {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: internalEmail,
-          password: password,
-        });
-        if (error) {
-          if (error.message.includes("Invalid login credentials")) {
-            setAuthError("ユーザー名またはパスワードが正しくありません");
-          } else {
-            setAuthError(`ログインに失敗しました: ${error.message}`);
+        isAuthSyncingRef.current = true;
+        try {
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email: internalEmail,
+            password: password,
+          });
+          if (error) {
+            if (error.message.includes("Invalid login credentials")) {
+              setAuthError("ユーザー名またはパスワードが正しくありません");
+            } else {
+              setAuthError(`ログインに失敗しました: ${error.message}`);
+            }
+            return;
           }
-          return;
-        }
-        if (data.user) {
-          setCurrentUser(data.user);
-          setCurrentUsername(username);
-          setAuthSuccessMsg("ログインしました！同期を開始します...");
-          await fetchCloudNotes(data.user.id, notes);
-          await fetchUserSettings(data.user.id);
-          setTimeout(() => {
-            setIsAuthModalOpen(false);
-            setAuthUsernameInput("");
-            setAuthPasswordInput("");
-            setAuthPasswordConfirmInput("");
-            setShowPassword(false);
-            setShowPasswordConfirm(false);
-            setAuthSuccessMsg(null);
-            setAgreedToTerms(false);
-          }, 800);
+          if (data.user) {
+            setCurrentUser(data.user);
+            setCurrentUsername(username);
+            setAuthSuccessMsg("ログインしました！同期を開始します...");
+            await fetchCloudNotes(data.user.id, notes);
+            await fetchUserSettings(data.user.id);
+            setTimeout(() => {
+              setIsAuthModalOpen(false);
+              setAuthUsernameInput("");
+              setAuthPasswordInput("");
+              setAuthPasswordConfirmInput("");
+              setShowPassword(false);
+              setShowPasswordConfirm(false);
+              setAuthSuccessMsg(null);
+              setAgreedToTerms(false);
+            }, 800);
+          }
+        } finally {
+          isAuthSyncingRef.current = false;
         }
       } else {
         // 新規登録（onAuthStateChangeとの競合による復旧キー上書きを防止）
@@ -2712,6 +2992,10 @@ export default function Home() {
       setAuthError("ユーザー名を入力してください");
       return;
     }
+    if (username.length > MAX_USERNAME_LENGTH) {
+      setAuthError(`ユーザー名は${MAX_USERNAME_LENGTH}文字以内で入力してください`);
+      return;
+    }
     if (!recoveryKeyInput) {
       setAuthError("復旧キーを入力してください");
       return;
@@ -2720,8 +3004,8 @@ export default function Home() {
       setAuthError("新しいパスワードを入力してください");
       return;
     }
-    if (password.length < 6) {
-      setAuthError("パスワードは6文字以上で設定してください");
+    if (password.length < 6 || password.length > MAX_PASSWORD_LENGTH) {
+      setAuthError(`パスワードは6〜${MAX_PASSWORD_LENGTH}文字で設定してください`);
       return;
     }
     if (!confirmPass) {
@@ -2997,7 +3281,7 @@ export default function Home() {
 
   // 新規カテゴリの追加処理（固有IDを返す）
   const handleAddCategory = (name: string): string | null => {
-    const trimmed = name.trim();
+    const trimmed = truncateByCodePoints(name.trim(), MAX_CATEGORY_NAME_LENGTH);
     if (!trimmed) return null;
 
     // 予約語のチェック（「すべてのメモ」「未分類」およびダブルクォーテーション付き）
@@ -3070,7 +3354,7 @@ export default function Home() {
     const serialized = serializeCategoryItems(updatedCategories);
     setCategoriesList(updatedCategories);
     latestSettingsRef.current.categoriesList = updatedCategories;
-    localStorage.setItem("seednote_categories", JSON.stringify(serialized));
+    safeSetLocalStorage("seednote_categories", JSON.stringify(serialized));
     saveCloudSettings({ categories: serialized }, true);
 
     // 選択中カテゴリ・検索フィルタからも除外
@@ -3094,7 +3378,7 @@ export default function Home() {
       return note;
     });
     setNotes(updatedNotes);
-    localStorage.setItem("seednote_items", JSON.stringify(updatedNotes));
+    safeSetLocalStorage("seednote_items", JSON.stringify(updatedNotes));
 
     if (currentUser && notesToUpdateInCloud.length > 0) {
       notesToUpdateInCloud.forEach((n) => {
@@ -3112,6 +3396,10 @@ export default function Home() {
     const trimmed = renameCategoryInput.trim();
     if (!trimmed) {
       setRenameCategoryError("カテゴリ名を入力してください");
+      return;
+    }
+    if (trimmed.length > MAX_CATEGORY_NAME_LENGTH) {
+      setRenameCategoryError(`カテゴリ名は${MAX_CATEGORY_NAME_LENGTH}文字以内で入力してください`);
       return;
     }
 
@@ -3146,7 +3434,7 @@ export default function Home() {
     const serialized = serializeCategoryItems(updatedCategories);
     setCategoriesList(updatedCategories);
     latestSettingsRef.current.categoriesList = updatedCategories;
-    localStorage.setItem("seednote_categories", JSON.stringify(serialized));
+    safeSetLocalStorage("seednote_categories", JSON.stringify(serialized));
     saveCloudSettings({ categories: serialized }, true);
 
     setCategoryToRename(null);
@@ -3198,7 +3486,7 @@ export default function Home() {
       if (n.id === editingNote.id) {
         return {
           ...n,
-          title: editTitleInput.trim() || undefined,
+          title: truncateByCodePoints(editTitleInput.trim(), MAX_NOTE_TITLE_LENGTH) || undefined,
           categories: editCategories.length > 0 ? editCategories : undefined,
         };
       }
@@ -3206,14 +3494,14 @@ export default function Home() {
     });
 
     setNotes(updatedNotes);
-    localStorage.setItem("seednote_items", JSON.stringify(updatedNotes));
+    safeSetLocalStorage("seednote_items", JSON.stringify(updatedNotes));
 
     // Supabaseに反映
     if (currentUser) {
       supabase
         .from("notes")
         .update({
-          title: editTitleInput.trim() || null,
+          title: truncateByCodePoints(editTitleInput.trim(), MAX_NOTE_TITLE_LENGTH) || null,
           categories: editCategories.length > 0 ? editCategories : [],
         })
         .eq("id", editingNote.id)
@@ -3263,12 +3551,14 @@ export default function Home() {
 
   // メモを保存する処理
   const handleSave = () => {
-    if (!content.trim()) return;
+    const trimmedContent = truncateByCodePoints(content.trim(), MAX_NOTE_CONTENT_LENGTH);
+    if (!trimmedContent) return;
+    const trimmedTitle = truncateByCodePoints(title.trim(), MAX_NOTE_TITLE_LENGTH);
 
     const newNote: Note = {
       id: crypto.randomUUID(),
-      title: title.trim() || undefined,
-      content: content.trim(),
+      title: trimmedTitle || undefined,
+      content: trimmedContent,
       createdAt: new Date().toISOString(),
       isTrash: false,
       categories: selectedCategories.length > 0 ? selectedCategories : undefined,
@@ -3327,7 +3617,7 @@ export default function Home() {
       note.id === id ? { ...note, isTrash: true } : note
     );
     setNotes(updatedNotes);
-    localStorage.setItem("seednote_items", JSON.stringify(updatedNotes));
+    safeSetLocalStorage("seednote_items", JSON.stringify(updatedNotes));
 
     if (currentUser) {
       supabase.from("notes").update({ is_trash: true }).eq("id", id).then();
@@ -3341,7 +3631,7 @@ export default function Home() {
       note.id === id ? { ...note, isTrash: false } : note
     );
     setNotes(updatedNotes);
-    localStorage.setItem("seednote_items", JSON.stringify(updatedNotes));
+    safeSetLocalStorage("seednote_items", JSON.stringify(updatedNotes));
 
     if (currentUser) {
       supabase.from("notes").update({ is_trash: false }).eq("id", id).then();
@@ -3374,6 +3664,20 @@ export default function Home() {
     setButtonSize(size);
     localStorage.setItem("seednote_button_size", size);
     saveCloudSettings({ button_size: size }, true);
+  };
+
+  // 長文メモの折りたたみ行数の切り替え
+  const handleNoteCollapseLinesChange = (lines: NoteCollapseLines) => {
+    setNoteCollapseLines(lines);
+    localStorage.setItem("seednote_note_collapse_lines", String(lines));
+    saveCloudSettings({ note_collapse_lines: lines }, true);
+  };
+
+  // 一覧・ゴミ箱メモ本文の展開・折りたたみ切り替え
+  const handleToggleNoteBody = (noteId: string) => {
+    setExpandedBodyNoteIds((prev) =>
+      prev.includes(noteId) ? prev.filter((id) => id !== noteId) : [...prev, noteId]
+    );
   };
 
   // Ctrl + Enter (または Cmd + Enter) で素早く保存
@@ -3744,8 +4048,8 @@ export default function Home() {
     if (lockModalMode === "setup") {
       const nextPass = lockInput1.trim();
       const confirmPass = lockInput2.trim();
-      if (nextPass.length < 4) {
-        setLockModalError("4文字以上で設定してください");
+      if (nextPass.length < 4 || nextPass.length > MAX_PASSWORD_LENGTH) {
+        setLockModalError(`4〜${MAX_PASSWORD_LENGTH}文字で設定してください`);
         return;
       }
       if (nextPass !== confirmPass) {
@@ -3782,8 +4086,8 @@ export default function Home() {
         setLockModalError("現在のパスワードが正しくありません");
         return;
       }
-      if (nextPass.length < 4) {
-        setLockModalError("新しいパスワードは4文字以上で入力してください");
+      if (nextPass.length < 4 || nextPass.length > MAX_PASSWORD_LENGTH) {
+        setLockModalError(`新しいパスワードは4〜${MAX_PASSWORD_LENGTH}文字で入力してください`);
         return;
       }
       if (nextPass !== confirmPass) {
@@ -3813,8 +4117,8 @@ export default function Home() {
         setLockModalError("アカウントのパスワードを入力してください");
         return;
       }
-      if (nextPass.length < 4) {
-        setLockModalError("新しい鍵パスワードは4文字以上で入力してください");
+      if (nextPass.length < 4 || nextPass.length > MAX_PASSWORD_LENGTH) {
+        setLockModalError(`新しい鍵パスワードは4〜${MAX_PASSWORD_LENGTH}文字で入力してください`);
         return;
       }
       if (nextPass !== confirmPass) {
@@ -3867,10 +4171,11 @@ export default function Home() {
 
   // メモへの追記（リプライ）を保存（大元のメモにぶら下がる不可逆ログ）
   const handleAddReply = (parentNoteId: string) => {
-    if (!replyContent.trim()) return;
+    const trimmedReply = truncateByCodePoints(replyContent.trim(), MAX_NOTE_CONTENT_LENGTH);
+    if (!trimmedReply) return;
     const newReply: NoteReply = {
       id: crypto.randomUUID(),
-      content: replyContent.trim(),
+      content: trimmedReply,
       createdAt: new Date().toISOString(),
     };
     let updatedReplies: NoteReply[] = [];
@@ -3885,7 +4190,7 @@ export default function Home() {
       return n;
     });
     setNotes(updatedNotes);
-    localStorage.setItem("seednote_items", JSON.stringify(updatedNotes));
+    safeSetLocalStorage("seednote_items", JSON.stringify(updatedNotes));
 
     if (currentUser && updatedReplies.length > 0) {
       supabase.from("notes").update({ replies: updatedReplies }).eq("id", parentNoteId).then();
@@ -3966,7 +4271,7 @@ export default function Home() {
   // 本文訂正を保存（思考の不可逆性を保つため過去の文章を履歴として保持）
   const handleSaveContentEdit = async () => {
     if (!editingContentNote) return;
-    const trimmed = editContentInput.trim();
+    const trimmed = truncateByCodePoints(editContentInput.trim(), MAX_NOTE_CONTENT_LENGTH);
     if (!trimmed) return;
 
     // 変更がない場合はそのまま閉じる
@@ -3990,7 +4295,7 @@ export default function Home() {
 
     const newNotes = notes.map((n) => (n.id === updatedNote.id ? updatedNote : n));
     setNotes(newNotes);
-    localStorage.setItem("seednote_items", JSON.stringify(newNotes));
+    safeSetLocalStorage("seednote_items", JSON.stringify(newNotes));
     setEditingContentNote(null);
 
     setToastMessage("✏️ 本文を訂正しました（過去の文章も保存されています）");
@@ -4596,20 +4901,30 @@ export default function Home() {
                   : "max-h-0 opacity-0 mb-0 pointer-events-none"
               }`}
             >
-              <input
-                type="text"
-                placeholder="タイトル（省略可）"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className={`w-full ${
-                  fontSize === "large" ? "px-4 py-2.5 text-base" : "px-3.5 py-2 text-sm"
-                } rounded-xl border focus:outline-none transition-colors`}
-                style={{
-                  backgroundColor: activeTheme.bgSub,
-                  borderColor: activeTheme.border,
-                  color: activeTheme.textPrimary,
-                }}
-              />
+              <div>
+                <input
+                  type="text"
+                  placeholder="タイトル（省略可）"
+                  maxLength={MAX_NOTE_TITLE_LENGTH}
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className={`w-full ${
+                    fontSize === "large" ? "px-4 py-2.5 text-base" : "px-3.5 py-2 text-sm"
+                  } rounded-xl border focus:outline-none transition-colors`}
+                  style={{
+                    backgroundColor: activeTheme.bgSub,
+                    borderColor: activeTheme.border,
+                    color: activeTheme.textPrimary,
+                  }}
+                />
+                <LengthLimitHint
+                  length={title.length}
+                  maxLength={MAX_NOTE_TITLE_LENGTH}
+                  warnThreshold={NOTE_TITLE_WARN_THRESHOLD}
+                  kind="title"
+                  theme={activeTheme}
+                />
+              </div>
             </div>
 
             {/* 本文入力欄（文字はゼロ、薄い鉛筆マークのみ） */}
@@ -4626,6 +4941,7 @@ export default function Home() {
                 ref={noteTextareaRef}
                 rows={tutorialStep === 3 ? 2 : 6}
                 placeholder=""
+                maxLength={MAX_NOTE_CONTENT_LENGTH}
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 onKeyDown={handleKeyDown}
@@ -4637,6 +4953,13 @@ export default function Home() {
                   color: activeTheme.textPrimary,
                   fontFamily: getNoteFontFamilyStyle(noteFont),
                 }}
+              />
+              <LengthLimitHint
+                length={content.length}
+                maxLength={MAX_NOTE_CONTENT_LENGTH}
+                warnThreshold={NOTE_LENGTH_WARN_THRESHOLD}
+                kind="body"
+                theme={activeTheme}
               />
             </div>
 
@@ -4691,6 +5014,7 @@ export default function Home() {
                       <input
                         type="text"
                         placeholder="新しいカテゴリ"
+                        maxLength={MAX_CATEGORY_NAME_LENGTH}
                         value={inlineNewCategoryName}
                         onChange={(e) => setInlineNewCategoryName(e.target.value)}
                         onKeyDown={(e) => {
@@ -4746,9 +5070,10 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={handleSave}
+                    disabled={!content.trim()}
                     className={`${
                       buttonSize === "large" ? "px-7 py-2.5 text-base" : "px-6 py-2 text-sm"
-                    } rounded-xl font-bold transition-all shadow-sm`}
+                    } rounded-xl font-bold transition-all shadow-sm disabled:opacity-45 disabled:cursor-not-allowed`}
                     style={{ backgroundColor: activeTheme.accent, color: activeTheme.accentText }}
                   >
                     保存
@@ -4890,14 +5215,53 @@ export default function Home() {
         {activeTab === "list" && (
           <div className="flex flex-col flex-1 min-h-0 w-full">
             <div className="flex items-center justify-between gap-2 mb-3 pb-2 border-b shrink-0" style={{ borderColor: activeTheme.border }}>
-              <h2
-                className={`${
-                  fontSize === "large" ? "text-xl" : "text-lg"
-                } font-bold`}
-                style={{ color: activeTheme.textPrimary }}
-              >
-                メモ一覧 ({activeNotes.length}件)
-              </h2>
+              <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                <h2
+                  className={`${
+                    fontSize === "large" ? "text-xl" : "text-lg"
+                  } font-bold`}
+                  style={{ color: activeTheme.textPrimary }}
+                >
+                  メモ一覧 ({activeNotes.length}件)
+                </h2>
+                {currentUser && (isSyncing || syncStatus === "syncing") && (
+                  <span
+                    className="text-[11px] px-2 py-0.5 rounded-full border"
+                    style={{
+                      backgroundColor: activeTheme.bgSub,
+                      borderColor: activeTheme.border,
+                      color: activeTheme.textSecondary,
+                    }}
+                  >
+                    🔄 同期中...
+                  </span>
+                )}
+                {currentUser && !isSyncing && (syncStatus === "offline" || syncStatus === "error") && (
+                  <span
+                    className="inline-flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded-full border"
+                    style={{
+                      backgroundColor: activeTheme.bgSub,
+                      borderColor: activeTheme.border,
+                      color: activeTheme.textSecondary,
+                    }}
+                  >
+                    <span>
+                      {syncStatus === "offline" ? "📡 オフライン（端末保存済み）" : "⚠️ 同期保留中"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        fetchCloudNotes(currentUser.id);
+                        fetchUserSettings(currentUser.id);
+                      }}
+                      className="underline font-bold hover:opacity-75"
+                      style={{ color: activeTheme.accent }}
+                    >
+                      再同期
+                    </button>
+                  </span>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => setIsReminderPanelOpen((prev) => !prev)}
@@ -5543,14 +5907,15 @@ export default function Home() {
                             <button
                               type="button"
                               onClick={() => {
-                                const yest = new Date(Date.now() - 86400000);
+                                const yest = new Date();
+                                yest.setDate(yest.getDate() - 1);
                                 setCalendarYear(yest.getFullYear());
                                 setCalendarMonth(yest.getMonth() + 1);
-                                const yesterday = yest.toLocaleDateString("sv-SE");
+                                const yesterday = getLocalYmd(-1);
                                 setFilterDate(filterDate === yesterday ? "" : yesterday);
                               }}
                               className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition-all ${
-                                filterDate === new Date(Date.now() - 86400000).toLocaleDateString("sv-SE")
+                                filterDate === getLocalYmd(-1)
                                   ? "bg-[#3d3731] text-white shadow-xs font-bold"
                                   : "bg-[#f0eade] text-[#5c5348] hover:bg-[#e5ded2]"
                               }`}
@@ -5573,13 +5938,14 @@ export default function Home() {
                   </div>
 
                   {/* ヒット件数 */}
-                  {(filterOnlyFavorite || filterCategories.length > 0 || includeTrashInSearch || searchQuery.trim().length > 0 || filterTimeSlots.length > 0 || Boolean(filterDate)) && (
+                  {(filterOnlyFavorite || filterOnlyLocked || filterCategories.length > 0 || includeTrashInSearch || searchQuery.trim().length > 0 || filterTimeSlots.length > 0 || Boolean(filterDate)) && (
                     <div className="text-[11px] text-[#8a7f72] pt-1 border-t border-[#f4f0e8] flex items-center justify-between">
                       <span>該当するメモ: {displayedNotes.length}件</span>
                       <button
                         type="button"
                         onClick={() => {
                           setFilterOnlyFavorite(false);
+                          setFilterOnlyLocked(false);
                           setFilterCategories([]);
                           setIncludeTrashInSearch(false);
                           setSearchQuery("");
@@ -5655,9 +6021,9 @@ export default function Home() {
                       <div className="flex items-start justify-between gap-2 mb-1.5">
                         <div className="flex items-center gap-2 flex-wrap pr-2 min-w-0 flex-1">
                           <h3
-                            className={`font-bold break-words [overflow-wrap:anywhere] ${
+                            className={`font-bold min-w-0 max-w-full break-all [overflow-wrap:anywhere] ${
                               fontSize === "large" ? "text-base" : "text-sm"
-                            } ${!isContentVisible && maskLockedTitle ? "break-all" : ""}`}
+                            }`}
                             style={{ color: activeTheme.textPrimary }}
                           >
                             {note.title ? (
@@ -5990,7 +6356,13 @@ export default function Home() {
                         </div>
                       )}
 
-                      <p
+                      <CollapsibleNoteBody
+                        text={isContentVisible ? note.content : maskLockedText(note.content)}
+                        maxLines={noteCollapseLines}
+                        isExpanded={expandedBodyNoteIds.includes(note.id)}
+                        onToggle={() => handleToggleNoteBody(note.id)}
+                        isMasked={!isContentVisible}
+                        accentColor={activeTheme.accent}
                         className={`${
                           fontSize === "large" ? "text-base" : "text-sm"
                         } whitespace-pre-wrap leading-relaxed break-words [overflow-wrap:anywhere] ${
@@ -6000,9 +6372,7 @@ export default function Home() {
                           color: activeTheme.textPrimary,
                           fontFamily: getNoteFontFamilyStyle(noteFont),
                         }}
-                      >
-                        {isContentVisible ? note.content : maskLockedText(note.content)}
-                      </p>
+                      />
 
                       {note.isLocked && (
                         <div className="mt-2.5 flex items-center justify-end">
@@ -6184,6 +6554,7 @@ export default function Home() {
                           <textarea
                             rows={3}
                             placeholder="追記を入力..."
+                            maxLength={MAX_NOTE_CONTENT_LENGTH}
                             value={replyContent}
                             onChange={(e) => setReplyContent(e.target.value)}
                             className={`w-full ${
@@ -6196,6 +6567,13 @@ export default function Home() {
                               fontFamily: getNoteFontFamilyStyle(noteFont),
                             }}
                             autoFocus
+                          />
+                          <LengthLimitHint
+                            length={replyContent.length}
+                            maxLength={MAX_NOTE_CONTENT_LENGTH}
+                            warnThreshold={NOTE_LENGTH_WARN_THRESHOLD}
+                            kind="body"
+                            theme={activeTheme}
                           />
                           <div className="flex justify-end gap-2">
                             <button
@@ -6548,9 +6926,9 @@ export default function Home() {
                     <div className="flex items-baseline justify-between gap-2 mb-1.5">
                       <div className="flex items-center gap-2 flex-wrap min-w-0 flex-1">
                         <h3
-                          className={`font-bold break-words [overflow-wrap:anywhere] ${
+                          className={`font-bold min-w-0 max-w-full break-all [overflow-wrap:anywhere] ${
                             fontSize === "large" ? "text-base" : "text-sm"
-                          } ${!isTrashVisible && maskLockedTitle ? "break-all" : ""}`}
+                          }`}
                           style={{ color: activeTheme.textPrimary }}
                         >
                           {note.title ? (
@@ -6605,19 +6983,25 @@ export default function Home() {
                       </div>
                     )}
 
-                    <p
-                      className={`${
-                        fontSize === "large" ? "text-base" : "text-sm"
-                      } whitespace-pre-wrap leading-relaxed mb-2 break-words [overflow-wrap:anywhere] ${
-                        !isTrashVisible ? "break-all select-none opacity-80 tracking-wider" : ""
-                      }`}
-                      style={{
-                        color: activeTheme.textPrimary,
-                        fontFamily: getNoteFontFamilyStyle(noteFont),
-                      }}
-                    >
-                      {isTrashVisible ? note.content : maskLockedText(note.content)}
-                    </p>
+                    <div className="mb-2">
+                      <CollapsibleNoteBody
+                        text={isTrashVisible ? note.content : maskLockedText(note.content)}
+                        maxLines={noteCollapseLines}
+                        isExpanded={expandedBodyNoteIds.includes(note.id)}
+                        onToggle={() => handleToggleNoteBody(note.id)}
+                        isMasked={!isTrashVisible}
+                        accentColor={activeTheme.accent}
+                        className={`${
+                          fontSize === "large" ? "text-base" : "text-sm"
+                        } whitespace-pre-wrap leading-relaxed break-words [overflow-wrap:anywhere] ${
+                          !isTrashVisible ? "break-all select-none opacity-80 tracking-wider" : ""
+                        }`}
+                        style={{
+                          color: activeTheme.textPrimary,
+                          fontFamily: getNoteFontFamilyStyle(noteFont),
+                        }}
+                      />
+                    </div>
 
                     {note.isLocked && (
                       <div className="mb-2 flex items-center justify-end">
@@ -6840,12 +7224,13 @@ export default function Home() {
               style={{ backgroundColor: activeTheme.bgCard, borderColor: activeTheme.border }}
             >
               <span className="block text-xs font-bold mb-2" style={{ color: activeTheme.textPrimary }}>
-                新しいカテゴリを追加
+                新しいカテゴリを追加（{MAX_CATEGORY_NAME_LENGTH}文字まで）
               </span>
               <div className="flex gap-2">
                 <input
                   type="text"
                   placeholder="カテゴリ名を入力..."
+                  maxLength={MAX_CATEGORY_NAME_LENGTH}
                   value={newCategoryInput}
                   onChange={(e) => setNewCategoryInput(e.target.value)}
                   onKeyDown={(e) => {
@@ -7403,6 +7788,49 @@ export default function Home() {
                 </div>
               </div>
 
+              {/* 長文メモの折りたたみ */}
+              <div
+                className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3.5 rounded-xl border transition-colors"
+                style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border }}
+              >
+                <div>
+                  <span className="font-medium block" style={{ color: activeTheme.textPrimary }}>
+                    長文メモの折りたたみ
+                  </span>
+                  <span className="text-xs" style={{ color: activeTheme.textSecondary }}>
+                    一覧やゴミ箱で長いメモを折りたたむ行数
+                  </span>
+                </div>
+                <div
+                  className="flex gap-1 p-1 rounded-lg border transition-colors self-start sm:self-auto"
+                  style={{ backgroundColor: activeTheme.bgApp, borderColor: activeTheme.border }}
+                >
+                  {(
+                    [
+                      { value: 0, label: "なし" },
+                      { value: 5, label: "5行" },
+                      { value: 8, label: "8行" },
+                      { value: 12, label: "12行" },
+                    ] as { value: NoteCollapseLines; label: string }[]
+                  ).map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => handleNoteCollapseLinesChange(opt.value)}
+                      className={`px-2.5 py-1.5 text-xs rounded-md font-medium transition-all ${
+                        noteCollapseLines === opt.value ? "shadow-xs font-bold" : "hover:opacity-80"
+                      }`}
+                      style={{
+                        backgroundColor: noteCollapseLines === opt.value ? activeTheme.accent : "transparent",
+                        color: noteCollapseLines === opt.value ? activeTheme.accentText : activeTheme.textSecondary,
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* 保存通知 */}
               <div
                 className="flex items-center justify-between p-3.5 rounded-xl border transition-colors"
@@ -7927,7 +8355,7 @@ export default function Home() {
                     </button>
                   </div>
                   <div className="text-[11px] leading-relaxed" style={{ color: activeTheme.textSecondary }}>
-                    アカウントのログインパスワードとは別に管理されます（4文字以上）。
+                    アカウントのログインパスワードとは別に管理されます（4〜{MAX_PASSWORD_LENGTH}文字）。
                   </div>
                   {lockPasswordHash && currentUser && (
                     <div className="flex justify-end pt-1 border-t" style={{ borderColor: activeTheme.border }}>
@@ -8348,13 +8776,14 @@ export default function Home() {
               <div>
                 <label className="block text-xs font-bold mb-1" style={{ color: activeTheme.textPrimary }}>
                   {lockModalMode === "unlock" && "鍵メモ用パスワード"}
-                  {lockModalMode === "setup" && "新しい鍵パスワード（4文字以上）"}
+                  {lockModalMode === "setup" && `新しい鍵パスワード（4〜${MAX_PASSWORD_LENGTH}文字）`}
                   {lockModalMode === "change" && "現在の鍵パスワード"}
                   {lockModalMode === "forgot" && "アカウントのログインパスワード"}
                 </label>
                 <div className="relative flex items-center">
                   <input
                     type={showLockInput1 ? "text" : "password"}
+                    maxLength={MAX_PASSWORD_LENGTH}
                     value={lockInput1}
                     onChange={(e) => setLockInput1(e.target.value)}
                     autoFocus
@@ -8380,11 +8809,12 @@ export default function Home() {
               {(lockModalMode === "setup" || lockModalMode === "change" || lockModalMode === "forgot") && (
                 <div>
                   <label className="block text-xs font-bold mb-1" style={{ color: activeTheme.textPrimary }}>
-                    {lockModalMode === "setup" ? "確認用（もう一度入力）" : "新しい鍵パスワード（4文字以上）"}
+                    {lockModalMode === "setup" ? "確認用（もう一度入力）" : `新しい鍵パスワード（4〜${MAX_PASSWORD_LENGTH}文字）`}
                   </label>
                   <div className="relative flex items-center">
                     <input
                       type={showLockInput2 ? "text" : "password"}
+                      maxLength={MAX_PASSWORD_LENGTH}
                       value={lockInput2}
                       onChange={(e) => setLockInput2(e.target.value)}
                       className="w-full px-3 py-2 pr-9 text-sm rounded-xl border focus:outline-none"
@@ -8415,6 +8845,7 @@ export default function Home() {
                   <div className="relative flex items-center">
                     <input
                       type={showLockInput3 ? "text" : "password"}
+                      maxLength={MAX_PASSWORD_LENGTH}
                       value={lockInput3}
                       onChange={(e) => setLockInput3(e.target.value)}
                       className="w-full px-3 py-2 pr-9 text-sm rounded-xl border focus:outline-none"
@@ -8783,6 +9214,7 @@ export default function Home() {
             <div>
               <input
                 type="text"
+                maxLength={MAX_CATEGORY_NAME_LENGTH}
                 value={renameCategoryInput}
                 onChange={(e) => {
                   setRenameCategoryInput(e.target.value);
@@ -8915,6 +9347,7 @@ export default function Home() {
                 <input
                   type="text"
                   placeholder="タイトルを入力（空欄なら無題）"
+                  maxLength={MAX_NOTE_TITLE_LENGTH}
                   value={editTitleInput}
                   onChange={(e) => setEditTitleInput(e.target.value)}
                   className={`w-full ${
@@ -8925,6 +9358,13 @@ export default function Home() {
                     borderColor: activeTheme.border,
                     color: activeTheme.textPrimary,
                   }}
+                />
+                <LengthLimitHint
+                  length={editTitleInput.length}
+                  maxLength={MAX_NOTE_TITLE_LENGTH}
+                  warnThreshold={NOTE_TITLE_WARN_THRESHOLD}
+                  kind="title"
+                  theme={activeTheme}
                 />
               </div>
 
@@ -8976,6 +9416,7 @@ export default function Home() {
                       <input
                         type="text"
                         placeholder="新しいカテゴリ"
+                        maxLength={MAX_CATEGORY_NAME_LENGTH}
                         value={inlineNewCategoryInEdit}
                         onChange={(e) => setInlineNewCategoryInEdit(e.target.value)}
                         onKeyDown={(e) => {
@@ -9142,6 +9583,7 @@ export default function Home() {
                 </label>
                 <textarea
                   rows={6}
+                  maxLength={MAX_NOTE_CONTENT_LENGTH}
                   value={editContentInput}
                   onChange={(e) => setEditContentInput(e.target.value)}
                   placeholder="新しい本文を入力してください..."
@@ -9155,6 +9597,13 @@ export default function Home() {
                     color: activeTheme.textPrimary,
                     fontFamily: getNoteFontFamilyStyle(noteFont),
                   }}
+                />
+                <LengthLimitHint
+                  length={editContentInput.length}
+                  maxLength={MAX_NOTE_CONTENT_LENGTH}
+                  warnThreshold={NOTE_LENGTH_WARN_THRESHOLD}
+                  kind="body"
+                  theme={activeTheme}
                 />
               </div>
             </div>
@@ -9357,12 +9806,13 @@ export default function Home() {
                     className="block text-xs font-bold mb-1"
                     style={{ color: activeTheme.textPrimary }}
                   >
-                    新しいパスワード（6文字以上）
+                    新しいパスワード（6〜64文字）
                   </label>
                   <div className="relative flex items-center">
                     <input
                       type={showPassword ? "text" : "password"}
                       placeholder="新しいパスワードを入力"
+                      maxLength={MAX_PASSWORD_LENGTH}
                       value={authPasswordInput}
                       onChange={(e) => setAuthPasswordInput(e.target.value)}
                       required
@@ -9398,6 +9848,7 @@ export default function Home() {
                     <input
                       type={showPasswordConfirm ? "text" : "password"}
                       placeholder="もう一度入力"
+                      maxLength={MAX_PASSWORD_LENGTH}
                       value={authPasswordConfirmInput}
                       onChange={(e) => setAuthPasswordConfirmInput(e.target.value)}
                       required
@@ -9466,12 +9917,13 @@ export default function Home() {
                     className="block text-xs font-bold mb-1"
                     style={{ color: activeTheme.textPrimary }}
                   >
-                    パスワード（6文字以上）
+                    パスワード（6〜64文字）
                   </label>
                   <div className="relative flex items-center">
                     <input
                       type={showPassword ? "text" : "password"}
                       placeholder="パスワードを入力"
+                      maxLength={MAX_PASSWORD_LENGTH}
                       value={authPasswordInput}
                       onChange={(e) => setAuthPasswordInput(e.target.value)}
                       required
@@ -9508,6 +9960,7 @@ export default function Home() {
                       <input
                         type={showPasswordConfirm ? "text" : "password"}
                         placeholder="もう一度パスワードを入力"
+                        maxLength={MAX_PASSWORD_LENGTH}
                         value={authPasswordConfirmInput}
                         onChange={(e) => setAuthPasswordConfirmInput(e.target.value)}
                         required
@@ -9845,7 +10298,7 @@ export default function Home() {
                     第4条（利用料金・完全無料での運用）
                   </h3>
                   <p className="text-[11px] leading-relaxed">
-                    本サービスはテキスト思考に特化した軽量設計により、完全無料で提供します。なお、無料インフラの維持やサービス継続の観点から、将来的に保存容量の上限設定や、一定期間利用されていないゴミ箱データの整理ルール等を導入する場合があります（重要な変更を行う場合は、アプリ内でのお知らせ等により事前に周知します）。
+                    本サービスはテキスト思考に特化した軽量設計により、完全無料で提供します。無料インフラの安定運用のため、メモ1件あたりタイトル100文字・本文（および追記・訂正）各10,000文字、カテゴリ名30文字の上限を設けています。また、サービス継続の観点から、将来的に保存容量の上限設定や、一定期間利用されていないゴミ箱データの整理ルール等を導入する場合があります（重要な変更を行う場合は、アプリ内でのお知らせ等により事前に周知します）。
                   </p>
                 </section>
 
@@ -10079,6 +10532,7 @@ export default function Home() {
                     <input
                       type={showDeletePassword ? "text" : "password"}
                       placeholder="パスワードを入力"
+                      maxLength={MAX_PASSWORD_LENGTH}
                       value={deletePasswordInput}
                       onChange={(e) => setDeletePasswordInput(e.target.value)}
                       required
