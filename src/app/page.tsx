@@ -426,7 +426,7 @@ const getFontFamilyStyle = (family: FontFamily): string => {
     case "serif":
       return "'Hiragino Mincho ProN', 'Yu Mincho', 'BIZ UDPMincho', 'MS PMincho', serif";
     case "rounded":
-      return "'Hiragino Maru Gothic ProN', 'BIZ UDPGothic', 'Yu Gothic', sans-serif";
+      return "'Zen Maru Gothic', 'Hiragino Maru Gothic ProN', 'BIZ UDPGothic', 'Yu Gothic', sans-serif";
     case "sans":
     default:
       return "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Hiragino Sans', 'Noto Sans JP', sans-serif";
@@ -1141,7 +1141,7 @@ const HELP_ITEMS = [
           <li><strong>かけ方・外し方：</strong> 新規入力欄下部の「🔒 鍵をつける」ボタン、または保存済みメモ右上の「…」メニューから「🔒 鍵をかける / 🔓 鍵を外す」で切り替えられます。</li>
           <li><strong>閲覧とロック戻し：</strong> 一度鍵パスワードで開けると、他の鍵付きメモも再入力なしで開けます。カード内の「隠す」や検索横の「🔒 すべて隠す」でいつでもロック状態に戻せます。</li>
           <li><strong>ロック中の制限：</strong> 本文は伏せ字になり、キーワード検索の対象外（タグや日時・お気に入り等では検索可）、追記・訂正・コピー・通知文表示も行えません。ゴミ箱へ移動しても鍵はかかったまま保護されます。</li>
-          <li><strong>詳細設定：</strong> 「⚙️ 設定」の「🔐 鍵付きメモ設定」で、ロック中のタイトル表示（隠す／表示する）、自動で隠すタイミング（手動・5分・15分・別画面切替時）、パスワード変更・再設定を行えます。</li>
+          <li><strong>詳細設定：</strong> 「⚙️ 設定」の「🔐 鍵付きメモ設定」で、ロック中のタイトル表示（隠す／表示する）、自動で隠すタイミング（手動・5分・15分・別画面/他アプリ切替時）、パスワード変更・再設定を行えます。</li>
         </ul>
       </div>
     ),
@@ -1562,6 +1562,7 @@ export default function Home() {
   const [timeSlots, setTimeSlots] = useState<Record<TimeSlotKey, TimeSlotConfig>>(DEFAULT_TIME_SLOTS);
   const [selectedSlotForEdit, setSelectedSlotForEdit] = useState<TimeSlotKey>("morning");
   const [isTimeSlotsAccordionOpen, setIsTimeSlotsAccordionOpen] = useState(false);
+  const [isLockSettingsAccordionOpen, setIsLockSettingsAccordionOpen] = useState(false);
 
   // ゴミ箱専用の検索・絞り込みState
   const [isTrashSearchPanelOpen, setIsTrashSearchPanelOpen] = useState(false);
@@ -1802,18 +1803,29 @@ export default function Home() {
     }
   }, []);
 
+  const prevActiveTabRef = useRef(activeTab);
+
   // 設定されたタイミングでの自動ロック監視
   useEffect(() => {
+    if (prevActiveTabRef.current !== activeTab) {
+      prevActiveTabRef.current = activeTab;
+      if (autoLockMode === "background" && (unlockedNoteIds.length > 0 || isLockSessionVerified)) {
+        lockAllNotes(false);
+        return;
+      }
+    }
+
     const hasOpenSecret = unlockedNoteIds.length > 0 || isLockSessionVerified;
     if (!hasOpenSecret || autoLockMode === "manual") return;
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        lockAllNotes(false);
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     if (autoLockMode === "background") {
-      const handleVisibilityChange = () => {
-        if (document.visibilityState === "hidden") {
-          lockAllNotes(false);
-        }
-      };
-      document.addEventListener("visibilitychange", handleVisibilityChange);
       return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
     }
 
@@ -1830,9 +1842,10 @@ export default function Home() {
 
     return () => {
       clearTimeout(timerId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       events.forEach((ev) => window.removeEventListener(ev, resetTimer));
     };
-  }, [autoLockMode, unlockedNoteIds.length, isLockSessionVerified, lockAllNotes]);
+  }, [activeTab, autoLockMode, unlockedNoteIds.length, isLockSessionVerified, lockAllNotes]);
 
   // 運営からのお知らせを取得（Supabase announcements テーブル）
   const fetchAnnouncements = useCallback(async () => {
@@ -8310,31 +8323,50 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* ── 項目X：🔐 鍵付きメモ設定 ── */}
+              {/* ── 項目X：🔐 鍵付きメモ設定（アコーディオン形式で折りたたみ可能） ── */}
               <div
-                className="p-4 rounded-xl border flex flex-col gap-3 transition-colors"
+                className="rounded-xl border overflow-hidden transition-colors"
                 style={{ backgroundColor: activeTheme.bgSub, borderColor: activeTheme.border }}
               >
-                <div className="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsLockSettingsAccordionOpen((prev) => !prev)}
+                  className="w-full p-4 flex items-center justify-between gap-2 text-left hover:opacity-90 transition-opacity cursor-pointer"
+                >
                   <div>
                     <div className="font-bold text-sm flex items-center gap-1.5" style={{ color: activeTheme.textPrimary }}>
                       <span>🔐</span> 鍵付きメモ設定
                     </div>
                     <div className="text-[11px] mt-0.5" style={{ color: activeTheme.textSecondary }}>
-                      鍵をかけたメモを「・」で隠すためのパスワードと表示ルール
+                      {isLockSettingsAccordionOpen
+                        ? "鍵をかけたメモを「・」で隠すためのパスワードと表示ルール"
+                        : "パスワードや自動で隠すタイミング（タップして設定を展開）"}
                     </div>
                   </div>
-                  <span
-                    className="text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0"
-                    style={{
-                      backgroundColor: lockPasswordHash ? activeTheme.accent : activeTheme.bgCard,
-                      borderColor: lockPasswordHash ? activeTheme.accent : activeTheme.border,
-                      color: lockPasswordHash ? activeTheme.accentText : activeTheme.textSecondary,
-                    }}
-                  >
-                    {lockPasswordHash ? "設定済み" : "未設定"}
-                  </span>
-                </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span
+                      className="text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0"
+                      style={{
+                        backgroundColor: lockPasswordHash ? activeTheme.accent : activeTheme.bgCard,
+                        borderColor: lockPasswordHash ? activeTheme.accent : activeTheme.border,
+                        color: lockPasswordHash ? activeTheme.accentText : activeTheme.textSecondary,
+                      }}
+                    >
+                      {lockPasswordHash ? "設定済み" : "未設定"}
+                    </span>
+                    <span
+                      className={`text-xs transition-transform duration-200 ${
+                        isLockSettingsAccordionOpen ? "rotate-90" : ""
+                      }`}
+                      style={{ color: activeTheme.textSecondary }}
+                    >
+                      ▶
+                    </span>
+                  </div>
+                </button>
+
+                {isLockSettingsAccordionOpen && (
+                  <div className="p-4 pt-2 border-t flex flex-col gap-3" style={{ borderColor: activeTheme.border }}>
 
                 {/* 鍵パスワードの設定・変更・再設定 */}
                 <div
@@ -8420,7 +8452,7 @@ export default function Home() {
                       自動で隠すタイミング
                     </div>
                     <div className="text-[11px]" style={{ color: activeTheme.textSecondary }}>
-                      解除したメモを自動でロック状態に戻す条件を選べます
+                      解除したメモを自動でロック状態に戻す条件を選べます（※ページ再読込時はどの設定でもロックに戻ります）
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-1.5">
@@ -8429,7 +8461,7 @@ export default function Home() {
                         { id: "manual", label: "手動・再読込時のみ" },
                         { id: "5m", label: "無操作 5分" },
                         { id: "15m", label: "無操作 15分" },
-                        { id: "background", label: "別画面に切替時" },
+                        { id: "background", label: "別画面・他アプリへ切替時" },
                       ] as const
                     ).map((opt) => {
                       const active = autoLockMode === opt.id;
@@ -8453,6 +8485,8 @@ export default function Home() {
                     })}
                   </div>
                 </div>
+                  </div>
+                )}
               </div>
 
               {/* アカウント・クラウド同期・復旧キー */}
