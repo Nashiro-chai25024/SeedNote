@@ -803,7 +803,7 @@ const HELP_ITEMS = [
   },
   {
     id: "save",
-    title: "メモの保存 / 保存通知について",
+    title: "💾 メモの保存 / 保存通知について",
     content: (
       <div className="space-y-2">
         <p>
@@ -828,7 +828,7 @@ const HELP_ITEMS = [
   },
   {
     id: "category",
-    title: "カテゴリ / ”未分類”について",
+    title: "🏷️ カテゴリ / ”未分類”について",
     content: (
       <div className="space-y-2.5">
         <div className="space-y-1.5">
@@ -865,7 +865,7 @@ const HELP_ITEMS = [
   },
   {
     id: "menu",
-    title: "メニュー（≡）の使い方",
+    title: "📋 メニュー（≡）の使い方",
     content: (
       <div className="space-y-1.5 text-xs">
         <p>画面左上の「≡」ボタンから、各種画面やサポート機能へ移動できます。</p>
@@ -882,7 +882,7 @@ const HELP_ITEMS = [
   },
   {
     id: "search",
-    title: "検索・絞り込みとお気に入り（☆/★）",
+    title: "🔍 検索・絞り込みとお気に入り（☆/★）",
     content: (
       <div className="space-y-2">
         <p>メモ一覧の「🔍 検索機能」ボタンから、見返したいメモを素早く探せます。</p>
@@ -899,7 +899,7 @@ const HELP_ITEMS = [
   },
   {
     id: "reply",
-    title: "メモへの追記",
+    title: "💬 メモへの追記",
     content: (
       <div className="space-y-1.5 text-xs">
         <p>
@@ -913,7 +913,7 @@ const HELP_ITEMS = [
   },
   {
     id: "edit_metadata",
-    title: "本文の訂正・タイトルやカテゴリの変更",
+    title: "✏️ 本文の訂正・タイトルやカテゴリの変更",
     content: (
       <div className="space-y-2 text-xs">
         <p>
@@ -936,7 +936,7 @@ const HELP_ITEMS = [
   },
   {
     id: "reminder",
-    title: "見返す日（リマインダー）",
+    title: "🔔 見返す日（リマインダー）",
     content: (
       <div className="space-y-1.5 text-xs">
         <p>
@@ -950,7 +950,7 @@ const HELP_ITEMS = [
   },
   {
     id: "locked_notes",
-    title: "鍵付きメモ（パスワード保護）",
+    title: "🔒 鍵付きメモ（パスワード保護）",
     content: (
       <div className="space-y-2 text-xs">
         <p>
@@ -967,7 +967,7 @@ const HELP_ITEMS = [
   },
   {
     id: "trash",
-    title: "ゴミ箱",
+    title: "🗑️ ゴミ箱",
     content: (
       <div className="space-y-2">
         <div>
@@ -990,7 +990,7 @@ const HELP_ITEMS = [
   },
   {
     id: "settings",
-    title: "設定（デザイン・鍵・アカウント同期）",
+    title: "⚙️ 設定（デザイン・鍵・アカウント同期）",
     content: (
       <div className="space-y-2 text-xs">
         <p>左メニューの「⚙️ 設定」から、見た目や使い心地、セキュリティを自分好みにカスタマイズできます。</p>
@@ -1008,7 +1008,7 @@ const HELP_ITEMS = [
   },
   {
     id: "faq",
-    title: "よくある質問（FAQ）",
+    title: "❓ よくある質問（FAQ）",
     content: (
       <div className="space-y-3">
         <div className="p-2.5 rounded-xl" style={{ backgroundColor: "rgba(128, 128, 128, 0.08)" }}>
@@ -1026,6 +1026,42 @@ const HELP_ITEMS = [
         <div className="p-2.5 rounded-xl" style={{ backgroundColor: "rgba(128, 128, 128, 0.08)" }}>
           <p className="font-bold text-xs">Q. なぜアプリを開いた瞬間に入力画面が出るのですか？</p>
           <p className="mt-1 text-xs opacity-85">A. アイデアを忘れてしまわないよう、アプリを開いてから書き留めるまでの操作を最小限にするためです。</p>
+        </div>
+        <div className="p-2.5 rounded-xl" style={{ backgroundColor: "rgba(128, 128, 128, 0.08)" }}>
+          <p className="font-bold text-xs">Q. ボタンが小さくて押しにくいです。</p>
+          <p className="mt-1 text-xs opacity-85">A. 左メニューの「⚙️ 設定」＞「文字・ボタンの大きさ」から「大きめ」に変更できます。</p>
+        </div>
+        <div className="p-2.5 rounded-xl" style={{ backgroundColor: "rgba(128, 128, 128, 0.08)" }}>
+          <p className="font-bold text-xs">Q. 文字が小さくて読みにくいです。</p>
+          <p className="mt-1 text-xs opacity-85">A. 左メニューの「⚙️ 設定」＞「文字・ボタンの大きさ」から「大きめ」に変更できます。フォントの種類も好みに合わせて切り替えられます。</p>
+        </div>
+        <div className="p-2.5 rounded-xl" style={{ backgroundColor: "rgba(128, 128, 128, 0.08)" }}>
+          <p className="font-bold text-xs">Q. ダークモードはありますか？</p>
+          <p className="mt-1 text-xs opacity-85">A. はい、あります。左メニューの「⚙️ 設定」＞テーマカラー・明るさから、目に優しいダークモードへ切り替えられます。</p>
+        </div>
+        <div className="p-2.5 rounded-xl" style={{ backgroundColor: "rgba(128, 128, 128, 0.08)" }}>
+          <p className="font-bold text-xs">Q. カテゴリが増えすぎてしまったので整理したいです。</p>
+          <p className="mt-1 text-xs opacity-85">A. 左メニューの「🏷️ カテゴリ管理」から、既存カテゴリの名前変更や不要なカテゴリの整理ができます（カテゴリを消去しても、メモ本文自体は消えません）。</p>
+        </div>
+        <div className="p-2.5 rounded-xl" style={{ backgroundColor: "rgba(128, 128, 128, 0.08)" }}>
+          <p className="font-bold text-xs">Q. 鍵をかけたメモの解除パスワードを忘れてしまいました。</p>
+          <p className="mt-1 text-xs opacity-85">A. ログイン中は、ロック解除画面や「⚙️ 設定」＞「🔐 鍵付きメモ設定」の「鍵パスワードを忘れた場合」から、アカウントのパスワードを使って再設定できます（※未ログイン時は安全上リセットできません）。</p>
+        </div>
+        <div className="p-2.5 rounded-xl" style={{ backgroundColor: "rgba(128, 128, 128, 0.08)" }}>
+          <p className="font-bold text-xs">Q. アカウントのパスワードを忘れてしまいました。</p>
+          <p className="mt-1 text-xs opacity-85">A. アカウント作成時に発行された「復旧キー」を使って、ログイン画面の「パスワードを忘れた場合」から新しいパスワードを再設定できます。</p>
+        </div>
+        <div className="p-2.5 rounded-xl" style={{ backgroundColor: "rgba(128, 128, 128, 0.08)" }}>
+          <p className="font-bold text-xs">Q. メモが見つかりません。</p>
+          <p className="mt-1 text-xs opacity-85">A. 保存せずにアプリを閉じてしまった可能性があります。保存していないメモを復旧させることはできません。保存ボタンを忘れずに押してください（※検索条件が残っていたり、ゴミ箱に入っている場合もあるため、検索機能もあわせてご確認ください）。</p>
+        </div>
+        <div className="p-2.5 rounded-xl" style={{ backgroundColor: "rgba(128, 128, 128, 0.08)" }}>
+          <p className="font-bold text-xs">Q. このアプリは使い続けられますか？</p>
+          <p className="mt-1 text-xs opacity-85">A. 現状しばらくは使い続けられると思います。しかし、運営側の都合でサービス終了する可能性もあります。その際は1ヶ月前から告知を行う予定です。ご了承ください（詳しくは利用規約をご覧ください）。</p>
+        </div>
+        <div className="p-2.5 rounded-xl" style={{ backgroundColor: "rgba(128, 128, 128, 0.08)" }}>
+          <p className="font-bold text-xs">Q. このアプリはAIを使用していますか？</p>
+          <p className="mt-1 text-xs opacity-85">A. アプリのプログラム内には AI を使用していません。しかし、アプリ開発上で AI Agent を用いてプログラムコードを記述しております。各個人のアカウントデータはローカルまたは Supabase で管理しておりますので、内容が AI に読み込まれることはありません。</p>
         </div>
       </div>
     ),
@@ -1167,6 +1203,9 @@ export default function Home() {
   const [inlineNewCategoryName, setInlineNewCategoryName] = useState("");
   const [newCategoryInput, setNewCategoryInput] = useState("");
   const [categoryToDelete, setCategoryToDelete] = useState<string | null>(null);
+  const [categoryToRename, setCategoryToRename] = useState<string | null>(null);
+  const [renameCategoryInput, setRenameCategoryInput] = useState("");
+  const [renameCategoryError, setRenameCategoryError] = useState<string | null>(null);
 
   // メモのタイトル・カテゴリ変更モーダル関連のState
   const [editingNote, setEditingNote] = useState<Note | null>(null);
@@ -1185,6 +1224,7 @@ export default function Home() {
   // 検索・絞り込みパネルとお気に入りのState
   const [isSearchPanelOpen, setIsSearchPanelOpen] = useState(false);
   const [filterOnlyFavorite, setFilterOnlyFavorite] = useState(false);
+  const [filterOnlyLocked, setFilterOnlyLocked] = useState(false);
   const [filterCategories, setFilterCategories] = useState<string[]>([]);
   const [includeTrashInSearch, setIncludeTrashInSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -2839,6 +2879,76 @@ export default function Home() {
     setCategoryToDelete(null);
   };
 
+  // カテゴリ名の変更確定処理（登録済みカテゴリ一覧と過去メモのタグを一括更新）
+  const handleConfirmRenameCategory = () => {
+    if (!categoryToRename) return;
+    const trimmed = renameCategoryInput.trim();
+    if (!trimmed) {
+      setRenameCategoryError("カテゴリ名を入力してください");
+      return;
+    }
+
+    const reservedWords = [
+      "すべてのメモ",
+      "未分類",
+      "”すべてのメモ”",
+      "”未分類”",
+      "\"すべてのメモ\"",
+      "\"未分類\"",
+    ];
+    if (reservedWords.includes(trimmed)) {
+      setRenameCategoryError("「”すべてのメモ”」および「”未分類”」はシステム専用のため使用できません");
+      return;
+    }
+
+    if (trimmed === categoryToRename) {
+      setCategoryToRename(null);
+      setRenameCategoryError(null);
+      return;
+    }
+
+    if (categoriesList.includes(trimmed)) {
+      setRenameCategoryError("同じ名前のカテゴリがすでに存在します");
+      return;
+    }
+
+    const updatedCategories = categoriesList.map((c) => (c === categoryToRename ? trimmed : c));
+    setCategoriesList(updatedCategories);
+    localStorage.setItem("seednote_categories", JSON.stringify(updatedCategories));
+    saveCloudSettings({ categories: updatedCategories }, true);
+
+    setSelectedCategories((prev) => prev.map((c) => (c === categoryToRename ? trimmed : c)));
+    setFilterCategories((prev) => prev.map((c) => (c === categoryToRename ? trimmed : c)));
+    setTrashFilterCategories((prev) => prev.map((c) => (c === categoryToRename ? trimmed : c)));
+
+    const notesToUpdateInCloud: Note[] = [];
+    const updatedNotes = notes.map((note) => {
+      if (!note.categories || !note.categories.includes(categoryToRename)) return note;
+      const renamed = Array.from(
+        new Set(note.categories.map((c) => (c === categoryToRename ? trimmed : c)))
+      );
+      const updated = { ...note, categories: renamed };
+      notesToUpdateInCloud.push(updated);
+      return updated;
+    });
+    setNotes(updatedNotes);
+    localStorage.setItem("seednote_items", JSON.stringify(updatedNotes));
+
+    if (currentUser && notesToUpdateInCloud.length > 0) {
+      notesToUpdateInCloud.forEach((n) => {
+        supabase.from("notes").update({ categories: n.categories || [] }).eq("id", n.id).then();
+      });
+    }
+
+    setCategoryToRename(null);
+    setRenameCategoryError(null);
+    if (enableToast) {
+      setToastMessage(`🏷️ 「${trimmed}」に変更しました`);
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 2000);
+    }
+  };
+
   // メモのタイトル・カテゴリ変更モーダルを開く
   const handleOpenEditModal = (note: Note) => {
     setEditingNote(note);
@@ -3591,7 +3701,12 @@ export default function Home() {
       return;
     }
     try {
-      const textToCopy = note.title ? `【${note.title}】\n${note.content}` : note.content;
+      const baseText = note.title ? `【${note.title}】\n${note.content}` : note.content;
+      const repliesText =
+        note.replies && note.replies.length > 0
+          ? `\n\n--- 追記 ---\n${note.replies.map((r) => r.content).join("\n\n")}`
+          : "";
+      const textToCopy = `${baseText}${repliesText}`;
       if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(textToCopy);
       } else {
@@ -3703,6 +3818,7 @@ export default function Home() {
 
   const handleJumpToReminderNote = (noteId: string) => {
     setFilterOnlyFavorite(false);
+    setFilterOnlyLocked(false);
     setFilterCategories([]);
     setIncludeTrashInSearch(false);
     setSearchQuery("");
@@ -3721,6 +3837,7 @@ export default function Home() {
   // 検索・絞り込み適用後のメモ一覧（複数AND検索＆キーワード検索＆日付検索対応）
   const displayedNotes = baseNotesForList.filter((note) => {
     if (filterOnlyFavorite && !note.isFavorite) return false;
+    if (filterOnlyLocked && !note.isLocked) return false;
     if (filterCategories.length > 0) {
       const matchesAll = filterCategories.every((cat) => {
         if (cat === "uncategorized") {
@@ -4453,18 +4570,33 @@ export default function Home() {
                       </button>
                     );
                   })}
-                  <input
-                    type="date"
-                    value={newNoteRemindAt}
-                    onChange={(e) => setNewNoteRemindAt(e.target.value)}
-                    aria-label="見返す日を指定"
-                    className="px-2 py-0.5 rounded-lg text-[11px] border bg-transparent focus:outline-none"
+                  <div
+                    className={`relative inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] transition-all cursor-pointer ${
+                      newNoteRemindAt ? "font-bold shadow-xs" : "border font-medium"
+                    }`}
                     style={{
+                      backgroundColor: newNoteRemindAt ? activeTheme.accent : activeTheme.bgSub,
                       borderColor: newNoteRemindAt ? activeTheme.accent : activeTheme.border,
-                      color: activeTheme.textPrimary,
-                      backgroundColor: activeTheme.bgSub,
+                      color: newNoteRemindAt ? activeTheme.accentText : activeTheme.textSecondary,
                     }}
-                  />
+                  >
+                    <span>📅</span>
+                    <span>
+                      {newNoteRemindAt
+                        ? (() => {
+                            const [, m, d] = newNoteRemindAt.split("-");
+                            return m && d ? `${Number(m)}/${Number(d)}` : newNoteRemindAt;
+                          })()
+                        : "日付を選ぶ"}
+                    </span>
+                    <input
+                      type="date"
+                      value={newNoteRemindAt}
+                      onChange={(e) => setNewNoteRemindAt(e.target.value)}
+                      aria-label="見返す日を指定"
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    />
+                  </div>
                   {newNoteRemindAt && (
                     <button
                       type="button"
@@ -4876,6 +5008,20 @@ export default function Home() {
                         <span>🗑️</span>
                         {includeTrashInSearch ? "ゴミ箱も含めて表示中" : "ゴミ箱も含める"}
                       </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setFilterOnlyLocked(!filterOnlyLocked)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 border`}
+                        style={{
+                          backgroundColor: filterOnlyLocked ? activeTheme.accent : activeTheme.bgSub,
+                          borderColor: filterOnlyLocked ? activeTheme.accent : activeTheme.border,
+                          color: filterOnlyLocked ? activeTheme.accentText : activeTheme.textSecondary,
+                        }}
+                      >
+                        <span>🔒</span>
+                        {filterOnlyLocked ? "鍵付きのみ表示中" : "鍵付きのみ"}
+                      </button>
                     </div>
                   </div>
 
@@ -5256,6 +5402,7 @@ export default function Home() {
                     type="button"
                     onClick={() => {
                       setFilterOnlyFavorite(false);
+                      setFilterOnlyLocked(false);
                       setFilterCategories([]);
                       setIncludeTrashInSearch(false);
                       setSearchQuery("");
@@ -6610,15 +6757,32 @@ export default function Home() {
                             ({count}件のメモ)
                           </span>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setCategoryToDelete(cat)}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg hover:text-[#b85448] transition-colors text-xs font-bold hover:opacity-80"
-                          style={{ color: activeTheme.textSecondary }}
-                          title="カテゴリを消去"
-                        >
-                          ✕
-                        </button>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCategoryToRename(cat);
+                              setRenameCategoryInput(cat);
+                              setRenameCategoryError(null);
+                            }}
+                            className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors text-xs hover:opacity-80"
+                            style={{ color: activeTheme.textSecondary }}
+                            title="カテゴリ名を変更"
+                            aria-label={`${cat}の名前を変更`}
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCategoryToDelete(cat)}
+                            className="w-7 h-7 flex items-center justify-center rounded-lg hover:text-[#b85448] transition-colors text-xs font-bold hover:opacity-80"
+                            style={{ color: activeTheme.textSecondary }}
+                            title="カテゴリを消去"
+                            aria-label={`${cat}を消去`}
+                          >
+                            ✕
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
@@ -8370,6 +8534,77 @@ export default function Home() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* カテゴリ名変更モーダル */}
+      {categoryToRename && (
+        <div
+          className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4"
+          onClick={() => {
+            setCategoryToRename(null);
+            setRenameCategoryError(null);
+          }}
+        >
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleConfirmRenameCategory();
+            }}
+            className="rounded-2xl p-6 sm:p-7 max-w-sm w-full border shadow-2xl transition-all flex flex-col gap-3"
+            style={{ backgroundColor: activeTheme.bgCard, borderColor: activeTheme.border }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div>
+              <h3 className="text-base font-bold flex items-center gap-1.5" style={{ color: activeTheme.textPrimary }}>
+                <span>✏️</span> カテゴリ名を変更
+              </h3>
+              <p className="text-xs mt-1" style={{ color: activeTheme.textSecondary }}>
+                「{categoryToRename}」がついている過去のメモも一括で更新されます。
+              </p>
+            </div>
+            <div>
+              <input
+                type="text"
+                value={renameCategoryInput}
+                onChange={(e) => {
+                  setRenameCategoryInput(e.target.value);
+                  if (renameCategoryError) setRenameCategoryError(null);
+                }}
+                autoFocus
+                placeholder="新しいカテゴリ名"
+                className="w-full px-3 py-2 text-sm rounded-xl border focus:outline-none"
+                style={{
+                  backgroundColor: activeTheme.bgSub,
+                  borderColor: activeTheme.border,
+                  color: activeTheme.textPrimary,
+                }}
+              />
+              {renameCategoryError && (
+                <p className="text-xs mt-1.5 text-[#b85448] font-medium">{renameCategoryError}</p>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setCategoryToRename(null);
+                  setRenameCategoryError(null);
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-medium transition-colors hover:opacity-80"
+                style={{ color: activeTheme.textSecondary }}
+              >
+                キャンセル
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 rounded-xl text-xs font-bold transition-colors shadow-xs hover:opacity-90"
+                style={{ backgroundColor: activeTheme.accent, color: activeTheme.accentText }}
+              >
+                変更する
+              </button>
+            </div>
+          </form>
         </div>
       )}
 
